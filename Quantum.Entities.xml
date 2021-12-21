@@ -1,0 +1,913 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Quantum.Entities</name>
+    </assembly>
+    <members>
+        <member name="T:Quantum.Entities.Http.FriendAddRequest">
+            <summary>
+            处理加好友请求
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.FriendAddRequest.flag">
+            <summary>
+            加好友请求的 flag（需从上报的数据中获得）
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLEnv.name">
+            <summary>
+            环境变量名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLEnv.status">
+            <summary>
+            状态 1 禁用，0 启用
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLEnv.timestamp">
+            <summary>
+            环境变量更新时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLTaskHttpResult.command">
+            <summary>
+            任务
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLTaskHttpResult.isDisabled">
+            <summary>
+            是否禁用
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLTaskHttpResult.name">
+            <summary>
+            名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLTaskHttpResult.status">
+            <summary>
+            0 运行中
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLTaskHttpResult._id">
+            <summary>
+            任务id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Http.QLTaskHttpResult.schedule">
+            <summary>
+            cron
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.GroupAddRequest.flag">
+            <summary>
+            加群请求的 flag（需从上报的数据中获得）
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.GroupAddRequest.sub_type">
+            <summary>
+            add 或 invite, 请求类型（需要和上报消息中的 sub_type 字段相符）
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.Communication.ReceiveMessage">
+            <summary>
+            QQ接受消息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.post_type">
+            <summary>
+            上报类型
+            message: 消息
+            request：上报
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.request_type">
+            <summary>
+            请求类型
+            friend 添加好友
+            group 加群/邀请
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.message_type">
+            <summary>
+            消息类型
+            private 私聊
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.sub_type">
+            <summary>
+            消息子类型, 如果是好友则是 friend, 如果是群临时会话则是 group, 如果是在群中自身发送则是 group_self
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.user_id">
+            <summary>
+            发送者 QQ 号
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.temp_source">
+            <summary>
+            临时会话来源
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.message">
+            <summary>
+            消息内容
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.sender">
+            <summary>
+            消息发送者信息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.group_id">
+            <summary>
+            QQ群
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.message_id">
+            <summary>
+            消息id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.flag">
+            <summary>
+            请求flag
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.ReceiveMessage.comment">
+            <summary>
+            验证信息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.SendMessage.message_type">
+            <summary>
+            消息类型, 支持 private、group , 分别对应私聊、群组, 如不传入, 则根据传入的 *_id 参数判断
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.SendMessage.user_id">
+            <summary>
+            对方 QQ 号 ( 消息类型为 private 时需要 )
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.SendMessage.group_id">
+            <summary>
+            群号 ( 消息类型为 group 时需要 )
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.SendMessage.message">
+            <summary>
+            要发送的内容
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.SendMessage.auto_escape">
+            <summary>
+            消息内容是否作为纯文本发送 ( 即不解析 CQ 码 ) , 只在 message 字段是字符串时有效
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.WxMsg.ToUserName">
+            <summary>
+                开发者微信号:接收到消息的公众号帐号
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.WxMsg.FromUserName">
+            <summary>
+                发送方帐号（一个OpenID，引起这条消息的微信用户）
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.WxMsg.CreateTime">
+            <summary>
+                消息创建时间 （整型）
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.WxMsg.MsgId">
+            <summary>
+                消息id，64位整型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.WxMsg.MsgType">
+            <summary>
+                消息类型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Communication.WxMsg.Content">
+            <summary>
+                文本消息内容
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.unknown">
+            <summary>
+                未知
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.text">
+            <summary>
+                文本消息
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.image">
+            <summary>
+                图片消息
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.voice">
+            <summary>
+                语音消息
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.video">
+            <summary>
+                视频消息
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.shortvideo">
+            <summary>
+                小视频消息
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.location">
+            <summary>
+                地里位置消息
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.link">
+            <summary>
+                连接消息
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.Communication.MessageFromWeiXinType.event">
+            <summary>
+                事件推送消息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.UserName">
+            <summary>
+            用户名
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.PassWord">
+            <summary>
+            密码
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.DBType">
+            <summary>
+            数据库类型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.DBAddress">
+            <summary>
+            数据库地址
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.Port">
+            <summary>
+            端口号
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.Host">
+            <summary>
+            绑定host
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.ManagerQQ">
+            <summary>
+            管理员qq
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.BlackQQ">
+            <summary>
+            黑名单QQ
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.CommandTimeInterval">
+            <summary>
+            指令响应时间间隔单位（s）
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.AuthInfo">
+            <summary>
+            授权结束时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.AuthCode">
+            <summary>
+            授权码
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.RefreshQLLoginCron">
+            <summary>
+            刷新青龙登录状态
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.RefreshQLTokenCron">
+            <summary>
+            刷新青龙授权token
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.EnvQuery.Key">
+            <summary>
+            搜索关键词
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.MessageProccessDTO.user_id">
+            <summary>
+            用户id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.MessageProccessDTO.group_id">
+            <summary>
+            群组id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.MessageProccessDTO.message">
+            <summary>
+            消息内容
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.MessageProccessDTO.message_id">
+            <summary>
+            消息id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.CommunicationType">
+            <summary>
+            通讯类型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.CommunicationId">
+            <summary>
+            通讯id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.message">
+            <summary>
+            消息内容
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.TextToPicture">
+            <summary>
+            是否文字转图片(暂未实现)
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.user_id">
+            <summary>
+            用户id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.group_id">
+            <summary>
+            分组id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.TaskCommandStep.ThreadId">
+            <summary>
+            线程id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.TaskCommandStep.UserId">
+            <summary>
+            用户id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.TaskCommandStep.HasChildTask">
+            <summary>
+            是否还有子任务
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.TaskCommandStep.IsChildTask">
+            <summary>
+            当前是否执行的子任务
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.TaskCommandStep.NextSubTaskId">
+            <summary>
+            下一步任务
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.TaskCommandStep.CreateTime">
+            <summary>
+            任务创建时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.TaskCommandStep.UpdateTime">
+            <summary>
+            更新时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.TaskCommandStep.ForceEndTime">
+            <summary>
+            强制结束任务时间
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.QL.QLongTask">
+            <summary>
+            青龙面板任务
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLongTask.name">
+            <summary>
+            任务名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLongTask.command">
+            <summary>
+            执行脚本
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.QL.QLTask">
+            <summary>
+            青龙任务和青龙面板关系
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLTask.schedule">
+            <summary>
+            Cron表达式
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLTask.status">
+            <summary>
+            0 运行中
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLTask.QLId">
+            <summary>
+            青龙面板Id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLTask.QLName">
+            <summary>
+            青龙面板名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLTask._id">
+            <summary>
+            青龙面板任务Id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLTask.isDisabled">
+            <summary>
+            1 禁用，0 启用
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLTaskRun.QLId">
+            <summary>
+            青龙配置Id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.QL.QLTaskRun.TaskIds">
+            <summary>
+            任务Id
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.EnvType.公共变量">
+            <summary>
+            公共环境变量
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.EnvType.用户变量">
+            <summary>
+            用户环境变量
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.EnvType.量子变量">
+            <summary>
+            量子助手环境变量
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.QLPanelEnvMode">
+            <summary>
+            青龙环境变量关系指定类型
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.QLPanelEnvMode.Auto">
+            <summary>
+            自动分配
+            </summary>
+        </member>
+        <member name="F:Quantum.Entities.QLPanelEnvMode.User">
+            <summary>
+            手动指定
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.LogType">
+            <summary>
+            任务执行类型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.LoggingInfo.UUID">
+            <summary>
+            cat /sys/class/dmi/id/product_uuid
+            cat /sys/class/dmi/id/product_serial
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.LoggingInfo.product_uuid">
+            <summary>
+            cat /sys/class/dmi/id/product_uuid
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.LoggingInfo.product_serial">
+            <summary>
+            cat /sys/class/dmi/id/product_serial
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.LoggingInfo.CID">
+            <summary>
+            容器Id
+            head -1 /proc/self/cgroup|cut -d/ -f3
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CommandModel.Key">
+            <summary>
+            触发指令
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CommandModel.Message">
+            <summary>
+            消息内容
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CommandModel.CommunicationType">
+            <summary>
+            指定消息的通讯类型，不指定则表示全部
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CommandModel.Enable">
+            <summary>
+            是否启用
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.Name">
+            <summary>
+            名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.Name">
+            <summary>
+            变量名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.Value">
+            <summary>
+            变量值
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.Enable">
+            <summary>
+            是否启用
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.Remark">
+            <summary>
+            备注
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.UserRemark">
+            <summary>
+            用户自定义备注
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.EnvType">
+            <summary>
+            环境变量类型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.Weight">
+            <summary>
+            权重
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.UserId">
+            <summary>
+            用户id(QQ,或者wxid)
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.CreateTime">
+            <summary>
+            创建时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.EnvModel.UpdateTime">
+            <summary>
+            更新时间    
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.LogModel.DirectoryName">
+            <summary>
+            文件夹名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.LogModel.LogPath">
+            <summary>
+            log 文件路径
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelEnvModel.QLPanelId">
+            <summary>
+            青龙面板id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelEnvModel.EnvId">
+            <summary>
+            量子环境变量ID
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelEnvModel.Mode">
+            <summary>
+            青龙环境变量同步模式
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.Name">
+            <summary>
+            名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.Address">
+            <summary>
+            地址
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.Weight">
+            <summary>
+            权重
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.Token">
+            <summary>
+            授权token
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.EnableAll">
+            <summary>
+            全量模式
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.Enable">
+            <summary>
+            启用状态
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.UserEnvMax">
+            <summary>
+            用户变量最大值
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.Model.TaskConcEnv">
+            <summary>
+            任务并发环境变量
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskConcEnv.TaskId">
+            <summary>
+            任务id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskConcEnv.EnvId">
+            <summary>
+            环境变量id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.Name">
+            <summary>
+            任务名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.Command">
+            <summary>
+            触发指令
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.ConcCount">
+            <summary>
+            并发数量限制
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.CommandEnv">
+            <summary>
+            触发指令消息的环境变量名称
+            如赋值message，当用户发送的消息这个指令时，量子助手将额外提供一个 message = "用户发送消息";
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.Cron">
+            <summary>
+            定时执行
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.FileName">
+            <summary>
+            脚本文件
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.TextToPicture">
+            <summary>
+            文字转图片
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.FileCache">
+            <summary>
+            脚本缓存
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.EnableConc">
+            <summary>
+            是否并发
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.Enable">
+            <summary>
+            启用状态
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.DayLimit">
+            <summary>
+            执行限制
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.EnablePush">
+            <summary>
+            开启推送
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.PushGroup">
+            <summary>
+            允许群消息通知
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.EnableAll">
+            <summary>
+            是否执行未绑定用户的用户变量
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.EnableLog">
+            <summary>
+            启用日志
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.Revocation">
+            <summary>
+            撤回群消息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.ConcEnvName">
+            <summary>
+            并发环境变量名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.Manager">
+            <summary>
+            是否管理员指令（管理员指令将只能管理员触发，且消息只通知管理员）
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.WaitTime">
+            <summary>
+            任务等待时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.TaskStatus">
+            <summary>
+            任务状态
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.TaskThreadId">
+            <summary>
+            任务线程id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.TaskStartNotify">
+            <summary>
+            任务开始通知文本
+            如果开启任务并发时指定，
+            如果不开启并发则可以在任务脚本中通知
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.TaskEndNotify">
+            <summary>
+            任务执行完成通知文本
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.TaskSubs">
+            <summary>
+            子任务
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.Model.TaskSubModel">
+            <summary>
+            多步骤任务
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskSubModel.Name">
+            <summary>
+            步骤名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskSubModel.Command">
+            <summary>
+            指令
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskSubModel.Sort">
+            <summary>
+            多步骤任务排序
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskSubModel.TaskId">
+            <summary>
+            主任务id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskSubModel.CommandEnv">
+            <summary>
+            触发指令消息的环境变量名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskSubModel.Revocation">
+            <summary>
+            撤回群消息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskSubModel.WaitTime">
+            <summary>
+            任务等待时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskSubModel.Remark">
+            <summary>
+            备注
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.UserModel.CommunicationType">
+            <summary>
+            用户类型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.UserModel.UserName">
+            <summary>
+            用户昵称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.UserModel.GroupId">
+            <summary>
+            群聊id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.UserModel.Remark">
+            <summary>
+            备注
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.UserModel.Weight">
+            <summary>
+            权重
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.UserModel.SourceId">
+            <summary>
+            用户来源id，如果是 go-cqhttp 则是 cqhttpId
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.UserModel.CreateTime">
+            <summary>
+            创建时间
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.Model.WorkWxModel">
+            <summary>
+            企业微信
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.WorkWxModel.Code">
+            <summary>
+            编码（唯一，不能重复，添加后不可修改）
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.WorkWxModel.Name">
+            <summary>
+            企业微信名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.WorkWxModel.Token">
+            <summary>
+            与企业微信账号后台的Token设置保持一致，区分大小写。
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.WorkWxModel.CorpEncodingAESKey">
+            <summary>
+            与微信企业账号后台的EncodingAESKey设置保持一致，区分大小写。
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.WorkWxModel.CorpId">
+            <summary>
+            与微信企业账号后台的CorpId设置保持一致，区分大小写。
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.WorkWxModel.CreateTime">
+            <summary>
+            添加时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.WxmpModel.Name">
+            <summary>
+            名称
+            </summary>
+        </member>
+    </members>
+</doc>

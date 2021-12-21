@@ -1,0 +1,332 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Quantum</name>
+    </assembly>
+    <members>
+        <member name="M:Quantum.Controllers.CqhttpController.Add(Quantum.Entities.Model.CqhttpModel)">
+            <summary>
+            添加或者更新go-cqhttp
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.CqhttpController.Get">
+            <summary>
+            获取go-cqhtt配置信息
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Controllers.EnumController">
+            <summary>
+            枚举接口
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.EnumController.Enums">
+            <summary>
+            获取所有枚举信息
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Controllers.EnumKeyValue">
+            <summary>
+            枚举对象Key-Value
+            </summary>
+        </member>
+        <member name="P:Quantum.Controllers.EnumKeyValue.Key">
+            <summary>
+            显示字符串
+            </summary>
+        </member>
+        <member name="P:Quantum.Controllers.EnumKeyValue.Value">
+            <summary>
+            枚举值
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.Index(Quantum.Entities.DTOs.EnvQuery)">
+            <summary>
+            环境变量列表数据
+            </summary>
+            <param name="query"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.SyncEnv">
+            <summary>
+            同步环境变量
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.UpdateEnvPanel(Quantum.Entities.DTOs.UpdateEnvPanelRequest)">
+            <summary>
+            更新指定环境变量容器。
+            </summary>
+            <param name="qLPanelEnvs"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.DeleteEnvs(System.Collections.Generic.List{System.String})">
+            <summary>
+            删除指定的环境变量(值)
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.Update(System.Collections.Generic.List{Quantum.Entities.DTOs.EnvModelPostModel})">
+            <summary>
+            更新环境变量
+            </summary>
+            <param name="envs"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.Delete(System.Collections.Generic.List{System.String})">
+            <summary>
+            通过环境变量id 删除
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.Query(System.String,System.String,System.Nullable{Quantum.Entities.EnvType})">
+            <summary>
+            查询环境变量
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.DisableEnvs(System.Collections.Generic.List{System.String})">
+            <summary>
+            禁用环境变量（授权访问或localhost访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.EnableEnvs(System.Collections.Generic.List{System.String})">
+            <summary>
+            启用环境变量（授权访问或localhost访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.Disable(System.Collections.Generic.List{System.String})">
+            <summary>
+            禁用环境变量(id)（授权访问或localhost访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.EnvController.Enable(System.Collections.Generic.List{System.String})">
+            <summary>
+            启用环境变量(id)（授权访问或localhost访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.LoginController.Login(Quantum.Entities.Config.Setting)">
+            <summary>
+            用户登录
+            </summary>
+            <param name="system"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.LogsController.DeleteLogs(System.Collections.Generic.List{System.String})">
+            <summary>
+            删除指定的环境变量(值)
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.LogsController.GetDetails(System.String)">
+            <summary>
+            获取详细日志
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.NotifiyController.Send(Quantum.Entities.DTOs.SendNotifyDTO)">
+            <summary>
+            发送消息
+            </summary>
+            <param name="type">通讯类型</param>
+            <param name="cid">通讯id</param>
+            <param name="message">消息内容</param>
+            <param name="msgToPic">是否文字转图片</param>
+            <param name="userId">用户Id</param>
+            <param name="groupId">qq群</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.OpenController.Auth(System.String)">
+            <summary>
+            通过AppKey获取授权Token，该Token有效期为10分钟
+            </summary>
+            <param name="AppKey"></param>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Controllers.QLConfigController">
+            <summary>
+            青龙配置文件管理
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.QLPanelController.GetToken">
+            <summary>
+            获取青龙配置，并包含最新的 认证token
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLPanelController.RefreshToken">
+            <summary>
+            刷新青龙授权Token（授权或localhost访问）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLPanelController.RefreshLogin">
+            <summary>
+            刷新青龙登录状态（授权或localhost访问）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLPanelController.GetQLEnvs(System.String,System.String)">
+            <summary>
+            获取青龙环境变量
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLPanelController.DeleteEnvs(System.String,System.Collections.Generic.List{System.String})">
+            <summary>
+            删除青龙容器环境变量
+            </summary>
+            <param name="id"></param>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLPanelController.AddEnvs(System.String,System.Collections.Generic.IEnumerable{System.Object})">
+            <summary>
+            添加环境变量
+            </summary>
+            <param name="id"></param>
+            <param name="envs"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLTaskController.Run(System.Collections.Generic.List{Quantum.Entities.QL.QLTaskRun})">
+            <summary>
+            运行任务
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLTaskController.Enable(System.Collections.Generic.List{Quantum.Entities.QL.QLTaskRun})">
+            <summary>
+            运行任务
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLTaskController.Disable(System.Collections.Generic.List{Quantum.Entities.QL.QLTaskRun})">
+            <summary>
+            运行任务
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLTaskController.Delete(System.Collections.Generic.List{Quantum.Entities.QL.QLTaskRun})">
+            <summary>
+            运行任务
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLTaskController.Update(Quantum.Entities.QL.QLongTask)">
+            <summary>
+            修改青龙任务
+            </summary>
+            <param name="task"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.QLTaskController.Add(Quantum.Entities.QL.QLongTask)">
+            <summary>
+            添加青龙任务
+            </summary>
+            <param name="task"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.SystemConfigController.UpdatePssword(Quantum.Entities.DTOs.UpdatePsswordRequest)">
+            <summary>
+            修改用户名密码
+            </summary>
+            <param name="request"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.SystemConfigController.Update(Quantum.Entities.Config.Setting)">
+            <summary>
+            修改系统设置
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.TaskController.Scripts(System.String)">
+            <summary>
+            获取脚本字符串
+            </summary>
+            <param name="file"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.TaskController.UpdateScripts(Quantum.Entities.Http.SaveQLFile)">
+            <summary>
+            更新脚本
+            </summary>
+            <param name="file"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.TaskController.Update(Quantum.Entities.Model.TaskModel)">
+            <summary>
+            添加，更新任务
+            </summary>
+            <param name="task"></param>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Controllers.WorkWxController">
+            <summary>
+            企业微信
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.WorkWxController.Get(System.String,System.String,System.String,System.String,System.String)">
+            <summary>
+            企业微信认证地址，请先添加企业微信
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.WorkWxController.Post(System.String,Senparc.Weixin.Work.Entities.PostModel)">
+            <summary>
+            微信后台验证地址（使用Post），企业微信后台应用的“修改配置”的Url填写
+            </summary>
+        </member>
+        <!-- Badly formed XML comment ignored for member "M:Quantum.Controllers.WorkWxController.SendMessage(Quantum.Entities.Model.WorkWxModel,System.String,System.String)" -->
+        <member name="M:Quantum.Controllers.WxmpController.AddOrUpdate(Quantum.Entities.Model.WxmpModel)">
+            <summary>
+            添加或者更新公众号配置
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.WxmpController.Post(System.String,System.String,System.String,System.String,System.String,System.String)">
+            <summary>
+            接受公众号post提交的消息数据
+            </summary>
+            <param name="appId"></param>
+            <param name="signature"></param>
+            <param name="echostr"></param>
+            <param name="nonce"></param>
+            <param name="timestamp"></param>
+            <param name="data"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.WxmpController.XmlToMessageFromWeiXin(System.String)">
+            <summary>
+                XML转消息对象
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.WxmpController.TryGetFirstTagText(System.Xml.XmlDocument,System.String,System.String@)">
+            <summary>
+                尝试取得XML中第一个指定标签的文本
+            </summary>
+            <param name="xml">xml文档对象</param>
+            <param name="tag">指定的标签名</param>
+            <param name="txt">取得的文本</param>
+            <returns>是否成功取得</returns>
+        </member>
+        <member name="T:Quantum.FixWeixinBugWeixinResult">
+            <summary>
+            修复微信换行 bug
+            </summary>
+        </member>
+        <member name="M:Quantum.FixWeixinBugWeixinResult.#ctor(Senparc.NeuChar.MessageHandlers.IMessageHandlerDocument)">
+            <summary>
+            这个类型只用于特殊阶段：目前IOS版本微信有换行的bug，\r\n会识别为2行
+            </summary>
+        </member>
+        <member name="M:Quantum.Program.CopyFolder(System.String,System.String)">
+            <summary>
+            复制源文件夹下的所有内容到新文件夹
+            </summary>
+            <param name="sources">源文件夹路径</param>
+            <param name="dest">新文件夹路径</param>
+        </member>
+    </members>
+</doc>
