@@ -9,6 +9,12 @@
             添加或者更新go-cqhttp
             </summary>
         </member>
+        <member name="M:Quantum.Controllers.CqhttpController.Delete(System.String)">
+            <summary>
+            删除go-cqhttp配置
+            </summary>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.CqhttpController.Get">
             <summary>
             获取go-cqhtt配置信息
@@ -241,11 +247,18 @@
             修改系统设置
             </summary>
         </member>
+        <member name="M:Quantum.Controllers.TaskController.ExecTask(System.Collections.Generic.List{System.String})">
+            <summary>
+            执行脚本任务
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.TaskController.Scripts(System.String)">
             <summary>
             获取脚本字符串
             </summary>
-            <param name="file"></param>
+            <param name="fileName">文件名</param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.TaskController.UpdateScripts(Quantum.Entities.Http.SaveQLFile)">

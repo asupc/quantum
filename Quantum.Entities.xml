@@ -304,6 +304,11 @@
             刷新青龙授权token
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Config.Setting.ServerPath">
+            <summary>
+            服务地址
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.DTOs.EnvQuery.Key">
             <summary>
             搜索关键词
