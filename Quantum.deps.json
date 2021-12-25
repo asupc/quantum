@@ -426,6 +426,23 @@
         }
       },
       "Humanizer.Core/2.8.26": {},
+      "Jellyfin.SkiaSharp.NativeAssets.LinuxArm/1.68.1": {
+        "dependencies": {
+          "SkiaSharp": "2.80.3"
+        },
+        "runtimeTargets": {
+          "runtimes/linux-arm/native/libSkiaSharp.so": {
+            "rid": "linux-arm",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-arm64/native/libSkiaSharp.so": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
       "K4os.Compression.LZ4/1.2.6": {
         "dependencies": {
           "System.Memory": "4.5.4"
@@ -1074,23 +1091,9 @@
           "System.Security.Principal.Windows": "5.0.0"
         }
       },
-      "Microsoft.Win32.SystemEvents/6.0.0": {
-        "runtime": {
-          "lib/netcoreapp3.1/Microsoft.Win32.SystemEvents.dll": {
-            "assemblyVersion": "6.0.0.0",
-            "fileVersion": "6.0.21.52210"
-          }
-        },
-        "runtimeTargets": {
-          "runtimes/win/lib/netcoreapp3.1/Microsoft.Win32.SystemEvents.dll": {
-            "rid": "win",
-            "assetType": "runtime",
-            "assemblyVersion": "6.0.0.0",
-            "fileVersion": "6.0.21.52210"
-          }
-        },
-        "compile": {
-          "lib/netcoreapp3.1/Microsoft.Win32.SystemEvents.dll": {}
+      "Microsoft.Win32.SystemEvents/4.7.0": {
+        "dependencies": {
+          "Microsoft.NETCore.Platforms": "5.0.0"
         }
       },
       "MySql.Data/8.0.27": {
@@ -1387,6 +1390,64 @@
           "lib/netstandard2.1/Senparc.Weixin.Work.dll": {}
         }
       },
+      "SkiaSharp/2.80.3": {
+        "dependencies": {
+          "System.Memory": "4.5.4"
+        },
+        "runtime": {
+          "lib/netstandard2.0/SkiaSharp.dll": {
+            "assemblyVersion": "2.80.0.0",
+            "fileVersion": "2.80.3.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/osx/native/libSkiaSharp.dylib": {
+            "rid": "osx",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-arm64/native/libSkiaSharp.dll": {
+            "rid": "win-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/libSkiaSharp.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/libSkiaSharp.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        },
+        "compile": {
+          "lib/netstandard2.0/SkiaSharp.dll": {}
+        }
+      },
+      "SkiaSharp.NativeAssets.Linux/2.80.3": {
+        "dependencies": {
+          "SkiaSharp": "2.80.3"
+        },
+        "runtimeTargets": {
+          "runtimes/linux-musl-x64/native/libSkiaSharp.so": {
+            "rid": "linux-musl-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libSkiaSharp.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "SkiaSharp.NativeAssets.Linux.NoDependencies/2.80.3": {
+        "dependencies": {
+          "SkiaSharp": "2.80.3"
+        }
+      },
       "Slapper.AutoMapper/2.0.1": {
         "runtime": {
           "lib/netstandard2.1/Slapper.dll": {
@@ -1571,8 +1632,16 @@
           "System.Runtime": "4.3.0"
         }
       },
-      "System.Collections.Immutable/5.0.0": {},
-      "System.ComponentModel.Annotations/5.0.0": {},
+      "System.Collections.Immutable/5.0.0": {
+        "compile": {
+          "lib/netstandard2.0/System.Collections.Immutable.dll": {}
+        }
+      },
+      "System.ComponentModel.Annotations/5.0.0": {
+        "compile": {
+          "ref/netstandard2.1/System.ComponentModel.Annotations.dll": {}
+        }
+      },
       "System.Configuration.ConfigurationManager/4.7.0": {
         "dependencies": {
           "System.Security.Cryptography.ProtectedData": "4.7.0",
@@ -1641,32 +1710,10 @@
           "runtime.native.System": "4.3.0"
         }
       },
-      "System.Drawing.Common/6.0.0": {
+      "System.Drawing.Common/4.7.0": {
         "dependencies": {
-          "Microsoft.Win32.SystemEvents": "6.0.0"
-        },
-        "runtime": {
-          "lib/netcoreapp3.1/System.Drawing.Common.dll": {
-            "assemblyVersion": "6.0.0.0",
-            "fileVersion": "6.0.21.52210"
-          }
-        },
-        "runtimeTargets": {
-          "runtimes/unix/lib/netcoreapp3.1/System.Drawing.Common.dll": {
-            "rid": "unix",
-            "assetType": "runtime",
-            "assemblyVersion": "6.0.0.0",
-            "fileVersion": "6.0.21.52210"
-          },
-          "runtimes/win/lib/netcoreapp3.1/System.Drawing.Common.dll": {
-            "rid": "win",
-            "assetType": "runtime",
-            "assemblyVersion": "6.0.0.0",
-            "fileVersion": "6.0.21.52210"
-          }
-        },
-        "compile": {
-          "lib/netcoreapp3.1/System.Drawing.Common.dll": {}
+          "Microsoft.NETCore.Platforms": "5.0.0",
+          "Microsoft.Win32.SystemEvents": "4.7.0"
         }
       },
       "System.Dynamic.Runtime/4.3.0": {
@@ -1954,7 +2001,7 @@
       },
       "System.Windows.Extensions/4.7.0": {
         "dependencies": {
-          "System.Drawing.Common": "6.0.0"
+          "System.Drawing.Common": "4.7.0"
         }
       },
       "System.Xml.ReaderWriter/4.3.0": {
@@ -2108,6 +2155,7 @@
       },
       "Quantum.Utils/1.0.0": {
         "dependencies": {
+          "Jellyfin.SkiaSharp.NativeAssets.LinuxArm": "1.68.1",
           "Microsoft.Data.Sqlite.Core": "5.0.9",
           "Microsoft.Extensions.Caching.Memory": "5.0.0",
           "Microsoft.Extensions.Http": "6.0.0",
@@ -2115,7 +2163,9 @@
           "Newtonsoft.Json": "13.0.1",
           "Quantum.Entities": "1.0.0",
           "RestSharp": "106.12.0",
-          "System.Drawing.Common": "6.0.0",
+          "SkiaSharp": "2.80.3",
+          "SkiaSharp.NativeAssets.Linux": "2.80.3",
+          "SkiaSharp.NativeAssets.Linux.NoDependencies": "2.80.3",
           "log4net": "2.0.12"
         },
         "runtime": {
@@ -3809,6 +3859,13 @@
       "path": "humanizer.core/2.8.26",
       "hashPath": "humanizer.core.2.8.26.nupkg.sha512"
     },
+    "Jellyfin.SkiaSharp.NativeAssets.LinuxArm/1.68.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-cdNiz3BXCKV1hiSyyXTFX4/Uk94f1FfxrxFWOU5nypr5yjYA5FO8WcxVZyIpQLnI+QoMqh518OxMzaFimEFDMw==",
+      "path": "jellyfin.skiasharp.nativeassets.linuxarm/1.68.1",
+      "hashPath": "jellyfin.skiasharp.nativeassets.linuxarm.1.68.1.nupkg.sha512"
+    },
     "K4os.Compression.LZ4/1.2.6": {
       "type": "package",
       "serviceable": true,
@@ -4229,12 +4286,12 @@
       "path": "microsoft.win32.registry/5.0.0",
       "hashPath": "microsoft.win32.registry.5.0.0.nupkg.sha512"
     },
-    "Microsoft.Win32.SystemEvents/6.0.0": {
+    "Microsoft.Win32.SystemEvents/4.7.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-hqTM5628jSsQiv+HGpiq3WKBl2c8v1KZfby2J6Pr7pEPlK9waPdgEO6b8A/+/xn/yZ9ulv8HuqK71ONy2tg67A==",
-      "path": "microsoft.win32.systemevents/6.0.0",
-      "hashPath": "microsoft.win32.systemevents.6.0.0.nupkg.sha512"
+      "sha512": "sha512-mtVirZr++rq+XCDITMUdnETD59XoeMxSpLRIII7JRI6Yj0LEDiO1pPn0ktlnIj12Ix8bfvQqQDMMIF9wC98oCA==",
+      "path": "microsoft.win32.systemevents/4.7.0",
+      "hashPath": "microsoft.win32.systemevents.4.7.0.nupkg.sha512"
     },
     "MySql.Data/8.0.27": {
       "type": "package",
@@ -4369,6 +4426,27 @@
       "path": "senparc.weixin.work/3.14.3",
       "hashPath": "senparc.weixin.work.3.14.3.nupkg.sha512"
     },
+    "SkiaSharp/2.80.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-qX6tGNP3+MXNYe2pKm0PCRiJ/cx+LTeLaggwZifB7sUMXhECfKKKHJq45VqZKt37xQegnCCdf1jHXwmHeJQs5Q==",
+      "path": "skiasharp/2.80.3",
+      "hashPath": "skiasharp.2.80.3.nupkg.sha512"
+    },
+    "SkiaSharp.NativeAssets.Linux/2.80.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-LYl/mvEXrsKMdDNPVjA4ul8JDDGZI8DIkFE0a5GdhaC/aooxgwjuaXZ9NfPg4cJsRf8tb6VhGHvjSNUngNOcJw==",
+      "path": "skiasharp.nativeassets.linux/2.80.3",
+      "hashPath": "skiasharp.nativeassets.linux.2.80.3.nupkg.sha512"
+    },
+    "SkiaSharp.NativeAssets.Linux.NoDependencies/2.80.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-fMfXO2YRwceJjAN+gsUopmwsPQqW3iiBmnF+ZRMDOAgZRQM47Eih7acExqYkSVv8qoqR9/24Q6RjZW2ScF7k4Q==",
+      "path": "skiasharp.nativeassets.linux.nodependencies/2.80.3",
+      "hashPath": "skiasharp.nativeassets.linux.nodependencies.2.80.3.nupkg.sha512"
+    },
     "Slapper.AutoMapper/2.0.1": {
       "type": "package",
       "serviceable": true,
@@ -4502,12 +4580,12 @@
       "path": "system.diagnostics.tracesource/4.3.0",
       "hashPath": "system.diagnostics.tracesource.4.3.0.nupkg.sha512"
     },
-    "System.Drawing.Common/6.0.0": {
+    "System.Drawing.Common/4.7.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-NfuoKUiP2nUWwKZN6twGqXioIe1zVD0RIj2t976A+czLHr2nY454RwwXs6JU9Htc6mwqL6Dn/nEL3dpVf2jOhg==",
-      "path": "system.drawing.common/6.0.0",
-      "hashPath": "system.drawing.common.6.0.0.nupkg.sha512"
+      "sha512": "sha512-v+XbyYHaZjDfn0ENmJEV1VYLgGgCTx1gnfOBcppowbpOAriglYgGCvFCPr2EEZyBvXlpxbEsTwkOlInl107ahA==",
+      "path": "system.drawing.common/4.7.0",
+      "hashPath": "system.drawing.common.4.7.0.nupkg.sha512"
     },
     "System.Dynamic.Runtime/4.3.0": {
       "type": "package",
