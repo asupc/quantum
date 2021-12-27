@@ -87,7 +87,7 @@
             <param name="ids"></param>
             <returns></returns>
         </member>
-        <member name="M:Quantum.Controllers.EnvController.Query(System.String,System.String,System.Nullable{Quantum.Entities.EnvType})">
+        <member name="M:Quantum.Controllers.EnvController.Query(System.String,System.String,System.Nullable{Quantum.Entities.EnvType},System.String)">
             <summary>
             查询环境变量
             </summary>
@@ -156,6 +156,13 @@
             <summary>
             青龙配置文件管理
             </summary>
+        </member>
+        <member name="M:Quantum.Controllers.QLPanelController.Update(Quantum.Entities.Model.QLPanelModel)">
+            <summary>
+            更新青龙面板配置
+            </summary>
+            <param name="QLPanelModel"></param>
+            <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.QLPanelController.GetToken">
             <summary>
@@ -275,6 +282,13 @@
             <param name="task"></param>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.UserController.Delete(System.Collections.Generic.List{System.String})">
+            <summary>
+            删除用户
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
         <member name="T:Quantum.Controllers.WorkWxController">
             <summary>
             企业微信
@@ -292,6 +306,19 @@
             </summary>
         </member>
         <!-- Badly formed XML comment ignored for member "M:Quantum.Controllers.WorkWxController.SendMessage(Quantum.Entities.Model.WorkWxModel,System.String,System.String)" -->
+        <member name="M:Quantum.Controllers.WxmpController.Get">
+            <summary>
+            微信公众号列表
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.WxmpController.Delete(System.String)">
+            <summary>
+            删除公众号
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.WxmpController.AddOrUpdate(Quantum.Entities.Model.WxmpModel)">
             <summary>
             添加或者更新公众号配置
@@ -308,6 +335,15 @@
             <param name="nonce"></param>
             <param name="timestamp"></param>
             <param name="data"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.WxmpController.SendMessage(System.String,System.String,System.String)">
+            <summary>
+            测试给公众号主动发送消息
+            </summary>
+            <param name="appId"></param>
+            <param name="userId"></param>
+            <param name="message"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.WxmpController.XmlToMessageFromWeiXin(System.String)">

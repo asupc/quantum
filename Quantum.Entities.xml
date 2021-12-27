@@ -309,6 +309,11 @@
             服务地址
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Config.Setting.GitRepository">
+            <summary>
+            脚本库
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.DTOs.EnvQuery.Key">
             <summary>
             搜索关键词
@@ -541,6 +546,11 @@
             是否启用
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Model.CommandModel.EnableRegex">
+            <summary>
+            开启正则匹配
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.Model.CqhttpModel.Name">
             <summary>
             名称
@@ -705,6 +715,11 @@
         <member name="P:Quantum.Entities.Model.TaskModel.TextToPicture">
             <summary>
             文字转图片
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.EnableRegex">
+            <summary>
+            开启正则匹配
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.TaskModel.FileCache">
