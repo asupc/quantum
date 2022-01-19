@@ -314,6 +314,21 @@
             脚本库
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Config.Setting.GlobalTextToPicture">
+            <summary>
+            全局文字转图片
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.InterferenceLine">
+            <summary>
+            文字转图片干扰线
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.WxpusherToken">
+            <summary>
+            微信push token
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.DTOs.EnvQuery.Key">
             <summary>
             搜索关键词
@@ -367,6 +382,16 @@
         <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.group_id">
             <summary>
             分组id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.Title">
+            <summary>
+            消息标题
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.MessageType">
+            <summary>
+            消息内容
             </summary>
         </member>
         <member name="P:Quantum.Entities.DTOs.TaskCommandStep.ThreadId">
@@ -504,6 +529,11 @@
             任务执行类型
             </summary>
         </member>
+        <member name="P:Quantum.Entities.LoggingInfo.UpdateTime">
+            <summary>
+            更新时间
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.LoggingInfo.UUID">
             <summary>
             cat /sys/class/dmi/id/product_uuid
@@ -524,6 +554,91 @@
             <summary>
             容器Id
             head -1 /proc/self/cgroup|cut -d/ -f3
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.LoggingInfo.Version">
+            <summary>
+            版本号
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.Model.AIOUserModel">
+            <summary>
+            统一用户
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.qq">
+            <summary>
+            qq号
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.qqname">
+            <summary>
+            qq昵称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.wxid">
+            <summary>
+            微信ID
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.wxname">
+            <summary>
+            微信昵称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.workerid">
+            <summary>
+            企业微信ID
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.workername">
+            <summary>
+            企业微信名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.vlwId">
+            <summary>
+            绑定的vlw id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.wxmpId">
+            <summary>
+            公众号id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.cqhttpId">
+            <summary>
+            cqhttpId
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.workwxId">
+            <summary>
+            企业微信ID
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.Weight">
+            <summary>
+            用户权重
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.remark">
+            <summary>
+            备注
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.NotifyCommunicationType">
+            <summary>
+            消息通知方式
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.MaxEnvCount">
+            <summary>
+            最大环境变量个数
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.ExpiryDate">
+            <summary>
+            有效期日期
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.CommandModel.Key">
@@ -614,6 +729,26 @@
         <member name="P:Quantum.Entities.Model.LogModel.LogPath">
             <summary>
             log 文件路径
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.MessageRecord.AppID">
+            <summary>
+            wxmp appid
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.MessageRecord.CreateTime">
+            <summary>
+            消息创建时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.MessageRecord.UserId">
+            <summary>
+            接收人id
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.MessageRecord.Message">
+            <summary>
+            消息内容
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.QLPanelEnvModel.QLPanelId">
@@ -887,6 +1022,51 @@
         <member name="P:Quantum.Entities.Model.UserModel.CreateTime">
             <summary>
             创建时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.Token">
+            <summary>
+            认证Token
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.robot_wxid">
+            <summary>
+            机器人wxid
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.Name">
+            <summary>
+            自定义名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.Http">
+            <summary>
+            API地址
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.AddFriend">
+            <summary>
+            自动通过好友请求
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.AddFriendMessage">
+            <summary>
+            添加好友发送消息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.BlackList">
+            <summary>
+            黑名单
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.Enable">
+            <summary>
+            是否启用
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.Groups">
+            <summary>
+            监听群
             </summary>
         </member>
         <member name="T:Quantum.Entities.Model.WorkWxModel">

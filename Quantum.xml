@@ -60,6 +60,14 @@
             </summary>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.EnvController.UpdateWeight(System.Int32,System.Collections.Generic.List{System.String})">
+            <summary>
+            更新环境变量权重
+            </summary>
+            <param name="weight"></param>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.EnvController.UpdateEnvPanel(Quantum.Entities.DTOs.UpdateEnvPanelRequest)">
             <summary>
             更新指定环境变量容器。
@@ -289,6 +297,38 @@
             <param name="ids"></param>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.UserController.GetBindingCode(System.String)">
+            <summary>
+            获取绑定码
+            </summary>
+            <param name="userId"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.VLWController.Receive(System.String,Quantum.Entities.DTOs.VLW.ReceiveMessage)">
+            <summary>
+            接受VLW 发送的消息
+            </summary>
+            <param name="token"></param>
+            <param name="data"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.VLWController.Add(Quantum.Entities.Model.VLWModel)">
+            <summary>
+            添加或者更新go-VLW
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.VLWController.Delete(System.String)">
+            <summary>   
+            删除VLW配置
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.VLWController.Get">
+            <summary>
+            获取VLW配置信息
+            </summary>
+            <returns></returns>
+        </member>
         <member name="T:Quantum.Controllers.WorkWxController">
             <summary>
             企业微信
@@ -319,22 +359,25 @@
             <param name="id"></param>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.WxmpController.AccessToken(System.String,System.Boolean)">
+            <summary>
+            获取wxmp access token
+            </summary>
+            <param name="appId">微信公众号 appId</param>
+            <param name="refresh">是否刷新（如果发现过期，可以使用该参数刷新）</param>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.WxmpController.AddOrUpdate(Quantum.Entities.Model.WxmpModel)">
             <summary>
             添加或者更新公众号配置
             </summary>
             <returns></returns>
         </member>
-        <member name="M:Quantum.Controllers.WxmpController.Post(System.String,System.String,System.String,System.String,System.String,System.String)">
+        <member name="M:Quantum.Controllers.WxmpController.Post(System.String)">
             <summary>
             接受公众号post提交的消息数据
             </summary>
             <param name="appId"></param>
-            <param name="signature"></param>
-            <param name="echostr"></param>
-            <param name="nonce"></param>
-            <param name="timestamp"></param>
-            <param name="data"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.WxmpController.SendMessage(System.String,System.String,System.String)">
@@ -353,12 +396,24 @@
         </member>
         <member name="M:Quantum.Controllers.WxmpController.TryGetFirstTagText(System.Xml.XmlDocument,System.String,System.String@)">
             <summary>
-                尝试取得XML中第一个指定标签的文本
+            尝试取得XML中第一个指定标签的文本
             </summary>
             <param name="xml">xml文档对象</param>
             <param name="tag">指定的标签名</param>
             <param name="txt">取得的文本</param>
             <returns>是否成功取得</returns>
+        </member>
+        <member name="M:Quantum.Controllers.WxpusherController.Index(System.String,Quantum.Entities.DTOs.WxpusherCallback)">
+            <summary>
+            wxpush 回调
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.WxpusherController.CreateQrcode(System.String)">
+            <summary>
+            创建wxpusher 关注二维码url
+            </summary>
+            <returns></returns>
         </member>
         <member name="T:Quantum.FixWeixinBugWeixinResult">
             <summary>
