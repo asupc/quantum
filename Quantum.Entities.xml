@@ -633,7 +633,7 @@
         </member>
         <member name="P:Quantum.Entities.Model.AIOUserModel.MaxEnvCount">
             <summary>
-            最大环境变量个数
+            用户积分
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.AIOUserModel.ExpiryDate">
@@ -669,6 +669,31 @@
         <member name="P:Quantum.Entities.Model.CqhttpModel.Name">
             <summary>
             名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomDataModel.Type">
+            <summary>
+            数据类型标识
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomDataModel.CreateTime">
+            <summary>
+            数据创建时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomDataModel.UpdateTime">
+            <summary>
+            数据更新时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomDataTitleModel.Type">
+            <summary>
+            数据类型标识
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomDataTitleModel.TypeName">
+            <summary>
+            数据类型名称
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.EnvModel.Name">
@@ -987,41 +1012,6 @@
         <member name="P:Quantum.Entities.Model.TaskSubModel.Remark">
             <summary>
             备注
-            </summary>
-        </member>
-        <member name="P:Quantum.Entities.Model.UserModel.CommunicationType">
-            <summary>
-            用户类型
-            </summary>
-        </member>
-        <member name="P:Quantum.Entities.Model.UserModel.UserName">
-            <summary>
-            用户昵称
-            </summary>
-        </member>
-        <member name="P:Quantum.Entities.Model.UserModel.GroupId">
-            <summary>
-            群聊id
-            </summary>
-        </member>
-        <member name="P:Quantum.Entities.Model.UserModel.Remark">
-            <summary>
-            备注
-            </summary>
-        </member>
-        <member name="P:Quantum.Entities.Model.UserModel.Weight">
-            <summary>
-            权重
-            </summary>
-        </member>
-        <member name="P:Quantum.Entities.Model.UserModel.SourceId">
-            <summary>
-            用户来源id，如果是 go-cqhttp 则是 cqhttpId
-            </summary>
-        </member>
-        <member name="P:Quantum.Entities.Model.UserModel.CreateTime">
-            <summary>
-            创建时间
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.VLWModel.Token">

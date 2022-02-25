@@ -21,6 +21,44 @@
             </summary>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.CustomDataController.Get(System.String,Quantum.Entities.Model.CustomDataModel,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
+            <summary>
+            获取自定义数据类型
+            </summary>
+            <param name="type"></param>
+            <param name="queryModel"></param>
+            <param name="createTimeStart"></param>
+            <param name="createTimeEnd"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.CustomDataController.Update(Quantum.Entities.Model.CustomDataModel)">
+            <summary>
+            更新数据
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.CustomDataController.Add(System.Collections.Generic.List{Quantum.Entities.Model.CustomDataModel})">
+            <summary>
+            批量提交数据
+            </summary>
+        </member>
+        <member name="M:Quantum.Controllers.CustomDataController.Delete(System.Collections.Generic.List{System.String})">
+            <summary>
+            删除数据
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.CustomDataTitleController.Get(System.String)">
+            <summary>
+            获取自定义数据类型
+            </summary>
+            <param name="type"></param>
+        </member>
+        <member name="M:Quantum.Controllers.CustomDataTitleController.AddOrUpdate(Quantum.Entities.Model.CustomDataTitleModel)">
+            <summary>
+            添加自定义数据字段信息
+            </summary>
+        </member>
         <member name="T:Quantum.Controllers.EnumController">
             <summary>
             枚举接口
@@ -125,12 +163,10 @@
             <summary>
             用户登录
             </summary>
-            <param name="system"></param>
-            <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.LogsController.DeleteLogs(System.Collections.Generic.List{System.String})">
             <summary>
-            删除指定的环境变量(值)
+            批量删除日志
             </summary>
             <returns></returns>
         </member>
@@ -145,12 +181,6 @@
             <summary>
             发送消息
             </summary>
-            <param name="type">通讯类型</param>
-            <param name="cid">通讯id</param>
-            <param name="message">消息内容</param>
-            <param name="msgToPic">是否文字转图片</param>
-            <param name="userId">用户Id</param>
-            <param name="groupId">qq群</param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.OpenController.Auth(System.String)">
@@ -297,6 +327,13 @@
             <param name="ids"></param>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.UserController.GetById(System.String)">
+            <summary>
+            通过用户Id获取用户信息
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.UserController.GetBindingCode(System.String)">
             <summary>
             获取绑定码
@@ -414,16 +451,6 @@
             创建wxpusher 关注二维码url
             </summary>
             <returns></returns>
-        </member>
-        <member name="T:Quantum.FixWeixinBugWeixinResult">
-            <summary>
-            修复微信换行 bug
-            </summary>
-        </member>
-        <member name="M:Quantum.FixWeixinBugWeixinResult.#ctor(Senparc.NeuChar.MessageHandlers.IMessageHandlerDocument)">
-            <summary>
-            这个类型只用于特殊阶段：目前IOS版本微信有换行的bug，\r\n会识别为2行
-            </summary>
         </member>
         <member name="M:Quantum.Program.CopyFolder(System.String,System.String)">
             <summary>
