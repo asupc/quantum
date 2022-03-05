@@ -21,14 +21,17 @@
             </summary>
             <returns></returns>
         </member>
-        <member name="M:Quantum.Controllers.CustomDataController.Get(System.String,Quantum.Entities.Model.CustomDataModel,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
+        <member name="M:Quantum.Controllers.CustomDataController.Get(System.String,Quantum.Entities.Model.CustomDataModel,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.String,System.Int32,System.Int32)">
             <summary>
-            获取自定义数据类型
+            获取自定义数据
             </summary>
-            <param name="type"></param>
-            <param name="queryModel"></param>
-            <param name="createTimeStart"></param>
-            <param name="createTimeEnd"></param>
+            <param name="type">类型</param>
+            <param name="queryModel">查询条件</param>
+            <param name="createTimeStart">创建时间-起</param>
+            <param name="createTimeEnd">创建时间-止</param>
+            <param name="key">关键字</param>
+            <param name="pageSize">分页大小</param>
+            <param name="pageIndex">页码</param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.CustomDataController.Update(Quantum.Entities.Model.CustomDataModel)">
@@ -53,6 +56,12 @@
             获取自定义数据类型
             </summary>
             <param name="type"></param>
+        </member>
+        <member name="M:Quantum.Controllers.CustomDataTitleController.Get">
+            <summary>
+            获取所有
+            </summary>
+            <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.CustomDataTitleController.AddOrUpdate(Quantum.Entities.Model.CustomDataTitleModel)">
             <summary>
