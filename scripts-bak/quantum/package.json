@@ -9,6 +9,7 @@
     "crypto-js": "^4.1.1",
     "fs": "0.0.1-security",
     "got": "^11.8.2",
+    "https-proxy-agent": "^5.0.0",
     "moment": "^2.29.1",
     "sqlite3": "^5.0.2",
     "tough-cookie": "^4.0.0"
