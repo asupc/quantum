@@ -329,6 +329,16 @@
             微信push token
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Config.Setting.AutomaticPayment">
+            <summary>
+            自动收款
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.IntegralProportion">
+            <summary>
+            积分比例
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.DTOs.EnvQuery.Key">
             <summary>
             搜索关键词
@@ -432,6 +442,41 @@
         <member name="P:Quantum.Entities.DTOs.TaskCommandStep.ForceEndTime">
             <summary>
             强制结束任务时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.VLW.WxTransfer.paysubtype">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.VLW.WxTransfer.is_arrived">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.VLW.WxTransfer.is_received">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.VLW.WxTransfer.receiver_pay_id">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.VLW.WxTransfer.payer_pay_id">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.VLW.WxTransfer.money">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.VLW.WxTransfer.remark">
+            <summary>
+            
             </summary>
         </member>
         <member name="T:Quantum.Entities.QL.QLongTask">
@@ -641,6 +686,11 @@
             有效期日期
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.WebId">
+            <summary>
+            
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.Model.CommandModel.Key">
             <summary>
             触发指令
@@ -669,6 +719,46 @@
         <member name="P:Quantum.Entities.Model.CqhttpModel.Name">
             <summary>
             名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.AccessToken">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.Remark">
+            <summary>
+            备注
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.Groups">
+            <summary>
+            监听群
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.AddFriend">
+            <summary>
+            是否自动同意好友请求
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.AddFriendMessage">
+            <summary>
+            通过好友请求后自动发送消息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.AddGroup">
+            <summary>
+            自动同意加群请求
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.AddGroupMessage">
+            <summary>
+            加群请求后发送消息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.BlackList">
+            <summary>
+            黑名单
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.CustomDataModel.Type">

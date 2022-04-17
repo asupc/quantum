@@ -173,6 +173,12 @@
             用户登录
             </summary>
         </member>
+        <member name="M:Quantum.Controllers.LoginController.Version">
+            <summary>
+            获取量子版本号
+            </summary>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.LogsController.DeleteLogs(System.Collections.Generic.List{System.String})">
             <summary>
             批量删除日志
@@ -184,6 +190,13 @@
             获取详细日志
             </summary>
             <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.MessageController.GetMessage(System.String)">
+            <summary>
+            获取web用户消息
+            </summary>
+            <param name="userId"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.NotifiyController.Send(Quantum.Entities.DTOs.SendNotifyDTO)">
@@ -348,6 +361,15 @@
             获取绑定码
             </summary>
             <param name="userId"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.UserController.DeductionIntegral(System.String,System.Int32,System.String)">
+            <summary>
+            扣除用户积分
+            </summary>
+            <param name="userId">用户id</param>
+            <param name="integral">积分</param>
+            <param name="remark">扣除备注</param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.VLWController.Receive(System.String,Quantum.Entities.DTOs.VLW.ReceiveMessage)">
