@@ -363,15 +363,6 @@
             <param name="userId"></param>
             <returns></returns>
         </member>
-        <member name="M:Quantum.Controllers.UserController.DeductionIntegral(System.String,System.Int32,System.String)">
-            <summary>
-            扣除用户积分
-            </summary>
-            <param name="userId">用户id</param>
-            <param name="integral">积分</param>
-            <param name="remark">扣除备注</param>
-            <returns></returns>
-        </member>
         <member name="M:Quantum.Controllers.VLWController.Receive(System.String,Quantum.Entities.DTOs.VLW.ReceiveMessage)">
             <summary>
             接受VLW 发送的消息
