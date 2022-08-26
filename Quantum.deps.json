@@ -1632,16 +1632,8 @@
           "System.Runtime": "4.3.0"
         }
       },
-      "System.Collections.Immutable/5.0.0": {
-        "compile": {
-          "lib/netstandard2.0/System.Collections.Immutable.dll": {}
-        }
-      },
-      "System.ComponentModel.Annotations/5.0.0": {
-        "compile": {
-          "ref/netstandard2.1/System.ComponentModel.Annotations.dll": {}
-        }
-      },
+      "System.Collections.Immutable/5.0.0": {},
+      "System.ComponentModel.Annotations/5.0.0": {},
       "System.Configuration.ConfigurationManager/4.7.0": {
         "dependencies": {
           "System.Security.Cryptography.ProtectedData": "4.7.0",
@@ -2096,7 +2088,8 @@
       },
       "Quantum.Application/1.0.0": {
         "dependencies": {
-          "Quantum.DB": "1.0.0"
+          "Quantum.DB": "1.0.0",
+          "Quartz": "3.3.3"
         },
         "runtime": {
           "Quantum.Application.dll": {}
