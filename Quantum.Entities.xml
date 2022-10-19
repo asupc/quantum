@@ -339,6 +339,26 @@
             积分比例
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Config.Setting.MessageInterval">
+            <summary>
+            消息队列间隔时间
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.Footer">
+            <summary>
+            自定义页脚
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.DTOs.CommunicationGroupDTO">
+            <summary>
+            群组
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.CommunicationGroupDTO.Name">
+            <summary>
+            
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.DTOs.EnvQuery.Key">
             <summary>
             搜索关键词
@@ -539,6 +559,21 @@
             任务Id
             </summary>
         </member>
+        <member name="T:Quantum.Entities.CommunicationType">
+            <summary>
+            通讯类型
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.TaskStatus">
+            <summary>
+            任务状态
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.EnvType">
+            <summary>
+            环境变量类型
+            </summary>
+        </member>
         <member name="F:Quantum.Entities.EnvType.公共变量">
             <summary>
             公共环境变量
@@ -567,6 +602,11 @@
         <member name="F:Quantum.Entities.QLPanelEnvMode.User">
             <summary>
             手动指定
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.MessageType">
+            <summary>
+            消息类型
             </summary>
         </member>
         <member name="T:Quantum.Entities.LogType">
@@ -686,9 +726,14 @@
             有效期日期
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.AIOUserModel.WebId">
+        <member name="P:Quantum.Entities.Model.AIOUserModel.Password">
             <summary>
             
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.AIOUserModel.UserName">
+            <summary>
+            用户名
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.CommandModel.Key">
@@ -716,14 +761,39 @@
             开启正则匹配
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Model.CommandModel.MessageType">
+            <summary>
+            消息类型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CommandModel.Remark">
+            <summary>
+            备注
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.Model.CqhttpModel.Name">
             <summary>
             名称
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.Http">
+            <summary>
+            http协议地址
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.Ws">
+            <summary>
+            websocket 协议地址
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.Model.CqhttpModel.AccessToken">
             <summary>
             
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CqhttpModel.Enable">
+            <summary>
+            是否启用
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.CqhttpModel.Remark">
@@ -784,6 +854,86 @@
         <member name="P:Quantum.Entities.Model.CustomDataTitleModel.TypeName">
             <summary>
             数据类型名称
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.Model.CustomEnvConfig">
+            <summary>
+            自定义环境变量配置
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.EnvName">
+            <summary>
+            环境变量名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.Name">
+            <summary>
+            配置名称
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.TriggerRegex">
+            <summary>
+            触发正则表达式
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.UpdateRegex">
+            <summary>
+            更新环境变量取值表达式
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.Remark">
+            <summary>
+            备注
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.Enable">
+            <summary>
+            是否启用
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.WhilteListGroup">
+            <summary>
+            白名单群号
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.SuccessTips">
+            <summary>
+            提交/更新成功提示
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.FailedTips">
+            <summary>
+            提交失败的提示信息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.SplitChar">
+            <summary>
+            分隔符
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfig.Score">
+            <summary>
+            积分扣除
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.Model.CustomEnvConfigRegex">
+            <summary>
+            环境变量配置取值正则表达式
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfigRegex.Key">
+            <summary>
+            Key
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfigRegex.ValueRegex">
+            <summary>
+            取值正则表达式
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.CustomEnvConfigRegex.IsRequired">
+            <summary>
+            是否必要
             </summary>
         </member>
         <member name="P:Quantum.Entities.Model.EnvModel.Name">
@@ -914,6 +1064,11 @@
         <member name="P:Quantum.Entities.Model.QLPanelModel.UserEnvMax">
             <summary>
             用户变量最大值
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.EnvName">
+            <summary>
+            允许提交的变量名
             </summary>
         </member>
         <member name="T:Quantum.Entities.Model.TaskConcEnv">
@@ -1147,6 +1302,11 @@
         <member name="P:Quantum.Entities.Model.VLWModel.Groups">
             <summary>
             监听群
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.VLWModel.Remark">
+            <summary>
+            备注信息
             </summary>
         </member>
         <member name="T:Quantum.Entities.Model.WorkWxModel">

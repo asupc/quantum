@@ -5,12 +5,17 @@
   "author": "asupc <17919100150@qq.com>",
   "private": true,
   "dependencies": {
-    "axois": "0.0.1-security",
+    "axios": "^1.1.0",
+    "axois": "^0.0.1-security",
     "crypto-js": "^4.1.1",
-    "fs": "0.0.1-security",
+    "date-fns": "^2.29.3",
+    "ds": "^1.4.2",
+    "fs": "^0.0.1-security",
     "got": "^11.8.2",
     "https-proxy-agent": "^5.0.0",
+    "jsdom": "^20.0.1",
     "moment": "^2.29.1",
+    "png-js": "^1.0.0",
     "sqlite3": "^5.0.2",
     "tough-cookie": "^4.0.0"
   }

@@ -541,6 +541,14 @@
             <param name="task"></param>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.QLTaskController.Log(System.String,System.String)">
+            <summary>
+            获取青龙脚本运行日志
+            </summary>
+            <param name="qlId">青龙id</param>
+            <param name="scriptId">脚本id</param>
+            <returns>日志文本</returns>
+        </member>
         <member name="M:Quantum.Controllers.QLTaskController.Add(Quantum.Entities.QL.QLongTask)">
             <summary>
             添加青龙任务
@@ -577,6 +585,12 @@
             </summary>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.SystemConfigController.Update">
+            <summary>
+            更新
+            </summary>
+            <returns></returns>
+        </member>
         <member name="T:Quantum.Controllers.TaskController">
             <summary>
             脚本指令
@@ -587,6 +601,13 @@
             获取所有的脚本指令
             </summary>
             <param name="query"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.TaskController.GetById(System.String)">
+            <summary>
+            获取任务详情
+            </summary>
+            <param name="id"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.TaskController.ExecTask(System.Collections.Generic.List{System.String})">
@@ -684,6 +705,33 @@
             <param name="userId">用户id</param>
             <param name="integral">积分</param>
             <param name="remark">扣除备注</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.UserController.ResetPassword(System.String)">
+            <summary>
+            重置用户密码
+            </summary>
+            <param name="userId"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.UserController.SetPassword(Quantum.Controllers.SetPasswordModel)">
+            <summary>
+            设置用户密码
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.UserController.Register(Quantum.Controllers.SetPasswordModel)">
+            <summary>
+            用户注册
+            </summary>
+            <param name="model"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.UserController.Login(Quantum.Controllers.SetPasswordModel)">
+            <summary>
+            web chat 登录
+            </summary>
+            <param name="model"></param>
             <returns></returns>
         </member>
         <member name="T:Quantum.Controllers.VLWController">
