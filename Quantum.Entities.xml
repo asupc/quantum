@@ -384,6 +384,151 @@
             消息id
             </summary>
         </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.msgSource">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.transType">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.money">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.memo">
+            <summary>
+            阿萨德
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.transferid">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.invalidtime">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.timeStamp">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.fromType">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.msgType">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.from_group">
+            <summary>
+            来源群
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.fromWxid">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.finalFromWxid">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.atWxidList">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.silence">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.membercount">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.signature">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.msg">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessageData.msgBase64">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveEvent.event">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveEvent.wxid">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveEvent.data">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessage.type">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessage.des">
+            <summary>
+            收到消息
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessage.data">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessage.timestamp">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessage.wxid">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessage.port">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessage.pid">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.DTOs.QXReceiveMessage.flag">
+            <summary>
+            
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.DTOs.SendNotifyDTO.CommunicationType">
             <summary>
             通讯类型
@@ -557,6 +702,11 @@
         <member name="P:Quantum.Entities.QL.QLTaskRun.TaskIds">
             <summary>
             任务Id
+            </summary>
+        </member>
+        <member name="T:Quantum.Entities.WxHttpConfigType">
+            <summary>
+            微信http类型
             </summary>
         </member>
         <member name="T:Quantum.Entities.CommunicationType">
@@ -1071,6 +1221,11 @@
             允许提交的变量名
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.GroupId">
+            <summary>
+            环境变量分组ID
+            </summary>
+        </member>
         <member name="T:Quantum.Entities.Model.TaskConcEnv">
             <summary>
             任务并发环境变量
@@ -1259,52 +1414,57 @@
             备注
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.Token">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.HttpType">
+            <summary>
+            http 协议类型
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.Token">
             <summary>
             认证Token
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.robot_wxid">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.robot_wxid">
             <summary>
             机器人wxid
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.Name">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.Name">
             <summary>
             自定义名称
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.Http">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.Http">
             <summary>
             API地址
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.AddFriend">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.AddFriend">
             <summary>
             自动通过好友请求
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.AddFriendMessage">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.AddFriendMessage">
             <summary>
             添加好友发送消息
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.BlackList">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.BlackList">
             <summary>
             黑名单
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.Enable">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.Enable">
             <summary>
             是否启用
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.Groups">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.Groups">
             <summary>
             监听群
             </summary>
         </member>
-        <member name="P:Quantum.Entities.Model.VLWModel.Remark">
+        <member name="P:Quantum.Entities.Model.WxHttpConfigModel.Remark">
             <summary>
             备注信息
             </summary>
