@@ -363,7 +363,6 @@
             <summary>
             发送消息
             </summary>
-            <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.OpenController.Auth(System.String)">
             <summary>
@@ -403,6 +402,12 @@
             <summary>
             青龙面板
             </summary>
+        </member>
+        <member name="M:Quantum.Controllers.QLPanelController.Page(Quantum.Entities.DTOs.QL.QLPanelQueryModel)">
+            <summary>
+            获取分页青龙面板
+            </summary>
+            <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.QLPanelController.Index">
             <summary>
@@ -633,6 +638,12 @@
             </summary>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.SystemConfigController.DatabaseShrink">
+            <summary>
+            收缩数据库文件大小
+            </summary>
+            <returns></returns>
+        </member>
         <member name="T:Quantum.Controllers.TaskController">
             <summary>
             脚本指令
@@ -785,8 +796,15 @@
         </member>
         <member name="T:Quantum.Controllers.VLWController">
             <summary>
-            VLW 微信通讯
+            微信通讯
             </summary>
+        </member>
+        <member name="M:Quantum.Controllers.VLWController.TestReceive(System.String)">
+            <summary>
+            测试xyo httpapi回调地址
+            </summary>
+            <param name="token"></param>
+            <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.VLWController.Receive(System.String,Quantum.Entities.DTOs.VLW.ReceiveMessage)">
             <summary>
@@ -813,23 +831,6 @@
             </summary>
             <returns></returns>
         </member>
-        <member name="T:Quantum.Controllers.WorkWxController">
-            <summary>
-            企业微信
-            </summary>
-        </member>
-        <member name="M:Quantum.Controllers.WorkWxController.Get(System.String,System.String,System.String,System.String,System.String)">
-            <summary>
-            企业微信认证地址，请先添加企业微信
-            </summary>
-            <returns></returns>
-        </member>
-        <member name="M:Quantum.Controllers.WorkWxController.Post(System.String,Senparc.Weixin.Work.Entities.PostModel)">
-            <summary>
-            微信后台验证地址（使用Post），企业微信后台应用的“修改配置”的Url填写
-            </summary>
-        </member>
-        <!-- Badly formed XML comment ignored for member "M:Quantum.Controllers.WorkWxController.SendMessage(Quantum.Entities.Model.WorkWxModel,System.String,System.String)" -->
         <member name="M:Quantum.Controllers.WxmpController.Get">
             <summary>
             微信公众号列表

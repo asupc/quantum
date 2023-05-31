@@ -344,9 +344,19 @@
             消息队列间隔时间
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Config.Setting.LoginNotify">
+            <summary>
+            量子登录提醒开关
+            </summary>
+        </member>
         <member name="P:Quantum.Entities.Config.Setting.Footer">
             <summary>
             自定义页脚
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Config.Setting.Caches">
+            <summary>
+            缓存类型
             </summary>
         </member>
         <member name="T:Quantum.Entities.DTOs.CommunicationGroupDTO">
@@ -1226,6 +1236,11 @@
             环境变量分组ID
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Model.QLPanelModel.Version">
+            <summary>
+            青龙版本
+            </summary>
+        </member>
         <member name="T:Quantum.Entities.Model.TaskConcEnv">
             <summary>
             任务并发环境变量
@@ -1367,6 +1382,11 @@
         <member name="P:Quantum.Entities.Model.TaskModel.TaskSubs">
             <summary>
             子任务
+            </summary>
+        </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.CommunicationTypes">
+            <summary>
+            通讯方式
             </summary>
         </member>
         <member name="T:Quantum.Entities.Model.TaskSubModel">
