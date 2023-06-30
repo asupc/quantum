@@ -1389,6 +1389,11 @@
             通讯方式
             </summary>
         </member>
+        <member name="P:Quantum.Entities.Model.TaskModel.EnableProxy">
+            <summary>
+            开启代理
+            </summary>
+        </member>
         <member name="T:Quantum.Entities.Model.TaskSubModel">
             <summary>
             多步骤任务

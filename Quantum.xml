@@ -888,6 +888,14 @@
             <param name="txt">取得的文本</param>
             <returns>是否成功取得</returns>
         </member>
+        <member name="M:Quantum.Controllers.WxmpController.WxmpLoginAsync(System.String,System.String)">
+            <summary>
+            通过微信授权code获取公众号用户openid 并登录web
+            </summary>
+            <param name="appId"></param>
+            <param name="code">微信授权code</param>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.WxpusherController.Index(System.String,Quantum.Entities.DTOs.WxpusherCallback)">
             <summary>
             wxpush 回调
