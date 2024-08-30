@@ -240,6 +240,12 @@
             </summary>
             <param name="type"></param>
         </member>
+        <member name="M:Quantum.Controllers.CustomDataTitleController.DeleteAsync(System.String,System.Boolean)">
+            <summary>
+            删除
+            </summary>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.CustomDataTitleController.Get">
             <summary>
             获取所有
@@ -801,6 +807,13 @@
             <param name="file"></param>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Controllers.TaskController.DeleteScripts(System.String)">
+            <summary>
+            删除脚本
+            </summary>
+            <param name="fileName"></param>
+            <returns></returns>
+        </member>
         <member name="M:Quantum.Controllers.TaskController.UpdateAsync(Quantum.Entities.Model.TaskModel)">
             <summary>
             添加，更新任务
@@ -815,11 +828,25 @@
             <param name="ids"></param>
             <returns></returns>
         </member>
-        <member name="M:Quantum.Controllers.TaskController.ExportAsync(System.String)">
+        <member name="M:Quantum.Controllers.TaskController.DisableAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            批量禁用脚本指令
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.TaskController.EnableAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            批量启用脚本指令
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Controllers.TaskController.ExportAsync(Quantum.Entities.DTOs.TaskQuery)">
             <summary>
             导出脚本指令
             </summary>
-            <param name="name"></param>
+            <param name="query"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Controllers.TaskController.ImportAsync">
