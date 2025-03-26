@@ -20,6 +20,7 @@
           "Microsoft.EntityFrameworkCore.Tools": "8.0.8",
           "Microsoft.VisualStudio.Azure.Containers.Tools.Targets": "1.21.0",
           "MySql.EntityFrameworkCore": "8.0.5",
+          "Quantum.Entities": "1.0.0",
           "Quartz.Extensions.Hosting": "3.13.0",
           "RestSharp": "111.4.1",
           "SkiaSharp": "2.88.8",
@@ -964,6 +965,18 @@
             "fileVersion": "0.8.0.0"
           }
         }
+      },
+      "Quantum.Entities/1.0.0": {
+        "dependencies": {
+          "Dapper.Contrib": "2.0.78",
+          "Microsoft.EntityFrameworkCore.Abstractions": "8.0.8"
+        },
+        "runtime": {
+          "Quantum.Entities.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
       }
     }
   },
@@ -1728,6 +1741,11 @@
       "sha512": "sha512-Z62eNBIu8E8YtbqlMy57tK3dV1+m2b9NhPeaYovB5exmLKvrGCqOhJTzrEUH5VyUWU6vwX3c1XHJGhW5HVs8dA==",
       "path": "zstdsharp.port/0.8.0",
       "hashPath": "zstdsharp.port.0.8.0.nupkg.sha512"
+    },
+    "Quantum.Entities/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
     }
   }
 }
