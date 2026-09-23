@@ -1,0 +1,1316 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Quantum</name>
+    </assembly>
+    <members>
+        <member name="T:Quantum.Web.Controllers.AiAgentController">
+            <summary>
+            AI Agent 会话与运行（管理员专用，2026-09-20 新增，AI 脚本修复 Agent 计划阶段三/四）。
+            会话与任务会话完全分离；运行进度由前端轮询 runs/steps 呈现（不占长连接，nginx 无需改动）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.GetConversations">
+            <summary>
+            会话列表
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.SaveConversation(Quantum.Entities.Model.AiConversationModel)">
+            <summary>
+            新建/改名会话（AllowEnvValues：本会话是否允许把环境变量值发给模型）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.DeleteConversations(System.String)">
+            <summary>
+            删除会话（连带消息/运行/轨迹/提案）
+            </summary>
+            <param name="ids">会话 Id 列表（逗号拼接）</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.GetMessages(System.String,System.Int64,System.Int32)">
+            <summary>
+            增量拉消息（afterSeq=0 拉最近 limit 条）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.Chat(Quantum.Entities.DTOs.AiChatRequest)">
+            <summary>
+            发起一次运行（立即返回，后台跑工具循环；前端轮询 runs/steps 与 messages）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.GetRun(System.String)">
+            <summary>
+            运行状态（含进度文案）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.GetLatestRun(System.String)">
+            <summary>
+            会话最近一次运行（任意状态；无 run 时 Data=null）——页面刷新/重进后的运行态恢复权威来源
+            （字面量段优先于参数段，与 runs/{id} 无路由冲突）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.BuildRunViewAsync(Quantum.Entities.Model.AiRunModel)">
+            <summary>run → AiRunView 组装（进度文案取最后一步；GetRun 与 runs/latest 共用）</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.CancelRun(System.String)">
+            <summary>
+            停止运行
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.GetSteps(System.String,System.Int32)">
+            <summary>
+            运行过程轨迹（工具调用/结果，页面过程面板）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.GetContract">
+            <summary>
+            平台能力摘要（页面「AI 已知的平台能力」面板）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.TestRunProposal(System.String)">
+            <summary>
+            手动再试运行一次提案（影子执行，真实副作用）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.ApplyProposal(System.String)">
+            <summary>
+            应用提案（服务端复校：基线哈希 + 门禁 + 编译；不过即拒绝且不改磁盘）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.DiscardProposal(System.String)">
+            <summary>
+            忽略提案
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.GetProposalContent(System.String)">
+            <summary>
+            提案差异对照（基线内容 + 候选内容，前端做行级 diff）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiAgentController.GetDefaultModel">
+            <summary>
+            当前默认模型（页面顶部选择器展示）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AiProviderController">
+            <summary>
+            AI 供应商与模型配置（管理员专用，2026-09-20 新增）：
+            供应商/模型 CRUD、连通性与工具能力测试、模型清单拉取导入、全局 AI 设置。
+            密钥默认只回掩码；明文仅经 {id}/reveal 显式动作返回（记操作日志）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.Get">
+            <summary>
+            供应商列表（含各自模型；密钥掩码）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.Save(Quantum.Entities.DTOs.AiProviderSaveModel)">
+            <summary>
+            新增/修改供应商（ApiKey 留空表示不改）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.Deletes(System.String)">
+            <summary>
+            删除供应商（连带其模型）
+            </summary>
+            <param name="ids">供应商 Id 列表（逗号拼接）</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.Reveal(System.String)">
+            <summary>
+            显示明文密钥（唯一的明文出口，记操作日志）
+            </summary>
+            <param name="id">供应商 Id</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.Test(System.String,System.String)">
+            <summary>
+            连通性测试（拉模型清单 + 最小对话 + 工具能力探测，结论写回供应商）
+            </summary>
+            <param name="id">供应商 Id</param>
+            <param name="modelId">指定测试模型（留空则用默认/第一个启用模型）</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.SyncModels(System.String)">
+            <summary>
+            拉取供应商模型清单（页面勾选后经 {id}/models/import 导入）
+            </summary>
+            <param name="id">供应商 Id</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.ImportModels(Quantum.Entities.DTOs.AiModelImportModel)">
+            <summary>
+            导入勾选的模型
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.SaveModel(Quantum.Entities.Model.AiModelModel)">
+            <summary>
+            新增/修改模型（上下文大小、输出上限、温度、默认模型）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.SetDefaultModel(System.String)">
+            <summary>
+            设为默认模型（全局仅一个）
+            </summary>
+            <param name="id">模型 Id</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.DeletesModels(System.String)">
+            <summary>
+            删除模型
+            </summary>
+            <param name="ids">模型 Id 列表（逗号拼接）</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.GetSetting">
+            <summary>
+            全局 AI 设置（单行）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AiProviderController.SaveSetting(Quantum.Entities.Model.AiSettingModel)">
+            <summary>
+            保存全局 AI 设置
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppAuthController">
+            <summary>
+            App（安卓客户端）认证接口：login / refresh / logout。
+            响应走统一 {Code, Message, Data} 包装；登录与刷新匿名（刷新令牌即凭证）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppAuthController.Login(Quantum.Web.Controllers.AppLoginRequest)">
+            <summary>
+            App 登录：账号密码 + 设备信息，返回 accessToken（2小时）与 refreshToken（滑动窗口，默认 365 天，见 Setting.RefreshTokenDays）
+            </summary>
+            <param name="request"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppAuthController.Refresh(Quantum.Web.Controllers.AppRefreshRequest)">
+            <summary>
+            刷新令牌：携带未过期的 refreshToken 换取新令牌对（旧 refreshToken 立即作废）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppAuthController.Logout(Quantum.Web.Controllers.AppRefreshRequest)">
+            <summary>
+            登出：吊销 refreshToken
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppLoginRequest">
+            <summary>
+            App 登录入参
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppLoginRequest.DeviceId">
+            <summary>
+            客户端设备唯一标识（首次安装生成）
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppLoginRequest.DeviceName">
+            <summary>
+            设备型号（可选）
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppLoginRequest.Platform">
+            <summary>
+            平台（android/ios/harmony，可选）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppRefreshRequest">
+            <summary>
+            App 刷新/登出入参
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppMediaController">
+            <summary>
+            App 媒体通道（M2）：下载根目录（ctx.File 门面产物）的列表/流式下发/内嵌封面。
+            鉴权比 AppUpload 下载更严：[ManagerOnly] 正向 claim，Open 匿名令牌/任务临时令牌天然被拒。
+            list 走 ResultFilter 信封；file/cover 为二进制直出（Range/ETag/inline/nosniff），
+            校验失败直出 404（不套 200 信封——ExoPlayer 对 200+JSON 只会报底层解析错误）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMediaController.List(System.Int32,System.Int32,System.String,System.String)">
+            <summary>
+            媒体列表：mtime 倒序；keyword 匹配文件名（包含）；dir 限定子目录（缺省全部）。
+            title/artist 取 ID3 元数据，解析失败回退「歌手 - 歌名」文件名拆分。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMediaController.Stream(System.String)">
+            <summary>
+            媒体流式下发：支持 Range（206 拖动/连播）、ETag("mtime-size") 缓存协商、
+            Content-Type 按扩展名固定映射；越界/白名单外/不存在直出 404。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMediaController.Cover(System.String)">
+            <summary>内嵌封面（ID3 picture 字节，ETag 同键缓存）；无封面 404，App 回退占位图。</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMediaController.NotFoundDirect">
+            <summary>二进制端点的直出 404：极简 JSON、不回显请求路径（ContentResult 不经 ResultFilter 包装）。</summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppMessageController">
+            <summary>
+            App 会话接口：seq 增量同步、已读回执、未读数、历史检索、指令提交、厂商推送注册与设备管理。
+            单管理员体系：业务端点全部 Manager 专属，身份取 JWT 声明（DeviceId）。
+            版本下发端点（原 version/latest 与 version/download 匿名端点）已随 App 端自更新移除，升级改手动安装 APK。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.Messages(System.Int64,System.Int32)">
+            <summary>
+            增量同步会话消息：取本地最大 seq 之后的消息（重连/启动补拉），顺带推进送达状态
+            </summary>
+            <param name="afterSeq">已同步到的最大 seq（首次传 0）</param>
+            <param name="limit">单页上限（默认 100，最大 500）</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.MarkRead(System.Int64)">
+            <summary>
+            已读回执：确认已读到 upToSeq，返回剩余未读数
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.ClearSession(System.String)">
+            <summary>
+            清空会话（App 端「删除会话」）：**2026-09-21 日志删除逻辑调整起与 session/delete 同语义**——
+            只删除会话行，消息记录（业务真实产生的数据）不再连带删除，删除入口收敛到日志中心。
+            端点仅为已发布 App 的兼容保留，响应形状不变（Cleared 恒为 0，MaxSeq 为当前全局最大 Seq）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.UnreadCount">
+            <summary>
+            未读会话消息数
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.History(System.String,System.Int32,System.Int32)">
+            <summary>
+            历史漫游：按关键字检索会话消息（SQL LIKE），seq 倒序分页
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.SessionsOverview(Quantum.Web.Controllers.ChatSessionOverviewRequest)">
+            <summary>
+            会话列表快照：每会话最后一条消息 + 总数 + 未读数（Web 管理端会话列表首屏）。
+            请求体携带各会话的本地已读水位（键 = 会话键，空串 = 默认会话）——服务端合并钳制为权威水位
+            （吸收上报并落库推进），未读按权威水位计算，响应条目带 ReadSeq（客户端吸收即完成对端追赶）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.SessionsRead(Quantum.Web.Controllers.ChatSessionOverviewRequest)">
+            <summary>
+            会话已读水位上报（2026-09-21 双端同步批次）：按会话推进服务端权威水位（只进 + 钳到 LastSeq，
+            入参形状与 sessions/overview 相同故直接复用）。实际推进的会话逐个广播 session_read 帧——
+            在线对端即时清角标；离线对端靠下次 overview 交换追赶。响应 Advanced = 实际推进的 (会话键, 水位) 列表。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.SessionMessages(System.String,System.Int64,System.Int32)">
+            <summary>
+            会话内分页：取某会话 Seq 倒序的一页（升序返回），首屏加载与向上滚动加载更早历史用（只读）。
+            </summary>
+            <param name="session">会话键（空 = 默认会话）</param>
+            <param name="beforeSeq">取该 Seq 之前（更早）的消息；≤ 0 表示从最新一条开始</param>
+            <param name="limit">单页条数（默认 50，最大 200）</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.DeleteSession(System.String)">
+            <summary>
+            删除会话（2026-09-18 会话分组归并批次；2026-09-21 日志删除逻辑调整）：只删除会话实体
+            （t_chat_session 行 = 会话数据），**该会话消息行（t_chat_message，业务真实产生的记录）保留**——
+            消息记录删除入口只有日志中心（session 空 = 默认会话，与 messages/clear 同风格 query 参数）。
+            响应带当前全局最大 Seq：消息不再删除后 Seq 号段不复用，客户端既有的游标回拨
+            min(当前, MaxSeq) 退化为 no-op，兼容保留。会话删除后，归属任务再推送消息时会话自动重建
+            （出站落库驱动，重建行预置已读水位，历史消息不计未读）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.Command(Quantum.Web.Controllers.AppCommandRequest)">
+            <summary>
+            提交指令/消息（REST 通道，等价 /ws/app 的 command 帧；2026-09-19 起不限流——
+            选项可重复点选语义下连点被 2s 窗口误拦，按所有者要求移除，鉴权与指令校验不变）。
+            图片/文件消息：Content=FileId、ContentType=image/file（A5.0① 上传后封装）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.Devices">
+            <summary>
+            我的多端在线设备列表（平台/机型/最近活跃）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.UnbindDevice(Quantum.Web.Controllers.AppUnbindDeviceRequest)">
+            <summary>
+            远程下线（解绑）设备
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.NotifySetting">
+            <summary>
+            我的通知偏好（无记录时返回默认全开）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.UpdateNotifySetting(Quantum.Entities.Model.AppNotifySettingModel)">
+            <summary>
+            保存通知偏好（仅影响厂商推送；免打扰时段格式 HH:mm）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.ScanLogin(Quantum.Web.Controllers.AppScanLoginRequest)">
+            <summary>
+            扫码登录管理后台：App 侧管理员（Manager 令牌）授权 Web 登录票据
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppScanLoginRequest">
+            <summary>
+            扫码登录入参
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppScanLoginRequest.Ticket">
+            <summary>
+            Web 端 qr-create 生成的票据（二维码内容）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.ChatSessionOverviewRequest">
+            <summary>
+            会话列表快照入参
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.ChatSessionOverviewRequest.ReadSeqs">
+            <summary>
+            各会话的本地已读水位（键 = 会话键，空串 = 默认会话；缺省视为 0 = 全部未读）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppCommandRequest">
+            <summary>
+            App 指令/消息提交入参
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppCommandRequest.Content">
+            <summary>
+            指令内容（与对话窗口输入一致，支持系统指令/快捷指令/脚本任务）；
+            图片/文件消息时为 FileId
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppCommandRequest.ContentType">
+            <summary>
+            内容类型（text/image/file，缺省 text；image/file 时 Content=FileId）
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppCommandRequest.ContentText">
+            <summary>
+            配文：image/file 消息附带的文字说明（可空；文本消息忽略）
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppCommandRequest.Session">
+            <summary>
+            来源会话键（= 任务 Id 或任务配置的会话名，可空 = 默认会话）：仅用于「接收」行回显与快捷回复归属，
+            不影响指令处理本身（任何会话发起的指令走同一处理管道）
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.AppCommandRequest.TargetTaskId">
+            <summary>
+            点选来源任务 Id（可空）：选项消息根部 taskId 由客户端点选代发时透传（手打/重发不带），
+            供入站三级路由①级精确路由——命中启用任务且指令匹配时只触发该任务；不落库、不影响回显
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppUnbindDeviceRequest">
+            <summary>
+            设备解绑入参
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppNotificationController">
+            <summary>
+            App 站内通知：列表/未读数/已读标记（通知落库与推送由 AppPushService.SendNotificationAsync 编排）。
+            单管理员体系：管理员专属。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppNotificationController.List(System.Int32,System.Int32,System.Boolean)">
+            <summary>
+            我的通知列表
+            </summary>
+            <param name="page">页码</param>
+            <param name="pageSize">页大小</param>
+            <param name="unreadOnly">仅未读</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppNotificationController.UnreadCount">
+            <summary>
+            未读通知数
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppNotificationController.MarkRead(System.String)">
+            <summary>
+            标记已读（不传 id 则全部已读）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.AppUploadController">
+            <summary>
+            App 端上传/下载接口：图片与聊天附件上传（白名单+大小+限流）、鉴权流式下载。
+            下载带 ETag/Last-Modified 支持缓存协商；图片 inline、其余 attachment + nosniff。
+            </summary>
+            <remarks>
+            类级 ManagerOnly 与契约 §5.1 的权限清单一致：Open AppKey 匿名令牌同密钥签发但无 Manager claim，
+            缺这道闸即可上传/下载任意附件（2026-09-18 补齐）。
+            </remarks>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppUploadController.Image">
+            <summary>
+            上传聊天图片（multipart 字段名 file；.jpg/.jpeg/.png/.gif/.webp，≤10MB；20 次/分钟）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppUploadController.File">
+            <summary>
+            上传聊天附件（multipart 字段名 file；导入白名单 + .pdf，≤50MB；20 次/分钟）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppUploadController.Download(System.String)">
+            <summary>
+            鉴权下载：图片 inline 且带 ETag/Last-Modified；
+            Content-Type 服务端按扩展名固定映射 + nosniff；非图片 Content-Disposition: attachment。
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Controllers.BaseController.IsManager">
+            <summary>
+            当前令牌是否管理员（正向 "Manager" claim；任务列表过滤/Env 限权/日志分型按此收敛）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BaseController.Denied">
+            <summary>
+            非 ManagerOnly 语义的拒绝响应：本项目 HTTP 恒 200，与过滤器同款 body Code=401 表达。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BaseController.GetUserDeviceId">
+            <summary>
+            当前登录设备 Id（JWT "DeviceId" 声明，App 令牌专有）。
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.BookmarkController">
+            <summary>
+            书签管理控制器
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BookmarkController.GetBookmarks(System.Int32,System.Int32,System.String)">
+            <summary>
+            获取所有书签（支持分页和搜索）
+            </summary>
+            <param name="page">页码</param>
+            <param name="pageSize">每页数量</param>
+            <param name="search">搜索关键字</param>
+            <returns>书签列表</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BookmarkController.GetBookmark(System.String)">
+            <summary>
+            根据ID获取书签详情
+            </summary>
+            <param name="id">书签ID</param>
+            <returns>书签详情</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BookmarkController.CreateBookmark(Quantum.Entities.DTOs.BookmarkDto)">
+            <summary>
+            创建新书签
+            </summary>
+            <param name="bookmarkDto">书签信息</param>
+            <returns>创建的书签</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BookmarkController.UpdateBookmark(System.String,Quantum.Entities.DTOs.BookmarkDto)">
+            <summary>
+            更新书签
+            </summary>
+            <param name="id">书签ID</param>
+            <param name="bookmarkDto">更新的书签信息</param>
+            <returns>无内容</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BookmarkController.DeleteBookmark(System.String)">
+            <summary>
+            删除书签
+            </summary>
+            <param name="id">书签ID</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BookmarkController.ImportBookmarks(System.Collections.Generic.List{Quantum.Entities.DTOs.BookmarkDto})">
+            <summary>
+            批量导入书签
+            </summary>
+            <param name="bookmarks">书签列表</param>
+            <returns>导入结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BookmarkController.ExportBookmarks">
+            <summary>
+            导出所有书签
+            </summary>
+            <returns>书签列表</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.BookmarkController.UpdateSortOrder(System.Collections.Generic.List{Quantum.Entities.DTOs.BookmarkSortDto})">
+            <summary>
+            更新书签排序
+            </summary>
+            <param name="sortData">排序数据</param>
+            <returns>无内容</returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.CommandController">
+            <summary>
+            快捷回复
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CommandController.Get(Quantum.Entities.DTOs.CommandQuery)">
+            <summary>
+            获取所有快捷回复
+            </summary>
+            <param name="query"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CommandController.DeleteAsync(System.String)">
+            <summary>
+            删除快捷回复
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CommandController.AddAsync(Quantum.Entities.Model.CommandModel)">
+            <summary>
+            添加快捷回复
+            </summary>
+            <param name="command"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CommandController.UpdateAsync(Quantum.Entities.Model.CommandModel)">
+            <summary>
+            修改快捷回复
+            </summary>
+            <param name="command"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CommandController.DisableAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            禁用快捷回复
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CommandController.EnableAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            启用快捷回复
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.CustomDataController">
+            <summary>
+            自定义数据
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataController.Get(System.String,Quantum.Entities.Model.CustomDataModel,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.String,System.Int32,System.Int32)">
+            <summary>
+            获取自定义数据
+            </summary>
+            <param name="type">类型</param>
+            <param name="queryModel">查询条件</param>
+            <param name="createTimeStart">创建时间-起</param>
+            <param name="createTimeEnd">创建时间-止</param>
+            <param name="key">关键字</param>
+            <param name="pageSize">分页大小</param>
+            <param name="pageIndex">页码</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataController.ExportAsync(System.String,Quantum.Entities.Model.CustomDataModel,System.Nullable{System.DateTime},System.Nullable{System.DateTime})">
+            <summary>
+            导出自定义数据为 CSV（与列表同筛选条件、全量不分页；表头取该类型的标题定义）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataController.UpdateAsync(Quantum.Entities.Model.CustomDataModel)">
+            <summary>
+            更新数据
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataController.UpdatesAsync(System.Collections.Generic.List{Quantum.Entities.Model.CustomDataModel})">
+            <summary>
+            更新数据
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataController.AddAsync(System.Collections.Generic.List{Quantum.Entities.Model.CustomDataModel})">
+            <summary>
+            批量提交数据
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataController.DeleteAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            删除数据
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataController.ClearAsync(System.String)">
+            <summary>
+            按数据类型清空数据
+            </summary>
+            <param name="type"></param>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.CustomDataTitleController">
+            <summary>
+            自定义数据表格头
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataTitleController.Get(System.String)">
+            <summary>
+            获取自定义数据类型
+            </summary>
+            <param name="type"></param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataTitleController.DeleteAsync(System.String,System.Boolean)">
+            <summary>
+            删除（管理员专用）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataTitleController.Get">
+            <summary>
+            获取所有（需登录：匿名会向公网泄露自定义数据结构元数据）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataTitleController.Get(Quantum.Entities.DTOs.BaseQuery)">
+            <summary>
+            分页
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.CustomDataTitleController.AddOrUpdate(Quantum.Entities.Model.CustomDataTitleModel)">
+            <summary>
+            添加自定义数据字段信息（管理员专用）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.DockerController">
+            <summary>
+            Docker管理控制器
+            提供对Docker容器、镜像、网络和卷的管理接口（管理员专用：主机容器操作对普通用户开放风险不成比例）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.ListContainers(System.Boolean)">
+            <summary>
+            列出容器
+            </summary>
+            <param name="all">是否列出所有容器（包括停止的）</param>
+            <returns>容器列表</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.InspectContainerAsync(System.String)">
+            <summary>
+            获取容器详细信息
+            </summary>
+            <param name="containerId">容器ID</param>
+            <returns>容器详细信息</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.GetContainerStats(System.String)">
+            <summary>
+            获取容器统计信息
+            </summary>
+            <param name="containerId">容器ID</param>
+            <returns>容器统计信息</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.GetContainersStats(System.Collections.Generic.IList{System.String})">
+            <summary>
+            批量获取容器统计信息
+            </summary>
+            <param name="containerIds">容器ID列表</param>
+            <returns>容器统计信息字典</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.StartContainer(System.String)">
+            <summary>
+            启动容器
+            </summary>
+            <param name="containerId">容器ID</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.StopContainer(System.String)">
+            <summary>
+            停止容器
+            </summary>
+            <param name="containerId">容器ID</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.RestartContainer(System.String)">
+            <summary>
+            重启容器
+            </summary>
+            <param name="containerId">容器ID</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.RemoveContainer(System.String,System.Boolean,System.Boolean)">
+            <summary>
+            删除容器
+            </summary>
+            <param name="containerId">容器ID</param>
+            <param name="force">是否强制删除</param>
+            <param name="removeVolumes">是否同时删除关联卷</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.GetContainerLogs(System.String,System.Boolean,System.Boolean,System.Boolean,System.String)">
+            <summary>
+            获取容器日志
+            </summary>
+            <param name="containerId">容器ID</param>
+            <param name="follow">是否持续跟踪日志</param>
+            <param name="stdout">是否包含标准输出</param>
+            <param name="stderr">是否包含错误输出</param>
+            <param name="tail">获取最后几行日志</param>
+            <returns>日志内容</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.ListImages(System.Boolean)">
+            <summary>
+            列出镜像
+            </summary>
+            <param name="all">是否列出所有镜像</param>
+            <returns>镜像列表</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.PullImage(System.String,System.String)">
+            <summary>
+            拉取镜像
+            </summary>
+            <param name="image">镜像名称</param>
+            <param name="tag">标签</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.RemoveImage(System.String,System.Boolean)">
+            <summary>
+            删除镜像
+            </summary>
+            <param name="imageId">镜像ID</param>
+            <param name="force">是否强制删除</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.ListNetworks">
+            <summary>
+            列出网络
+            </summary>
+            <returns>网络列表</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.ConnectContainerToNetwork(System.String,System.String)">
+            <summary>
+            连接容器到网络
+            </summary>
+            <param name="networkId">网络ID</param>
+            <param name="containerId">容器ID</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.DisconnectContainerFromNetwork(System.String,System.String)">
+            <summary>
+            断开容器与网络的连接
+            </summary>
+            <param name="networkId">网络ID</param>
+            <param name="containerId">容器ID</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.ListVolumes">
+            <summary>
+            列出卷
+            </summary>
+            <returns>卷列表</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.CreateVolume(System.String,System.String)">
+            <summary>
+            创建卷
+            </summary>
+            <param name="name">卷名称</param>
+            <param name="driver">驱动类型</param>
+            <returns>创建结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.RemoveVolume(System.String)">
+            <summary>
+            删除卷
+            </summary>
+            <param name="volumeName">卷名称</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.GetSystemInfo">
+            <summary>
+            获取Docker系统信息
+            </summary>
+            <returns>系统信息</returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.DockerController.GetVersion">
+            <summary>
+            获取Docker版本信息
+            </summary>
+            <returns>版本信息</returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.EnumController">
+            <summary>
+            枚举接口
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnumController.Enums">
+            <summary>
+            获取所有枚举信息
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.EnvController">
+            <summary>
+            环境变量（扁平化单类型；单管理员体系下整体管理员专属，Open/任务临时令牌不可访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.Index(Quantum.Entities.DTOs.EnvQuery)">
+            <summary>
+            环境变量列表数据
+            </summary>
+            <param name="query"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.Export(Quantum.Entities.DTOs.EnvQuery)">
+            <summary>
+            导出环境变量（与列表同筛选条件、全量；每行一个变量值）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.DeleteEnvs(System.String)">
+            <summary>
+            删除指定的环境变量(按值匹配)
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.Save(System.Collections.Generic.List{Quantum.Entities.DTOs.EnvModelPostModel})">
+            <summary>
+            批量保存环境变量（领域动作：按名称合并，存在即更新、不存在即新增）
+            </summary>
+            <param name="envs"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.Delete(System.String)">
+            <summary>
+            通过环境变量id 删除
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.Query(System.String,System.String)">
+            <summary>
+            查询环境变量
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.DisableValues(System.String)">
+            <summary>
+            禁用环境变量（按值，授权访问或localhost访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.EnableValues(System.String)">
+            <summary>
+            启用环境变量（按值，授权访问或localhost访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.Disable(System.String)">
+            <summary>
+            禁用环境变量(id)（授权访问或localhost访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.EnvController.Enable(System.String)">
+            <summary>
+            启用环境变量(id)（授权访问或localhost访问）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LoginController.Login(Quantum.Entities.Config.Setting)">
+            <summary>
+            用户登录
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LoginController.QrCreate">
+            <summary>
+            创建扫码登录票据（匿名，Web 登录页展示二维码；票据 2 分钟有效）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LoginController.QrStatus(System.String)">
+            <summary>
+            轮询扫码状态（匿名）：status 0=待扫码 1=已授权（Token 一次性返回） 2=过期
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LoginController.Version">
+            <summary>
+            获取量子版本号
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.LogsController">
+            <summary>
+            日志中心（分型按角色过滤）：任务日志(1)/指令触发(5) 全员可见；
+            通知(2)/操作(3)/登录(4)/外触(6)/系统(7) 仅管理员——删除/清空/统计亦为管理员专用。
+            </summary>
+        </member>
+        <member name="F:Quantum.Web.Controllers.LogsController.ManagerOnlyLogTypes">
+            <summary>
+            仅管理员可见的日志类型（含操作日志=3）
+            </summary>
+        </member>
+        <member name="F:Quantum.Web.Controllers.LogsController.PublicLogTypes">
+            <summary>
+            全员可见的日志类型（非管理员未指定类型时强制收敛到该集合）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LogsController.Index(Quantum.Entities.DTOs.LogQuery)">
+            <summary>
+            获取日志信息（非管理员仅任务/指令触发两类）
+            </summary>
+            <param name="query"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LogsController.DeleteLogs(System.String)">
+            <summary>
+            批量删除日志（管理员专用）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LogsController.ClearLogs">
+            <summary>
+            清空全部日志（管理员专用）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LogsController.Statistics(System.Int32)">
+            <summary>
+            日志统计（按级别计数 + 近 N 天按日计数，管理员专用）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.LogsController.GetDetails(System.String)">
+            <summary>
+            获取详细日志（受限类型的详情对非管理员隐藏）
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.MenuController">
+            <summary>
+            菜单管理（管理员专用）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.MenuController.GetAsync">
+            <summary>
+            获取所有菜单（树形结构）。库为空时从 jsons/menu.json 初始化一次；
+            "数据管理"下的自定义数据子菜单由 CustomDataTitleController 增删时同步维护，本接口只读。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.MenuController.UpdateMenuAsync(System.Collections.Generic.List{Quantum.Entities.DTOs.MenuItem})">
+            <summary>
+            保存菜单（全部更新，先删后增）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.MenuController.ResetMenuAsync">
+            <summary>
+            重置菜单到默认状态（从 JSON 重建，含自定义数据子菜单）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.NotifiyController">
+            <summary>
+            消息通知（管理员专用：单用户 App 会话消息入口，普通用户不开放群发能力）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.NotifiyController.Send(Quantum.Entities.DTOs.SendNotifyDTO)">
+            <summary>
+            发送消息
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenController.AuthByBody(Quantum.Web.Controllers.OpenAuthRequest)">
+            <summary>
+            通过AppKey获取授权Token（Body 传参，推荐）：AppKey 不进 URL，避免被代理/访问日志留存
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenController.Auth(System.String)">
+            <summary>
+            通过AppKey获取授权Token，该Token有效期为10分钟（URL 传参旧通道，兼容存量对接方，建议迁移 POST /auth）
+            </summary>
+            <param name="AppKey"></param>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.OpenAuthRequest">
+            <summary>
+            AppKey 授权入参（POST /api/Open/auth）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.OpenTriggerTaskController">
+            <summary>
+            外触内执
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.Trigger(System.String)">
+            <summary>
+            触发执行
+            </summary>
+            <param name="secret">配置安全密钥</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.Trigger(System.String,System.Object)">
+            <summary>
+            触发执行
+            </summary>
+            <param name="secret">配置安全密钥</param>
+            <param name="data">自定义数据</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.AddAsync(Quantum.Entities.Model.OpenTriggerTask)">
+            <summary>
+            添加或者更新外触内执配置
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.DeleteAsync(System.String)">
+            <summary>
+            删除外触内执配置（ids 逗号分隔，与 Task 批量删除约定一致）
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.GetAsync(Quantum.Entities.DTOs.BaseQuery)">
+            <summary>
+            获取外触内执配置信息
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.DisableAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            批量禁用外触内执指令
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.EnableAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            批量启用外触内执指令
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="T:Quantum.Web.Controllers.ScriptVersionController">
+            <summary>
+            脚本版本管理（管理员专用，2026-09-20 新增）：脚本历史快照的查看、对比与回滚。
+            当前版本始终以磁盘文件为准（读取走既有 GET /api/Task/scripts），本控制器只管历史。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ScriptVersionController.Get(System.String,System.Int32,System.Int32)">
+            <summary>
+            版本列表（不含正文；fileName 为空则查全部文件）
+            </summary>
+            <param name="fileName">脚本文件（相对 scripts/quantum 根）</param>
+            <param name="pageIndex">页码</param>
+            <param name="pageSize">分页大小</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ScriptVersionController.Files">
+            <summary>
+            有版本记录的脚本文件清单（版本页左侧筛选）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ScriptVersionController.GetById(System.String)">
+            <summary>
+            版本详情（含正文）
+            </summary>
+            <param name="id">版本 Id</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ScriptVersionController.Rollback(System.String)">
+            <summary>
+            回滚到指定版本：历史内容同样过门禁与编译，不通过即拒绝且不落盘（与在线保存同口径）
+            </summary>
+            <param name="id">版本 Id</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ScriptVersionController.SetPinned(System.String,System.Boolean)">
+            <summary>
+            锁定/解锁版本（锁定版本不被每文件保留数清理）
+            </summary>
+            <param name="id">版本 Id</param>
+            <param name="pinned">是否锁定</param>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ScriptVersionController.Deletes(System.String)">
+            <summary>
+            删除版本记录（只删历史快照，不触碰磁盘上的当前脚本文件）
+            </summary>
+            <param name="ids">版本 Id 列表（逗号拼接）</param>
+        </member>
+        <member name="T:Quantum.Web.Controllers.SystemConfigController">
+            <summary>
+            系统设置（管理员专用；footer/install 匿名端点不受影响）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SystemConfigController.GetSetting">
+            <summary>
+            获取系统设置（登录后才可访问；敏感字段统一脱敏返回）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SystemConfigController.UpdatePassword(Quantum.Entities.DTOs.UpdatePasswordRequest)">
+            <summary>
+            修改登录密码
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SystemConfigController.Update(Quantum.Entities.Config.Setting)">
+            <summary>
+            修改系统设置
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SystemConfigController.GetFooter">
+            <summary>
+            获取自定义页脚信息
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SystemConfigController.Install(Quantum.Entities.Config.Setting)">
+            <summary>
+            初始化系统
+            </summary>
+            <param name="setting"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SystemConfigController.DatabaseShrink">
+            <summary>
+            收缩数据库（SQLite VACUUM；MySQL 优化高写入表）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.TaskController">
+            <summary>
+            脚本指令
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.Index(Quantum.Entities.DTOs.TaskQuery)">
+            <summary>
+            获取所有的脚本指令（服务端按调用者权限过滤：非管理员不返回 Manager 任务）
+            </summary>
+            <param name="query"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.GetByIdAsync(System.String)">
+            <summary>
+            获取任务详情（Manager 任务对非管理员隐藏）
+            </summary>
+            <param name="id"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.ExecTask(System.Collections.Generic.List{System.String})">
+            <summary>
+            执行脚本任务（Manager 任务仅管理员可执行）。
+            任务→通知接线：手动执行成功受理后广播任务通知（category=task，点按直达任务日志）。
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.ScriptsAsync(System.String)">
+            <summary>
+            获取脚本字符串（管理员专用：脚本内容属服务端代码，不对普通 App 用户开放）
+            </summary>
+            <param name="fileName">文件名</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.UpdateScriptsAsync(Quantum.Entities.DTOs.SaveQLFile)">
+            <summary>
+            更新脚本（保存流水线：门禁+编译；失败时内容不落盘，返回 blocked/warnings/errors 三类诊断）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.DeleteScripts(System.String)">
+            <summary>
+            删除脚本
+            </summary>
+            <param name="fileName"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.AddAsync(Quantum.Entities.DTOs.TaskSaveModel)">
+            <summary>
+            添加任务（管理员专用：任务会在服务端执行脚本，创建权不开放给普通 App 用户）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.UpdateAsync(Quantum.Entities.DTOs.TaskSaveModel)">
+            <summary>
+            更新任务（非管理员可改非 Manager 任务，但不可变更 Manager 标记，防止借编辑提权）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.DeleteAsync(System.String)">
+            <summary>
+            删除量子任务
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.DisableAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            批量禁用脚本指令
+            </summary>
+            <param name="ids"></param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.EnableAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            批量启用脚本指令
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.ExportAsync(Quantum.Entities.DTOs.TaskQuery)">
+            <summary>
+            导出脚本指令（非管理员导出内容同样剔除 Manager 任务）
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.ImportAsync">
+            <summary>
+            导入脚本指令（管理员专用：导入即创建服务端执行的任务）
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.Finish(System.String)">
+            <summary>
+            手动结束多步骤任务
+            </summary>
+            <param name="threadId">指令步骤句柄（脚本环境变量 StepCommandTaskThreadId，非任务 Id）</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.Redo(System.String)">
+            <summary>
+            多步骤任务回到上一步
+            </summary>
+            <param name="threadId">指令步骤句柄（脚本环境变量 StepCommandTaskThreadId，非任务 Id）</param>
+            <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.AddEnv(System.String,Quantum.Entities.Model.EnvModel)">
+            <summary>
+            为当前任务添加一个环境变量
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.Scripts">
+            <summary>
+            获取所有的脚本文件
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.UploadController">
+            <summary>
+            Web 管理端上传（脚本/导入文件投放）：管理员专用——上传目标是服务端可执行/可导入目录，
+            不对普通 App 用户开放（App 用户附件走 api/AppUpload，隔离存储+归属校验）。
+            </summary>
+        </member>
+        <member name="F:Quantum.Web.Controllers.UploadController.MaxUploadBytes">
+            <summary>
+            单文件上传上限（100MB：脚本/导入文件远小于此，防磁盘与带宽耗尽）
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Filters.ActionLogFilter">
+            <summary>
+            操作日志过滤器。作为特性标注在 action 上时，MVC 会缓存并跨请求复用同一实例，
+            因此计时器绝不能放实例字段（并发请求会互相 Stop/覆写）——改存 HttpContext.Items，每请求独立。
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Filters.ManagerOnlyAttribute">
+            <summary>
+            管理员专用端点过滤器：在 CustomAuthorizationFilter（验签）之后执行，只认正向
+            "Manager"="true" claim——该 claim 仅由 LoginService（Web 管理端）与
+            AppAuthService（Manager=1 的 App 用户）签发。普通 App 用户、Open AppKey 匿名令牌、
+            任务临时令牌（后两类无 Manager claim，且匿名/低信任来源）一律拒绝。
+            本项目 HTTP 状态码恒为 200，拒绝同样以 body Code=401 表达（与 CustomAuthorizationFilter 一致）。
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Middleware.AppWebSocketMiddleware">
+            <summary>
+            /ws/app?token=&lt;jwt&gt; 的 App 长连接网关（重写自 /ws/chat，替代 Web 聊天成为唯一用户触点）：
+            - 握手必须携带有效 JWT（AppAuthService 签发，与管理端共用密钥），验签失败 401 拒绝升级；
+              也支持连接后首帧 {"type":"auth","token":"..."} 兜底鉴权（4.4 协议上行 auth）。
+              单管理员体系：令牌还必须带 Manager claim——Open AppKey/任务临时令牌禁止连 WS（下行广播含会话内容）
+            - 下行 message/notify 帧带 msgId，客户端 ack 幂等确认送达；断线重连后按 seq 走 sync/REST 补拉
+            - 接收帧：ping 保活、command 指令（按设备限流 2s）、ack 已送达、sync 增量同步
+            - 60s 无任何帧踢连接（客户端 25s 应用层心跳，约 2 倍余量，容忍 Doze/网络抖动）
+            - 单帧总长度上限 256KB：拒绝无 EndOfMessage 的无限分片拼帧（未认证连接即可发起的内存耗尽 DoS）
+            </summary>
+        </member>
+        <member name="F:Quantum.Web.Middleware.AppWebSocketMiddleware.MaxFrameBytes">
+            <summary>
+            单帧最大总字节数（拼帧累计，超限即断连）：正常业务帧远小于此值。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Middleware.AppWebSocketMiddleware.IsPingFrame(System.String,System.Text.Json.JsonDocument)">
+            <summary>
+            心跳帧按 type 字段精确判断（原实现是子串匹配，会把内容含 "ping" 的 command 帧误当心跳吞掉）。
+            doc 为调用方一次解析的结果（可空 = 非 JSON 帧）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Middleware.AppWebSocketMiddleware.TryParseFrame(System.String)">
+            <summary>帧文本一次解析（ping 判定/兜底鉴权/帧处理共享）；非 JSON 帧返回 null。</summary>
+        </member>
+        <member name="M:Quantum.Web.Middleware.AppWebSocketMiddleware.TryAuthenticateAsync(System.Net.WebSockets.WebSocket,System.Text.Json.JsonDocument)">
+            <summary>
+            首帧兜底鉴权：type=auth 携带 token；验签失败或非 Manager 令牌下发 error 帧并关闭连接（返回 false）。
+            doc 为调用方一次解析的结果（可空 = 非 JSON 帧，按鉴权失败处理）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Middleware.AppWebSocketMiddleware.HandleFrameAsync(Microsoft.AspNetCore.Http.HttpContext,System.Net.WebSockets.WebSocket,System.Text.Json.JsonDocument)">
+            <summary>
+            已鉴权连接的帧分发。DB 操作走短生命周期作用域，避免长连接长期占用 DbContext。
+            doc 为调用方一次解析的结果（可空 = 非 JSON 帧，直接忽略）。
+            </summary>
+        </member>
+    </members>
+</doc>

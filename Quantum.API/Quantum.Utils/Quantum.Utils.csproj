@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 项目名与命名空间解耦：源码 namespace Quantum.Utils / Quantum.Extensions / Quantum 原样保留 -->
+    <RootNamespace>Quantum.Utils</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- HttpContextExtension 的 HttpContext / ClaimsPrincipal 依赖框架引用（原 Web SDK 隐式 using） -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="log4net" Version="3.4.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quantum.Entities\Quantum.Entities.csproj" />
+  </ItemGroup>
+
+</Project>

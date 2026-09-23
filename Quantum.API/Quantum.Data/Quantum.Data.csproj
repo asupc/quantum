@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 项目名与命名空间解耦：源码 namespace Quantum.DB / Quantum.Migrations.* / Quantum.DB.DesignTime 原样保留 -->
+    <RootNamespace>Quantum.Data</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- CacheManager 的 IMemoryCache / IServiceScopeFactory 依赖框架引用 -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="MySql.EntityFrameworkCore" Version="10.0.9" />
+    <!-- Design/Tools 仅设计期使用（dotnet-ef / PMC），不随发布传递 -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quantum.Entities\Quantum.Entities.csproj" />
+    <ProjectReference Include="..\Quantum.Utils\Quantum.Utils.csproj" />
+  </ItemGroup>
+
+</Project>

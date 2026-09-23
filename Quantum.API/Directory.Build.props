@@ -1,0 +1,11 @@
+<Project>
+
+  <!-- Quantum.API 解决方案统一构建属性：五项目共用 TFM/可空性/隐式 using，
+       与原单项目 Quantum.csproj 的设置一致；各 csproj 不再重复声明。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

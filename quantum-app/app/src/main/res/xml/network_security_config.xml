@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  明文流量策略：允许用户配置 http:// 服务器节点（内网直连/无反代场景）。
+  HTTPS 仍是推荐部署；http 下登录凭据与令牌经网络明文传输，仅限可信内网使用。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

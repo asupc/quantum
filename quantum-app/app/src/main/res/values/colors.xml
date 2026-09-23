@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#0B111E</color>
+    <!-- 窗口底色/启动闪屏底色，须与 QuantumPalette.Background 保持一致 -->
+    <color name="quantum_window_background">#0B0F19</color>
+</resources>

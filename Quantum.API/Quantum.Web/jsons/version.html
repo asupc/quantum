@@ -1,0 +1,1 @@
+1. .Net Core 版本升级到10.0 <br />2. 取消授权验证 <br /> 3. 新增docker restart xx，docker ps 指令（需要映射 '/var/run/docker.sock:/var/run/docker.sock:ro' ）<br />4. 应用程序包跟随镜像更新，更新版本需要更新镜像，建议重装  <br />5. 映射目录推荐  <br /> ./app/config:/app/config <br /> ./app/scripts:/app/scripts  <br /> ./app/db:/app/db <br /> /var/run/docker.sock:/var/run/docker.sock:ro

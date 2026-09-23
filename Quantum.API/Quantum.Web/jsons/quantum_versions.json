@@ -1,0 +1,256 @@
+﻿{
+  "Code": 200,
+  "Data": [
+    {
+      "Ver": "V1.01.13 Beta 1",
+      "description": "1.  新增环境变量导出功能，将环境变量按行导出。支持过滤条件导出<br/>2. 青龙任务开启分页，优化查看日志自动刷新的体验。"
+    },
+    {
+      "Ver": "V1.01.19 Beta 1",
+      "description": "1. 优化并发多线程，强制并发数最大为 CPU 线程数的4倍。<br/>2. 优化一个指令触发多个任务的逻辑。<br/>3. 调整验证授权的机制，面板中除了管理多面板任务，脚本，配置，消息指令 等以外，均不验证授权<br/>4. 优化获取公众号Access Token 逻辑，新增获取Access Token API<br/>5. 优化脚本任务执行效率<br/>6. 优化查询环境变量速度<br/>7. 微信，QQ，公众号，wxpusher 统一，并完成老用户的数据迁移。消息推送将推送到最后一次用户发送任意指令的通讯工具上。如用户A 绑定了QQ 及微信，用户最后一次发送指令是通过QQ，那么定时任务的推送消息将通过QQ机器人发送，如果用微信发生一次交互则使用微信机器人推送。<br/><br/>！！！！！更新提示：此版本开始统一用户，将会自动迁移之前的用户数据。谨慎升级，升级前建议备份数据库。！！！！！<br/>！！！！！更新提示：此版本开始统一用户，将会自动迁移之前的用户数据。谨慎升级，升级前建议备份数据库。！！！！！<br/>！！！！！更新提示：此版本开始统一用户，将会自动迁移之前的用户数据。谨慎升级，升级前建议备份数据库。！！！！！"
+    },
+    {
+      "Ver": "V1.01.20 Beta 1",
+      "description": "1. 修复账号绑定的BUG 。<br/>2. 修复多步骤任务BUG。"
+    },
+    {
+      "Ver": "V1.01.21 Beta 1",
+      "description": "1. 修复QQ昵称有Emoji导致指令失效的BUG 。<br/>2. 相同用户产生多个用户数据时自动合并<br/>3. 修复执行定时任务无法通知的BUG 如（CK过期，活动领取等）"
+    },
+    {
+      "Ver": "V1.01.23 Beta 1",
+      "description": "1. 修复环境变量筛选青龙时BUG<br/>2. 环境变量用户展示，筛选，修改展示调整"
+    },
+    {
+      "Ver": "V1.01.27 Beta 1",
+      "description": "1. 修复同步环境变量用户信息丢失和用户重复的问题<br/>2. 优化重置分配的逻辑<br/>3. 新增sqlite3，fs依赖"
+    },
+    {
+      "Ver": "V1.02.12 Beta 1",
+      "description": "1. 量子环境变量提供逻辑变更，如果是管理员指令，则提供所有有效的用户变量。<br/>2. 新增API /api/message ,可以使用该API 触发指令。无鉴权，限制同一个IP 8秒请求一次<br/>3. 加强量子账号密码随机长度，SQLlite数据库文件新增随机字符串<br/>4. 加强对登录接口，和open access token 的请求限制。<br/>5. 移除系统指令：\"清理过期\"<br/>6. 优化刷新青龙日志的逻辑<br/>7. 解决因为第一个容器没有脚本任务导致通过任务编辑脚本异常的问题。"
+    },
+    {
+      "Ver": "V1.02.16 Beta 1",
+      "description": "1. 修复OpenAPI 获取Token 失败的BUG。<br/>2. 登录出现请求频繁提示的问题修复。<br/>3. 调整授权验证逻辑。<br/>4. 其他细节调整。"
+    },
+    {
+      "Ver": "V1.02.18 Beta 1",
+      "description": "1. 修复一些BUG<br/>2. 新增windows通过指令更新量子的支持"
+    },
+    {
+      "Ver": "V1.02.19 Beta 1",
+      "description": "1. 量子配置文件密码加密<br/>2. 量子配置文件数据库链接字符串加密<br/>3. 新增用户登录提醒管理员"
+    },
+    {
+      "Ver": "V1.02.20 Beta 1",
+      "description": "1. 量子自由度再次升级，新增自定义数据接口，脚本可以自定义添加数据。接口详情请查看 <a href='/swagger'>swagger</a> <br/>2. 删除部分兼容数据，老版本如果还未升级最新版本将无法自动迁移数据升级。<br/>3. 新装用户免费试用到2022年2月21日 23点59分59秒。"
+    },
+    {
+      "Ver": "V1.02.25 Beta 1",
+      "description": "1. 自定义数据接口新增全字段过滤条件。<br/>2. 修复合并账户导致积分丢失的问题。<br/>3. 调整日志输出级别。<br/>4. 新增自定义数据标题<br/>5. 数据迁移新增微信公众号，用户，自定义数据<br/>6. 提供的系统环境变量新增qq微信信息，CommunicationUserId（qq号或者微信id），CommunicationUserName（昵称）"
+    },
+    {
+      "Ver": "V1.03.05 Beta 1",
+      "description": "1. 优化列表分页数据<br/>2. 优化数据管理的查询功能<br/>3. 修复修改密码报错的BUG<br/>4. 其他优化。"
+    },
+    {
+      "Ver": "V1.03.16 Beta 1",
+      "description": "1. 新增Web方式发送指令。<br/>2. Web指令同一个IP 每5s 只响应一次指令。<br/3. Web方式暂不和其他通讯方式绑定用户关系。<br/>4. 访问地址<a href='/quantum-chat/index.html'>quantum-chat</a>"
+    },
+    {
+      "Ver": "V1.03.18 Beta 1",
+      "description": "1. 登录认证信息升级，重启后登录Token 将直接失效。<br/>2. 调整默认页面为青龙管理<br/>3. 调整web 通讯页面，可以和QQ 微信完成账号绑定<br/>注意事项：<br/>4. web通讯接口每一个IP 每5秒钟响应一次请求，频发发送消息将不会响应消息。<br/>5. 使用web时，如果本地存储没有WebId则会自动生成一个，发送绑定按提示操作完成账号绑定即可。<br/>6. 请用户自行保存该ID ，如果浏览器缓存清理会导致丢失，将ID 发送给Web助手即可。<br/>7. 用户发送 “清空聊天记录”则清空当前消息记录。<br/>"
+    },
+    {
+      "Ver": "V1.03.20 Beta 1",
+      "description": "1. cqhttp 新增单独添加黑名单选项，群里多个机器人时，将其他QQ 机器人添加成黑名单，避免相互触发指令。<br/>2. 彻底修复登录过期不自动跳转登录界面的问题。<br/>3. 其他BUG 修复"
+    },
+    {
+      "Ver": "V1.03.31 Beta 1",
+      "description": "1. 处理VLW部分插件因返回 msg_id 为long时处理异常问题<br/>2. 使用京豆App访问时，提交QQ号时前面自动加上 WebId- ，可以使用WebId-qq号 发送给Web端完成WebId 的设定。<br/>3. 更新授权时间验证机制，解决获取时间异常的提示。<br/>4. 一些BUG 修复"
+    },
+    {
+      "Ver": "V1.04.04 Beta 1",
+      "description": "1. 数据管理日期筛选条件问题修复。<br/>2. 青龙任务默认加载启用的任务。<br/>3. 其他问题修复。"
+    },
+    {
+      "Ver": "V1.04.09 Beta 1",
+      "description": "修复因为IP V4,V6导致的登录Token立即失效的问题。"
+    },
+    {
+      "Ver": "V1.04.17 Beta 1 ",
+      "description": "1. 新增导出脚本指令过滤条件<br/>2. 新增数据管理字段模糊匹配<br/>3. 微信自动收款后添加记录（通过数据管理查看）为防止微信防作弊检测，收款时间延迟5-15秒<br/>4. 新增扣除用户积分的API  /api/User/DeductionIntegral/{userId}/{integral}"
+    },
+    {
+      "Ver": "V1.05.09 Beta 1 ",
+      "description": "1. 修复通过AppToken 登录授权提示IP 地址变更的问题。<br/>2. 新增群管API：消息群撤回（QQ），群禁言（QQ），群踢人 API （QQ，微信）。<br/>3. 用户管理支持webid 等搜索<br/>4. 前端数据展示优化<br/>稳定性提升"
+    },
+    {
+      "Ver": "V1.06.11 Beta 1",
+      "description": "1. 开放大量API，大部分API 可以通过localhost 访问。<br/>2. 全量容器可以指定用户变量上限，溢出的向其他全量容器同步（未测试，请执行测试）"
+    },
+    {
+      "Ver": "V1.08.26 Beta 1 ",
+      "description": "1. 优化脚本执行效率（老的脚本需要更新脚本库）<br/>2. 编辑环境变量展示webid<br/>3. 新增消息队列发送，请通过系统设置 设置发送间隔，不填默认5秒，（消息间隔防止消息被吞）<br/>4. 脚本库一些更新。<br/>5. 公众号Token 问题修复<br/>6. 其他BUG修复。"
+    },
+    {
+      "Ver": "V1.08.27 Beta 1 ",
+      "description": "1. 更新quantum.js sendNotify 方法，支持微信发送图片。 具体使用示例请参考脚本 “买家秀”<br/>2. 修复脚本开启了文字转图，但未设置服务地址导致的消息无法发送的BUG 。<br/>3. 管理员指令不传递用户变量"
+    },
+    {
+      "Ver": "V1.09.05 Beta 1 ",
+      "description": "1. 量子web通讯更新，取消WebId，需要使用QQ号登录<br/>2. 新增设置Web密码脚本，设置密码后才可使用量子web<br/>3. 用户管理操作列新增重置密码功能<br/>4. 快捷回复允许指定消息类型（文本，图片）指定图片时回复的内容为图片api 地址，不需要自己拼接CQ码"
+    },
+    {
+      "Ver": "V1.09.09 Beta 1 ",
+      "description": "1. Web 通讯开放注册功能 可以和QQ 微信绑定。请通过<a href='/quantum-chat/index.html'>quantum-chat</a>查看。<br/>2. 新增版本功能介绍<br/>3. 修复BUG"
+    },
+    {
+      "Ver": "V1.09.09 Beta 2 ",
+      "description": "1. 关闭Web注册用户和QQ 微信相互绑定功能<br/>2. Web注册IP 限流，防止恶意注册。<br/>3. Web用户信息出现错误时提示重新登录。<br/>4.优化用户管理手机端排版问题。"
+    },
+    {
+      "Ver": "V1.09.12 Beta 1 ",
+      "description": "1. 恢复Web注册用户绑定QQ 微信，绑定后Web端需要重新登录。<br/>2. 新增微信ID登录Web，及Web登录可用Web用户注册名，QQ号码，微信ID（使用指令”我的助手“获取）登录<br/>3. 暂时屏蔽数据迁移功能<br/>4. Web通讯支持图片消息（文字转图不适用），使用方法和微信QQ一致，具体食用方法参考脚本指令”买家秀“<br/><img width='360px' src='web-iamge-message.jpg'><br/>5. 其他BUG修复。"
+    },
+    {
+      "Ver": "V1.09.22 Beta 1 ",
+      "description": "1. 编辑青龙时未启用时不验证青龙是否有效。<br/>2. 新增视频消息支持开放API ，MessageType=3 ，支持QQ，Web，微信平台，快捷消息同步开放视频消息类型，API 发送参考nyn.js<br/>3. 其他BUG修复。<br/>4. 此版本微信消息异常的请更新到Beta2"
+    },
+    {
+      "Ver": "V1.09.24 Beta 1 ",
+      "UpdateTime": "2022-09-24",
+      "description": "1. 系统设置新增文字消息中文转火星文，可能避免QQ无缘无故吞消息。<br/>2. 回复消息通知日志记录。"
+    },
+    {
+      "Ver": "V1.10.19 Beta 1 ",
+      "UpdateTime": "2022-10-19",
+      "description": "1. 微信屏蔽所有公众号消息（wxid gh_ 开头） <br/>2. 数据管理 按不同数据类型拆分二级菜单。<br/>3. 新增自定义登录页脚内容（系统设置中调整，支持html标签）<br/>4. 更新记录页面检测有新版本可以直接更新<br/>5. 恢复微信自动通过好友请求（随机3-10秒通过，再随机3-10秒发送欢迎语）"
+    },
+    {
+      "Ver": "V1.10.30 Beta 1 ",
+      "UpdateTime": "2022-10-30",
+      "description": "1. 修改认证授权方式，除非安全接口外取消放行localhost的访问，所有访问均需要授权  <br/>2. 修改登录用户授权保存方式，重启量子后均要求重新登录 <br/>3. 修改登录用户强制下线前一个登录设备  <br/><p style='color:red'>4. 自己编写插件用户注意 ：如果您通过自己的脚本访问了量子的接口，请在脚本中直接 引用quantum.js 的api 方法 如 const { api } = require('./quantum')，直接使用api方法来请求接口。 删除掉你脚本中引用的const got = require('got'); 和 api的定义。具体参照quantum.js 第 14行代码 api 的定义。<br/>5. 更新脚本库！更新脚本库！更新脚本库！</p>"
+    },
+    {
+      "Ver": "脚本库更新-2022年10月31日",
+      "UpdateTime": "2022-10-30",
+      "description": "修复 “绑定”，“设置Web密码”，“定时删除量子日志”无法正常运行的问题。"
+    },
+    {
+      "Ver": "V1.11.04 Beta 1",
+      "UpdateTime": "2022-11-04",
+      "description": "1. 绑定到管理QQ 的微信，Web账户可以使用管理员指令 <br/> 2. 单击数据管理标题可以对当前页面该字段进行批量编辑。"
+    },
+    {
+      "Ver": "V1.11.18 Beta 1",
+      "UpdateTime": "2022-11-18",
+      "description": "1. 数据管理新增自定义展示字段信息。<br/>2. 数据管理批量修改数据时，如果选中了数据行则只修改选中的，否则修改当前页的数据。<br/>3. 日志中心新增清空日志功能<br/>4. 管理员指令不再提供用户环境变量（解决部分用户环境变量过多导致的运行异常）<br/><p style='color:red;'>5. 青龙环境变量同步规则变化，请仔细阅读！请仔细阅读！请仔细阅读！<p><br/>&nbsp&nbsp a. 全量容器，无条件同步所有公共变量和用户变量（可以指定同步的用户变量名称）无上限<br/>&nbsp&nbsp b. 青龙分组，用户变量将按照分组进行同步。 如有ABCDEDG 7个容器，600个 用户环境变量，其中A 容器为全量，则A 容器直接同步600个用户环境变量。 BCD 分组为 1 ，EFG 分组为2 且权重相等， 则 BCD 三个容器分别分配 200个用户变量， EFG 三个容器分别分配200个用户变量 , A容器中的用户环境变量 = BCD容器中的用户环境变量 = EFG容器中的用户环境变量。 分组 都不填时默认为同一个分组。<br/>&nbsp&nbsp c. 注意：手动指定容器的环境变量将不会按照分组重新分配。"
+    },
+    {
+      "Ver": "V1.11.18 Beta 2",
+      "UpdateTime": "2022-11-18 0:0:2",
+      "description": "修复V1.11.18 Beta 1微信消息BUG。"
+    },
+    {
+      "Ver": "V1.11.19 Beta 1 ",
+      "UpdateTime": "2022-11-19",
+      "description": "1. 修复同步问题<br/>2. 修复清空日志异常问题<br/>3. 修复Web异常问题"
+    },
+    {
+      "Ver": "V1.11.22 Beta 1 ",
+      "UpdateTime": "2022-11-22",
+      "description": "1. 文字转图，转火星文全局开关分为QQ 和 微信。<br/>2. 新增手动结束多步骤任务接口，请查看quantum.js<br/>3. 优化同步环境变量逻辑。"
+    },
+    {
+      "Ver": "V1.11.23 Beta 1 ",
+      "UpdateTime": "2022-11-23",
+      "description": "1. 微信新增对千寻框架支持，<br/>2. 修复一些BUG。"
+    },
+    {
+      "Ver": "V1.11.24 Beta 1 ",
+      "UpdateTime": "2022-11-24",
+      "description": "1. 千寻已知问题修复。"
+    },
+    {
+      "Ver": "V1.11.25 Beta 1 ",
+      "UpdateTime": "2022-11-25",
+      "description": "常规升级，修复一些问题。"
+    },
+    {
+      "Ver": "V1.12.03 Beta 1 ",
+      "UpdateTime": "2022-12-03",
+      "description": "1. 新增对青龙2.13.9以后版本支持（任务管理），更新后请通过青龙管理编辑保存一次，获取到版本信息。<br/>2. 同步环境变量新增 ”同步详细日志“ 记录，同步有问题请查看相关日志提交。"
+    },
+    {
+      "Ver": "V1.12.06 Beta 1 ",
+      "UpdateTime": "2022-12-06",
+      "description": "Bug修复。"
+    },
+    {
+      "Ver": "V2.02.11 Beta 1 ",
+      "UpdateTime": "2023-02-11",
+      "description": "1. 青龙管理新增分页，关键字搜索。<br/>2. 修改青龙配置时，若未启用则不获取青龙版本和验证账号密码。<br/>3. 脚本指令允许指定执行通讯方式，不选则为所以通讯方式。"
+    },
+    {
+      "Ver": "V2.02.16 Beta 1 ",
+      "UpdateTime": "2023-02-16",
+      "description": "BUG修复，脚本库部分优化调整。"
+    },
+    {
+      "Ver": "V2.04.19 Beta 1 ",
+      "UpdateTime": "2023-04-19",
+      "description": "积累性更新，性能大量优化，基础数据开启缓存机制（内存占用提高），响应速度提升10倍以上，降低BUG出现率，测试模拟同一时间触发200条消息 0 错误，返回对象压缩，减少带宽压力。"
+    },
+    {
+      "Ver": "V2.05.31 Beta 1 ",
+      "UpdateTime": "2023-05-31",
+      "description": "1. 修复部分因其他脚本导致的环境变量名称，或值为空时导致的同步青龙失败的问题。<br/>2. 新增数据库文件收缩功能， 系统设置>收缩数据库文件<br/>3. 更新脚本库指令。"
+    },
+    {
+      "Ver": "V2.06.16 Beta 1 ",
+      "UpdateTime": "2023-06-16",
+      "description": "脚本指令新增启用代理开关，可使用星空代理或熊猫代理，优先使用星空代理。注意：仅支持使用quantum.js 中 api 方法发起的请求，及青龙脚本中的脚本指令均不支持。 <br/> 星空代理变量名 XK_PROXY，变量值为生成的获取代理API地址，一次获取一个，json 格式。<br/> 熊猫代理变量名 XM_PROXY，变量值为生成的获取代理API地址，一次获取一个，json 格式，获取过期时间。<br/>对于脚本开启了代理，但部分域名不需要代理访问时，请指定环境变量 request_proxy_white_list ，多个值用&分割，如 qq.com&baidu.com，脚本默认添加了熊猫和星空代理的域名，请勿随意更改。<br/>注意：该功能为简易代理方式，并为验证代理IP是否可用，且并未判断代理IP 是否被目标服务器限流等。"
+    },
+    {
+      "Ver": "V2.06.30 Beta 1 ",
+      "UpdateTime": "2023-06-30",
+      "description": "1. 优化同步时相同环境变量的判断依据。</br>2. Quantum-Chat 新增公众号免登录功能，使用方法：公众号设置>功能设置 将量子域名 配置到【业务域名 JS接口安全域名 网页授权域名】中，具体设置要求请参考公众号的说明，域名需要备案，不能使用端口号，在微信中直接访问Quantum-chat。如：https://chat.quantum.com/quantum-chat?wxmpAppId=aaaaaaaa  ，aaaaaaaa 为公众号 AppId，需要在量子中配置。如Url 中无wxmpAppId参数 则默认账号密码登录方式。也可以将地址设置在公众号自定义菜单中"
+    },
+    {
+      "Ver": "V2.08.08 Beta 1 ",
+      "UpdateTime": "2023-08-08",
+      "description": "新增AI对话功能，请通过系统设置配置，测试功能，请勿滥用，随时可能停用，暂时仅支持私聊。"
+    },
+    {
+      "Ver": "V2.10.18 Beta 1 ",
+      "UpdateTime": "2023-10-18",
+      "description": "为进一步优化量子执行效率 对功能进行调整 </br>1. 取消管理员 推送，管理（脚本） 指令，快捷回复的推送不受影响。</br>2. 脚本执行时环境变量不再提供用户变量，需要相关用户变量需要在脚本中通过API 获取。</br>3. 取消脚本定时执行的并发功能</br>4. 多步骤任务结束前不允许触发其它脚本指令</br>5. 未执行完脚本指令可以查看日志。</br>6. 执行脚本时出现的异常将捕获显示在执行日志中</br>7. 多步骤任务可以控制重复当前步骤，详见 quantum.js中redoStepCommandTask 方法。</br>8. 停止对青龙脚本的支持（可以自行调整获取环境变量部分的方法完成兼容）</br>9. 数据管理新增清空功能。"
+    },
+    {
+      "Ver": "V3.06.14 Beta 1 ",
+      "UpdateTime": "2023-10-18",
+      "description": "<p style='color:red;'>一般人别更！更新的需要重新拉镜像！<br/>更新前请自行备份！<p><br/>更新日期：2024年6月24日<br/>1.架构升级从.net5升级到.net8所有依赖全部升级，文字转图功能暂时无法使用，理论性能提升（微软吹的）<br/>2.新增对python脚本的支持，镜像nodejs版本升级到16，npm。<br/>3.镜像默认安装了python的requests依赖，其它的依赖自己进容器安装。<br/>4.Windows平台更新请根据自己系统自行安装.Net8 runtime<td><a href='https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-aspnetcore-8.0.7-windows-arm64-installer'>Arm64</a>|<a href='https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-aspnetcore-8.0.7-windows-hosting-bundle-installer'>Hosting Bundle</a>|<a href='https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-aspnetcore-8.0.7-windows-x64-installer'>x64</a>|<a href='https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-aspnetcore-8.0.7-windows-x86-installer'>x86</a></td>，以及python3：<a href='https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe'>64-bit</a>|<a href='https://www.python.org/ftp/python/3.12.4/python-3.12.4.exe'>32-bit</a>|<a href='https://www.python.org/ftp/python/3.12.4/python-3.12.4-arm64.exe'>ARM64</a><br/>5.数据管理新增可视化功能，可以选择XY轴数据生成折线图<br/>6.系统设置新增队列处理间隔，消息处理使用队列模式，间隔N毫秒处理一条。<br/>7.修复新增，编辑青龙认证异常的BUG"
+    },
+    {
+      "Ver": "V3.08.16 Beta 1 ",
+      "UpdateTime": "2023-10-18",
+      "description": "1. 删除系统配置中的脚本库设置 <br/>2. 删除系统指令更新脚本库 <br/>3. 新增指令分组功能，指令分组编码和名称均不能为空也不能重复，配置仓库地址后可以通过操作列进行更新脚本库，一个分组一个脚本库，更新的脚本将复制到分组编码同名的文件夹中 <br/>4. 脚本指令新增分组管理 <br/>5. 新增脚本编辑功能， <br/>6. 数据管理新增标题管理功能，数据管理可以配置显示/隐藏菜单 <br/>7. 其他UI功能调整"
+    },
+    {
+      "Ver": "V3.08.30 Beta 1 ",
+      "UpdateTime": "2024-08-30",
+      "description": "修复一些BUG，UI功能调整优化"
+    },
+    {
+      "Ver": "V4.03.26 Beta 1 ",
+      "UpdateTime": "2025-03-26",
+      "description": "新增外触内执功能"
+    },
+    {
+      "Ver": "V4.11.13 Beta 1 ",
+      "UpdateTime": "2025-11-13",
+      "description": "1. .Net Core 版本升级到 9.0 <br/>2. 取消授权验证 <br/> 3. 新增docker restart xx，docker ps 指令（需要映射 '/var/run/docker.sock:/var/run/docker.sock:ro' ）<br/>4. 应用程序包跟随镜像更新，更新版本需要更新镜像，建议重装  <br/>5. 映射目录变更，请参考群文件<br/>6. 更新后无法使用 更新、重启 命令"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      暗色科技风为唯一主题，故父主题取 Material 深色（非 Light）：
+      窗口底色、启动闪屏、生物识别弹层都随父主题走深色，未自行绘制背景的页面
+      （登录页/锁定页等）不会再透出浅色窗口底 —— 这是端内白色背景的根因。
+      状态栏/导航栏图标颜色由 windowLightStatusBar 决定：浅色父主题给出的是深色图标，
+      在深色页面上等于不可见，必须显式声明为 false。
+    -->
+    <style name="Theme.Quantum.Base" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/quantum_window_background</item>
+        <item name="android:colorBackground">@color/quantum_window_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/quantum_window_background</item>
+        <item name="android:navigationBarColor">@color/quantum_window_background</item>
+    </style>
+
+    <style name="Theme.Quantum" parent="Theme.Quantum.Base" />
+</resources>

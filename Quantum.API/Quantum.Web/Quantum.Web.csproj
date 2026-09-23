@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <TypeScriptSourceMap>False</TypeScriptSourceMap>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <TypeScriptSourceMap>False</TypeScriptSourceMap>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- 产物名保持 Quantum：根 Dockerfile ENTRYPOINT / build-service.bat 校验 / Swagger XML 均依赖 -->
+    <AssemblyName>Quantum</AssemblyName>
+    <RootNamespace>Quantum.Web</RootNamespace>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DocumentationFile>Quantum.xml</DocumentationFile>
+    <PublishAot>False</PublishAot>
+    <DockerfileContext>..</DockerfileContext>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- scripts 下的 .cs 是任务源码（运行时经门禁+Roslyn 编译执行），不能编进主程序集；
+         scripts 各子目录维持 None 项不复制产物的既有语义（运行时由上传/挂载投放） -->
+    <Compile Remove="logs\**" />
+    <Compile Remove="scripts-bak\**" />
+    <Compile Remove="scripts\**" />
+    <Compile Remove="wwwroot\**" />
+    <Content Remove="logs\**" />
+    <Content Remove="scripts-bak\**" />
+    <Content Remove="wwwroot\**" />
+    <EmbeddedResource Remove="logs\**" />
+    <EmbeddedResource Remove="scripts-bak\**" />
+    <EmbeddedResource Remove="scripts\**" />
+    <EmbeddedResource Remove="wwwroot\**" />
+    <None Remove="logs\**" />
+    <None Remove="scripts-bak\**" />
+    <None Remove="wwwroot\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Autofac.Extensions.DependencyInjection" Version="11.0.2" />
+    <!-- DockerController 直接使用 Docker.DotNet.Models -->
+    <PackageReference Include="Docker.DotNet" Version="3.125.15" />
+    <PackageReference Include="log4net" Version="3.4.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.12" />
+    <!-- dotnet-ef（CreateMigration.bat）以本项目为 startup-project，需 Design 包 -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <!-- Startup 的 AddQuartz/AddQuartzHostedService -->
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="4.0.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quantum.Application\Quantum.Application.csproj" />
+    <ProjectReference Include="..\Quantum.Data\Quantum.Data.csproj" />
+    <ProjectReference Include="..\Quantum.Entities\Quantum.Entities.csproj" />
+    <ProjectReference Include="..\Quantum.Utils\Quantum.Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- appsettings.json 含运行环境敏感配置（DB 口令/JWT 密钥等）：不打进编译/发布产物，
+         避免随公共镜像分发。容器首启无配置时自动生成随机凭据（SystemConfigHelper），
+         需要自带配置的部署用 volume 挂载 appsettings.json。 -->
+    <Content Update="appsettings.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 示例任务（scripts/demo/*.cs）随发布产物分发：新部署开箱即有抄写模板；
+         其余 scripts 内容为开发期遗留（运行时经上传/挂载投放），不主动分发 -->
+    <Content Include="scripts\demo\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+version: '3.9'
+services:
+
+  quantum_test:
+    image: asupc/quantum
+    tty: true
+    stdin_open: true
+    restart: always
+    ports:
+      - '5088:5088'
+    volumes:
+      - './appsettings.json:/app/appsettings.json'
+      - './scripts:/app/scripts'
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+    container_name: quantum_test

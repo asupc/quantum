@@ -1,0 +1,25 @@
+# 服务端部署编排（Docker Compose v2，旧版 v1 需自行补 version 字段）
+# 镜像来源：本机 build-service.bat 产出 quantum-image\asupc-quantum_<日期>.tar，
+# 服务器上 docker load -i 导入；或直接 docker pull asupc/quantum:latest。
+services:
+  quantum:
+    # 固定某天快照时改用日期 tag，如 asupc/quantum:20260915
+    image: asupc/quantum:latest
+    container_name: quantum
+    restart: always
+    tty: true
+    stdin_open: true
+    ports:
+      - "5088:5088" # HTTP 与 App WebSocket 通道同端口
+    volumes:
+      # 镜像按安全约定不含 appsettings.json（防密钥随镜像分发），必须挂载自有配置；
+      # 注意：宿主机上先放好该文件再启动，否则 Docker 会把它建成一个同名目录。
+      # 不挂载时容器首启会自动生成随机凭据（仅适合临时试用）。
+      - ./app/appsettings.json:/app/appsettings.json
+      - ./app/config:/app/config # task.ini / Commands.xml 等运行配置
+      - ./app/scripts:/app/scripts # 任务脚本目录
+      - ./app/db:/app/db # SQLite 数据库（DBType=Sqlite 时生效）
+      - ./app/logs:/app/logs # 运行日志
+      # Docker 管理模块所需；不使用该功能可删除此行
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+# 首次部署：mkdir -p app && 放入 appsettings.json，再 docker compose up -d

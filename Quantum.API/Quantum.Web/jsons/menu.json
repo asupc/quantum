@@ -1,0 +1,307 @@
+[
+  {
+    "path": "/chat",
+    "name": "chat",
+    "component": "Main",
+    "meta": {
+      "title": "会话",
+      "icon": "fa-solid fa-comments"
+    },
+    "children": [
+      {
+        "path": "index",
+        "name": "chat-index",
+        "component": "chat/index",
+        "meta": {
+          "title": "会话",
+          "icon": "fa-solid fa-comments"
+        },
+        "children": [],
+        "sort": 1
+      },
+      {
+        "path": "ai",
+        "name": "ai-index",
+        "component": "ai/index",
+        "meta": {
+          "title": "AI助手",
+          "icon": "fa-solid fa-robot"
+        },
+        "children": [],
+        "sort": 2
+      }
+    ],
+    "sort": 2
+  },
+  {
+    "path": "/custom-data",
+    "name": "customData",
+    "component": "Main",
+    "meta": {
+      "title": "数据管理",
+      "icon": "fa-solid fa-table"
+    },
+    "children": [
+      {
+        "path": "custom-data-title",
+        "name": "custom-data-title",
+        "component": "custom-data/title",
+        "meta": {
+          "title": "标题管理",
+          "icon": "fa fa-table"
+        },
+        "children": [],
+        "sort": 1
+      }
+    ],
+    "sort": 3
+  },
+  {
+    "path": "/task",
+    "name": "task",
+    "component": "Main",
+    "meta": {
+      "title": "指令中心",
+      "icon": "fa-solid fa-terminal"
+    },
+    "children": [
+      {
+        "path": "index",
+        "name": "scripts-index",
+        "component": "task/index",
+        "meta": {
+          "title": "脚本指令",
+          "icon": "fa-solid fa-terminal"
+        },
+        "children": [],
+        "sort": 1
+      },
+      {
+        "path": "open-trigger-task",
+        "name": "open-trigger-task",
+        "component": "open-trigger-task/index",
+        "meta": {
+          "title": "外触内执",
+          "icon": "fa-solid fa-terminal"
+        },
+        "children": [],
+        "sort": 2
+      },
+      {
+        "path": "script-versions",
+        "name": "script-versions",
+        "component": "taskScripts/versions",
+        "meta": {
+          "title": "脚本版本",
+          "icon": "fa-solid fa-clock-rotate-left"
+        },
+        "children": [],
+        "sort": 3
+      },
+      {
+        "path": "task-scripts",
+        "name": "task-scripts",
+        "component": "taskScripts/index",
+        "meta": {
+          "title": "脚本编辑",
+          "icon": "fa-solid fa-pencil"
+        },
+        "children": [],
+        "sort": 4
+      }
+    ],
+    "sort": 4
+  },
+  {
+    "path": "/docker",
+    "name": "docker",
+    "component": "Main",
+    "meta": {
+      "title": "Docker管理",
+      "icon": "fa-brands fa-docker"
+    },
+    "children": [
+      {
+        "path": "/docker/index",
+        "name": "docker-index",
+        "component": "docker/index",
+        "meta": {
+          "title": "概览",
+          "icon": "fa-solid fa-eye"
+        },
+        "children": [],
+        "sort": 1
+      },
+      {
+        "path": "/docker/containers",
+        "name": "docker-containers",
+        "component": "docker/containers",
+        "meta": {
+          "title": "容器管理",
+          "icon": "fa-brands fa-docker"
+        },
+        "children": [],
+        "sort": 2
+      },
+      {
+        "path": "/docker/images",
+        "name": "docker-images",
+        "component": "docker/images",
+        "meta": {
+          "title": "镜像管理",
+          "icon": "fa-solid fa-house"
+        },
+        "children": [],
+        "sort": 3
+      },
+      {
+        "path": "/docker/networks",
+        "name": "docker-networks",
+        "component": "docker/networks",
+        "meta": {
+          "title": "网络管理",
+          "icon": "fa-solid fa-network-wired"
+        },
+        "children": [],
+        "sort": 4
+      },
+      {
+        "path": "/docker/volumes",
+        "name": "docker-volumes",
+        "component": "docker/volumes",
+        "meta": {
+          "title": "卷管理",
+          "icon": "fa-solid fa-floppy-disk"
+        },
+        "children": [],
+        "sort": 5
+      }
+    ],
+    "sort": 5
+  },
+  {
+    "path": "/settings",
+    "name": "settings",
+    "component": "Main",
+    "meta": {
+      "title": "系统管理",
+      "icon": "fa-solid fa-gear"
+    },
+    "children": [
+      {
+        "path": "index",
+        "name": "settings-index",
+        "component": "setting/index",
+        "meta": {
+          "title": "系统设置",
+          "icon": "fa-solid fa-gear"
+        },
+        "children": [],
+        "sort": 1
+      },
+      {
+        "path": "menu",
+        "name": "settings-menu",
+        "component": "setting/menu",
+        "meta": {
+          "title": "菜单管理",
+          "icon": "fa-solid fa-gear"
+        },
+        "children": [],
+        "sort": 2
+      },
+      {
+        "path": "ai-providers",
+        "name": "ai-providers",
+        "component": "ai/providers",
+        "meta": {
+          "title": "AI供应商",
+          "icon": "fa-solid fa-microchip"
+        },
+        "children": [],
+        "sort": 3
+      },
+      {
+        "path": "ai-setting",
+        "name": "ai-setting",
+        "component": "ai/setting",
+        "meta": {
+          "title": "AI设置",
+          "icon": "fa-solid fa-sliders"
+        },
+        "children": [],
+        "sort": 4
+      }
+    ],
+    "sort": 6
+  },
+  {
+    "path": "/env",
+    "name": "env",
+    "component": "Main",
+    "meta": {
+      "title": "环境变量",
+      "icon": "fa-solid fa-seedling"
+    },
+    "children": [
+      {
+        "path": "index",
+        "name": "env-Index",
+        "component": "env/index",
+        "meta": {
+          "title": "环境变量",
+          "icon": "fa-solid fa-gears"
+        },
+        "children": [],
+        "sort": 1
+      }
+    ],
+    "sort": 9
+  },
+  {
+    "path": "/replay",
+    "name": "replay",
+    "component": "Main",
+    "meta": {
+      "title": "快捷回复",
+      "icon": "fa-solid fa-reply"
+    },
+    "children": [
+      {
+        "path": "index",
+        "name": "replay-index",
+        "component": "replay/index",
+        "meta": {
+          "title": "快捷回复",
+          "icon": "fa-solid fa-reply"
+        },
+        "children": [],
+        "sort": 1
+      }
+    ],
+    "sort": 10
+  },
+  {
+    "path": "/logs",
+    "name": "logs",
+    "component": "Main",
+    "meta": {
+      "title": "日志中心",
+      "icon": "fa-brands fa-file-text"
+    },
+    "children": [
+      {
+        "path": "index",
+        "name": "logs-index",
+        "component": "logs/index",
+        "meta": {
+          "title": "日志中心",
+          "icon": "fa-solid fa-file-lines"
+        },
+        "children": [],
+        "sort": 1
+      }
+    ],
+    "sort": 12
+  }
+]

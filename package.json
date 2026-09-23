@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "sass": "^1.94.0"
+  },
+  "dependencies": {
+    "vuedraggable": "^2.24.3"
+  }
+}

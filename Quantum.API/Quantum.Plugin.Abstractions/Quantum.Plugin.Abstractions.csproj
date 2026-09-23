@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 插件契约项目：任务源码编译的唯一自有契约引用，保持零包依赖（纯 BCL）。
+       TFM/可空性/隐式 using 由 Quantum.API/Directory.Build.props 统一继承。
+       GenerateDocumentationFile：产出同名 .xml，供 AI Agent 的「平台能力摘要」读取 XML 注释
+       （ScriptContractCatalog 反射签名 + 注释拼提示词，契约变更即提示词同步，无需手工维护）。 -->
+  <PropertyGroup>
+    <RootNamespace>Quantum.Plugins</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

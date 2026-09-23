@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 项目名与命名空间解耦：源码 namespace Quantum.Application 原样保留 -->
+    <RootNamespace>Quantum</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UploadService 的 IFormFile / AppWebSocketManager 的 HttpContext / 托管服务等 ASP.NET Core 类型 -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Docker.DotNet" Version="3.125.15" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.13.0" />
+    <PackageReference Include="log4net" Version="3.4.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <!-- Quartz 核心库经 Extensions.Hosting 传递引入 -->
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="4.0.1" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+    <PackageReference Include="TagLibSharp" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quantum.Data\Quantum.Data.csproj" />
+    <ProjectReference Include="..\Quantum.Entities\Quantum.Entities.csproj" />
+    <ProjectReference Include="..\Quantum.Utils\Quantum.Utils.csproj" />
+    <ProjectReference Include="..\Quantum.Plugin.Abstractions\Quantum.Plugin.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 原 Web SDK 隐式 using 显式化：7 个服务使用 ILogger<> -->
+    <Using Include="Microsoft.Extensions.Logging" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- CodeReviewStaticStateFixesTests 访问 SendMessageHelper.Sender/SendSafeAsync；
+         Web 层 AppWebSocketMiddleware 访问 AppPushService.FrameJsonOptions（internal static），
+         主项目 AssemblyName 恒为 Quantum（M4 后为 Quantum.Web 产出 Quantum.dll） -->
+    <InternalsVisibleTo Include="Quantum.API.Tests" />
+    <InternalsVisibleTo Include="Quantum" />
+  </ItemGroup>
+
+</Project>

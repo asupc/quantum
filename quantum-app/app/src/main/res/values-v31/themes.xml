@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ 启动屏独立取色，未声明时会回落到窗口底色；显式声明避免冷启动白闪。 -->
+    <style name="Theme.Quantum" parent="Theme.Quantum.Base">
+        <item name="android:windowSplashScreenBackground">@color/quantum_window_background</item>
+    </style>
+</resources>

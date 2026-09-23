@@ -1,0 +1,29 @@
+﻿{
+  "Code": 200,
+  "Data": [
+    {
+      "title": "Docker安装gc-cqhttp",
+      "url": "https://docs.qq.com/doc/DQUxXeXV1Q0ljV0hO"
+    },
+    {
+      "title": "量子助手安装帮助文档",
+      "url": "https://docs.qq.com/doc/DQUlVc29GZHFHd1Jj"
+    },
+    {
+      "title": "量子助手功能及配置",
+      "url": "https://docs.qq.com/doc/DQU9LT2ZPSUxLVVVj"
+    },
+    {
+      "title": "使用常见问题",
+      "url": "https://docs.qq.com/doc/DR05JalZ4T1hrTElW"
+    },
+    {
+      "title": "开发者文档",
+      "url": "https://docs.qq.com/doc/DQWpEZ3l0S0lPTHJT"
+    },
+    {
+      "title": "OpenAPI(swagger)",
+      "url": "/swagger"
+    }
+  ]
+}

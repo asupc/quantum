@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 项目名与命名空间解耦：源码 namespace Quantum.Entities.* 原样保留 -->
+    <RootNamespace>Quantum.Entities</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Model 使用 [Owned]/[Table] 等 EF 注解 -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

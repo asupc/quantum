@@ -1,0 +1,203 @@
+/* 风格 B「暗夜量子」设计 Token —— 沉稳深空钛金石墨 */
+:root {
+    --bg: #0B0F19;            /* 应用底色（深空石墨） */
+    --sider: #0E1422;         /* 侧栏 */
+    --card: #141C2E;          /* 卡面主色 */
+    --card-2: #182238;        /* 卡面深色 / 表头 / 输入框底 */
+    --line: rgba(148, 163, 184, .12);
+    --line-2: rgba(148, 163, 184, .20);
+    --accent: #0EA5E9;        /* 高阶电光蓝青 (Sky Tech Blue) */
+    --accent-2: #38BDF8;      /* 浅蓝微光 */
+    --accent-weak: rgba(14, 165, 233, .10);
+    --text: #F8FAFC;          /* 高对比白 */
+    --text-2: #94A3B8;        /* 次要文字 */
+    --text-3: #64748B;        /* 辅助说明 */
+    --ok: #10B981;            /* 柔和翠绿 */
+    --warn: #F59E0B;          /* 柔和琥珀黄 */
+    --danger: #F43F5E;        /* 柔和玫瑰红 */
+    --radius: 12px;
+    --glow: 0 0 0 1px rgba(14, 165, 233, .22), 0 0 20px rgba(14, 165, 233, .10);
+}
+
+/* 玻璃卡片：卡面 + 细描边 + 圆角 + 投影 */
+.glass-card {
+    background: linear-gradient(180deg, var(--card) 0%, var(--card-2) 100%);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .40);
+}
+
+/* 标准查询卡片容器 */
+.filter-card {
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    background: linear-gradient(180deg, var(--card) 0%, var(--card-2) 100%);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, .25);
+}
+
+.filter-card .n-form-item {
+    margin-bottom: 0 !important;
+}
+
+.filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 34px;
+}
+
+/* 网格底纹：44px 网格 + 径向 mask */
+.grid-bg {
+    position: relative;
+}
+
+.grid-bg::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 44px 44px;
+    opacity: .35;
+    mask-image: radial-gradient(1200px 800px at 50% 0%, #000 30%, transparent 100%);
+    -webkit-mask-image: radial-gradient(1200px 800px at 50% 0%, #000 30%, transparent 100%);
+    pointer-events: none;
+}
+
+/* 状态胶囊 + 光晕 */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.pill .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+}
+
+.pill.ok {
+    background: rgba(52, 211, 153, .12);
+    color: var(--ok);
+}
+
+.pill.off {
+    background: rgba(148, 163, 184, .12);
+    color: var(--text-2);
+}
+
+.pill.warn {
+    background: rgba(251, 191, 36, .12);
+    color: var(--warn);
+}
+
+.pill.danger {
+    background: rgba(248, 113, 113, .12);
+    color: var(--danger);
+}
+
+/* 等宽数字 */
+.mono {
+    font-family: Consolas, "Segoe UI", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--text-2);
+}
+
+/* 深色滚动条 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, .25);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, .4);
+}
+
+/* FontAwesome 图标默认行内对齐 */
+i.fa-solid,
+i.fa-regular,
+i.fa-brands {
+    display: inline-block;
+    line-height: 1;
+}
+
+/* 按钮内图标严格尺寸门控与光学对齐 */
+.n-button .n-button__icon {
+    margin-right: 5px !important;
+}
+
+.n-button .n-button__icon i.fa-solid,
+.n-button .n-button__icon i.fa-regular,
+.n-button .n-button__icon i.fa-brands {
+    font-size: 13px !important;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: -0.5px;
+}
+
+.n-button.n-button--small-type .n-button__icon i.fa-solid,
+.n-button.n-button--small-type .n-button__icon i.fa-regular,
+.n-button.n-button--small-type .n-button__icon i.fa-brands {
+    font-size: 11.5px !important;
+}
+
+.n-button.n-button--tiny-type .n-button__icon i.fa-solid,
+.n-button.n-button--tiny-type .n-button__icon i.fa-regular {
+    font-size: 10.5px !important;
+}
+
+.n-button.n-button--large-type .n-button__icon i.fa-solid,
+.n-button.n-button--large-type .n-button__icon i.fa-regular {
+    font-size: 15px !important;
+}
+
+
+/* 表格行内操作列：图标统一规范（配合 utils/op-actions.js 使用） */
+.op-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.op-icon {
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: .8;
+    transition: opacity .15s ease, transform .15s ease;
+}
+
+.op-icon:hover {
+    opacity: 1;
+    transform: scale(1.2);
+}
+
+/* 会话页专用 token：取值同 App 端 Theme.kt（见 docs/Web端会话交互与UI预览方案.md §3.1） */
+:root {
+    --bubble-bot: #1E293B;   /* 机器人气泡（App SurfaceVariant） */
+    --bubble-me: #0C4A6E;    /* 用户气泡（App CyanContainer） */
+    --chat-input: #1C2841;   /* 输入条底色（App SurfaceContainerHigh） */
+    --mark-purple: #6366F1;  /* 富文本紫标记（App Indigo） */
+}
