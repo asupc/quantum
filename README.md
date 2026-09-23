@@ -2,7 +2,6 @@
 
 个人自动化任务管理平台：**任务调度 + C# 脚本引擎 + 会话式指令交互 + 内置 AI 助手**，单仓库交付三个端——ASP.NET Core 后端、Vue 3 Web 管理端、安卓客户端。
 
-![Web 管理端会话页](docs/ui-redesign/screenshots/chat-web-live.png)
 
 ## 功能清单
 
