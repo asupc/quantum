@@ -214,7 +214,29 @@ curl -X POST https://<host>/api/ExternalPush/messages \
 - 单实例调度约束：Quartz 由托管服务提供、调度状态内存重建，本期无跨节点选主/分布式锁。
   **不得横向扩容调度节点**；多副本需先补独立选主与持久调度设计，再启用自动重试。
 - 新功能默认关闭：`RetryCount=0`、策略 `Enabled=false`、外部推送凭据 `Enabled=false`。运行记录采集默认开启（只增表不改行为）。
+  说明：计划 §5 提的「运行记录采集可独立打开」未做成开关——带外部风险的能力（重试、告警、对外凭据）都已各自默认关闭、
+  可独立启用，而记录本身只新增表且可按保留期清理；为它再开一条「记录/不记录」双写路径会让日志落库口径分叉，风险大于收益。
 - 灰度观察项：卡住的 `Running`、待重试堆积、告警投递失败数、日志与 `t_task_run` 磁盘增长。
-- 已验证：`dotnet test` 640 全绿（SQLite 内存库）；`quantum-web` `npm run test` 与 `npm run build` 通过。
-- **未验证（不得当作已验证）**：MySQL 实例上的迁移 Up/Down 与唯一索引实测（本机无可用 MySQL 实例）；
-  安卓真机与浏览器端到端行为；第三方 SDK 实调；生产网关/TLS 与真实数据量压测。
+- 回退：先关策略与凭据（停新投递）并停后台领取，再退旧 Web/App；**事故回退时不执行 Down 删新表/历史数据**，
+  回退顺序与 §2.2/§6.5 一致。迁移失败按维护窗口恢复备份，不带病启动。
+
+### 7.1 已完成的验证（证据）
+
+| 项 | 结果 |
+|---|---|
+| `dotnet test` | 651 全绿（SQLite 内存库；含 5 个新测试类 + 迁移链 + 鉴权隔离） |
+| SQLite 迁移链 | 从空库真跑 `Migrate()`：Init→TaskRunBaseline→ExternalPushBaseline，6 张新表、`DisplayTitle`/`SessionTitle` 两列、4 个 `CREATE UNIQUE INDEX` 均在，`GetPendingMigrations()` 为空，重复 `(RootRunId,Attempt)` 被唯一索引拒 |
+| **MySQL 迁移链** | 本地一次性 `mysql:8.4` 容器（localhost:33069，用后即删）实跑：**新库全链 Up** → 校验 6 表 + 5 唯一索引 + 2 标题列齐备；**Down 回 Init** → 新表与新列全部消失、业务表数回到 27；**旧库增量升级**（停在 Init 再 Up）→ 只应用新两条迁移。**未触碰生产 NAS MySQL** |
+| 大数据量压测 §3.6 | 各 50 000 行 `t_task_run`：SQLite 文件库 插入 0.16s／列表计数 0.26ms／分页 20 条 0.21ms／到期重试扫描 0.20ms／深分页 offset 20000 为 21.1ms；MySQL 8.4 插入 2.15s／计数 0.35ms／分页 3.4ms／到期扫描 3.2ms／深分页 offset 20000 为 32.2ms。`EXPLAIN` 实证命中 `IX_t_task_run_TaskId_CreatedAtUtc`（range + Backward index scan + Using index）与 `IX_t_task_run_Status_NextAttemptAtUtc`（range + Using index） |
+| `quantum-web` | `npm run test` 85/85 全绿、`npm run build` 通过 |
+| `quantum-app` | 全模块 `testDebugUnitTest` + `assembleDebug` 通过；Room **v7→v8 非破坏迁移**用真 SQLite 验证：新列可空出现、存量行为 NULL（不伪造标题）、`outbox` 待发正文与 `pickedKeys` 已选态活过迁移 |
+
+### 7.2 仍未验证（不得当作已验证）
+
+- 生产 MySQL 实例上的实际升级执行与维护窗口演练（本机验证走的是一次性容器）。
+- 浏览器端与安卓真机的端到端点击行为（本轮为编译 + 单元/集成级验证，无真机）。
+- 第三方 SDK 实调与真实反向代理/TLS/限流配置下的行为（含 §6.5 与 R-08 的边缘层 413 边界）。
+- 真实生产数据量下的容量与增长评估（压测用的是合成数据）。
+- 时区口径的现场确认：后端 `DateTimeZoneHandling.Local` + `DateFormatString="yyyy-MM-dd HH:mm:ss"` 输出**不带时区标记**，
+  本功能所有 `*Utc` 字段按 UTC 墙钟持久化，Web/App 侧均已按「补 Z 当 UTC 解读再转本地时区」处理；
+  存量非 UTC 字段（如 `t_log.CreateTime`）仍按本地墙钟解读，两套并存，改动前须逐字段确认。
