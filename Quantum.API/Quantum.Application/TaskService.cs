@@ -81,9 +81,9 @@ public class TaskService
             var run = await _runService.AcceptAsync(taskInfo.Id, taskInfo.Name, taskInfo.FileName,
                 source, triggerRef, taskInfo.Manager);
             receipts.Add(new TaskRunReceipt(taskInfo.Id, run.Id));
-            _ = RunTrackedAsync(taskInfo, run, ct).ContinueWith(
-                t => _log.Error($"任务执行后台异常（{taskInfo.Name}）", t.Exception),
-                TaskContinuationOptions.OnlyOnFaulted);
+            // 后台执行必须落在自己的作用域里：请求一结束，本实例的 scoped DbContext 就被 Dispose，
+            // 直接捕获 this 会让终态落库抛 ObjectDisposedException、运行记录永久停在 Running
+            TaskRunRecorder.LaunchAcceptedRun(run, () => RunTrackedAsync(taskInfo, run, ct), ct);
         }
 
         return receipts;
@@ -165,6 +165,24 @@ public class TaskService
         }
 
         await RunTrackedAsync(task, run, ct);
+    }
+
+    /// <summary>
+    /// 供独立后台作用域调用的入口：按 RunId 找回任务后走与定时触发完全相同的链路。
+    /// 任务在受理与执行之间被删除时，把该运行记录按取消收口，不留无人认领的 Running。
+    /// </summary>
+    public async Task ExecuteAcceptedRunAsync(TaskRunModel run, CancellationToken ct = default)
+    {
+        var taskInfo = run?.TaskId == null
+            ? null
+            : CacheManager.Get<TaskModel>().FirstOrDefault(n => n.Id == run.TaskId);
+        if (taskInfo == null)
+        {
+            await _runService.AbandonPendingRetryAsync(run, "任务已删除");
+            return;
+        }
+
+        await RunTrackedAsync(taskInfo, run, ct);
     }
 
     /// <summary>组装一次性执行上下文并跑脚本，只返回结构化终态（日志与运行记录由调用方落）。</summary>
@@ -342,8 +360,15 @@ public class TaskService
     /// </summary>
     public async Task<bool> AddAsync(TaskSaveModel saveModel)
     {
-        ValidateCron(saveModel?.Cron);
-        await ValidateSessionNameAsync(saveModel?.SessionName);
+        // 前两行按可空写法判定，说明请求体为空是可达路径；不在这里收口，saveModel.Id 会抛 NullReferenceException，
+        // 并把完整堆栈经 ExceptionFilter 回给调用方（2026-09-26 端到端冒烟实测）
+        if (saveModel == null)
+        {
+            throw new BusinessException("缺少任务内容");
+        }
+
+        ValidateCron(saveModel.Cron);
+        await ValidateSessionNameAsync(saveModel.SessionName);
         if (!string.IsNullOrEmpty(saveModel.Id) && await _dbContext.Tasks.AnyAsync(n => n.Id == saveModel.Id))
         {
             throw new BusinessException("任务已存在，请刷新列表后重新新增！");

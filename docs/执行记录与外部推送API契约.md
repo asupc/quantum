@@ -263,3 +263,36 @@ curl -X POST https://<host>/api/ExternalPush/messages \
 
 G0 门禁的「找回缺失文档」一项已确认为**不可完成**：`git log --all -- docs/**` 为空，`docs/` 从未被版本控制跟踪。
 经仓库所有者裁决改为「以本计划与本文档为契约基准推进」，本文档即该裁决的落地记录。
+
+## 9. 隔离实例端到端冒烟结论（2026-09-26）
+
+在仓库外的临时目录用**独立 SQLite 库**起了一个后端实例（scratch `appsettings.json` 指向
+`DBType=Sqlite` + 自定口令，绝不触碰生产库），用真实 HTTP 走了一遍新链路。
+
+**发现并修复一个只在真跑时暴露的缺陷**（单测共用同一个 DbContext，照不出来）：
+`TaskService.AcceptAndRunAsync` 派后台执行时捕获了**请求作用域**的 scoped `TaskRunService`，
+请求一结束其 DbContext 被 Dispose，终态落库抛 `ObjectDisposedException` →
+运行记录**永久停在 Running**、`t_log` 行也永远不写。修复：后台执行统一落到
+`TaskRunRecorder.LaunchAcceptedRun` 自建的作用域里（与既有 `TaskExecutionRetryRunner` 同一套路），
+未注入容器时（单测）退回同步执行避免静默不跑。
+
+修复后的实测结果：
+
+- `POST /api/Task/execute-runs` → `{TaskId, RunId}`；约 1 秒后该运行记录终态为 `Failed` + `ScriptException`，`ElapsedMs=846`。
+- 安全摘要为「冒烟失败任务 执行异常：InvalidOperationException: deliberate failure password=\*\*\* …」——
+  脚本异常里明文写的口令**没进摘要**，也没出现在列表响应里。
+- `LogAvailable=true`；`GET /api/Logs/details/{LogId}` 返回的日志正文含完整堆栈与
+  `执行结果：执行异常（Failed/ScriptException）` footer；`t_log` 行与 `t_task_run` 按预分配 `LogId` 一一对应，
+  且该行 `Success=0`——**失败不再被记成成功**这条一期核心口径在真实运行态成立。
+- 策略写入 `99/999999/0/99999` 被服务端 clamp 为 `3/3600/1/1440`；`RetryCount=0` 时不排重试。
+- 手动 `POST /api/TaskRun/{runId}/retry` 返回 200 并新增一条历史记录；不存在的 RunId 返回「执行记录不存在」。
+- G-Push：凭据创建默认 `Enabled=false`、密钥 43 字符且列表响应里搜不到它；启用后
+  `PushKey` 推送成功、`SessionKey` 以 `external:` 开头；同键同内容重放 `Duplicate=true` 且 `MsgId` 不变；
+  正文含裸 `http://` 被拒；`PushKey` 打 `GET /api/Task` 得 401；坏 JWT 打 `GET /api/TaskRun` 得 401；
+  `POST /api/App/sessions/overview` 响应含 `SessionTitle` 字段。
+- 启动恢复：把上一轮因该缺陷卡在 Running 的两条记录判为 `Interrupted`（真实结果不可知，未重放未判成功）。
+
+**本次冒烟顺带发现的既有缺陷（不属本期范围，未深修）**：`POST /api/Task` 的请求体形状不规范时
+`TaskService.AddAsync` 会抛 `NullReferenceException`，堆栈原文经 ExceptionFilter 回进响应 `Message`。
+已补 `saveModel == null` 的干净业务文案；非空但字段缺失的形态未逐一定位，留作单独修复项
+（同类信息泄露面：未处理异常的 `Message` 含堆栈，建议后续统一在 ExceptionFilter 侧收口）。
