@@ -32,7 +32,7 @@ public class LogsController : BaseController
     }
 
     /// <summary>
-    /// 获取日志信息（非管理员仅任务/指令触发两类）
+    /// 获取日志信息（非管理员仅任务/指令触发两类，且其中的 Manager 任务日志按服务端过滤隐藏）
     /// </summary>
     /// <param name="query"></param>
     /// <returns></returns>
@@ -47,7 +47,7 @@ public class LogsController : BaseController
             }
             query.LogTypes = PublicLogTypes;
         }
-        return await _logsService.GetPageAsync(query);
+        return await _logsService.GetPageAsync(query, hideManagerTaskLogs: !IsManager);
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public class LogsController : BaseController
     }
 
     /// <summary>
-    /// 获取详细日志（受限类型的详情对非管理员隐藏）
+    /// 获取详细日志（受限类型的详情对非管理员隐藏；Manager 任务的执行日志同样不得直读）
     /// </summary>
     /// <param name="id"></param>
     /// <returns></returns>
@@ -94,6 +94,11 @@ public class LogsController : BaseController
         {
             var meta = await _logsService.GetMetaAsync(id);
             if (meta != null && ManagerOnlyLogTypes.Contains(meta.LogType))
+            {
+                return Denied();
+            }
+            // 任务日志/指令触发是「全员类型」，但内容可能属 Manager 任务：按任务归属再判一次
+            if (await _logsService.IsManagerTaskLogAsync(meta))
             {
                 return Denied();
             }

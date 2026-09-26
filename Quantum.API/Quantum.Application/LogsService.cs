@@ -20,9 +20,14 @@ public class LogsService
     }
 
     /// <summary>
-    /// 分页查询日志
+    /// 分页查询日志。
     /// </summary>
-    public async Task<PageResult<LogModel>> GetPageAsync(LogQuery query)
+    /// <param name="hideManagerTaskLogs">
+    /// 非 Manager 令牌必须传 true（审核项 R-02）：任务日志/指令触发原先只按 LogType 放开，
+    /// 普通令牌能看到 Manager 任务的执行记录与详情链接。此处按「日志目录名 ← Manager 任务脚本名」
+    /// 与「运行记录 Manager 快照」两路一致收敛，列表与总数同步过滤。
+    /// </param>
+    public async Task<PageResult<LogModel>> GetPageAsync(LogQuery query, bool hideManagerTaskLogs = false)
     {
         if (query.EndTime.HasValue)
         {
@@ -43,6 +48,14 @@ public class LogsService
        && (string.IsNullOrEmpty(query.Module) || n.Module == query.Module)
        && (query.FailedOnly == null || !query.FailedOnly.Value || n.Success == false));
 
+        if (hideManagerTaskLogs)
+        {
+            var dirs = await ManagerLogDirsAsync();
+            logs = logs.Where(n => (n.DirectoryName == null || !dirs.Contains(n.DirectoryName))
+                // 任务删除后目录名反查不到任务，用运行记录的 Manager 快照兜底（子查询，不拼 IN 大列表）
+                && !_dbContext.TaskRuns.Any(r => r.LogId == n.Id && r.ManagerSnapshot));
+        }
+
         return new PageResult<LogModel>
         {
             Data = await logs.OrderByDescending(n => n.CreateTime).ThenBy(n => n.Id).Skip(query.Skip).Take(query.PageSize).ToListAsync(),
@@ -50,6 +63,35 @@ public class LogsService
             Page = query.PageIndex,
             PageSize = query.PageSize
         };
+    }
+
+    /// <summary>
+    /// Manager 任务对应的日志目录名集合（与写入侧 <see cref="TaskExcuteService.LogDirNameFrom"/> 同口径，
+    /// 否则子目录脚本会出现「记录指向 A、过滤按 B」的漏网）。
+    /// </summary>
+    private async Task<List<string>> ManagerLogDirsAsync()
+    {
+        var files = await _dbContext.Tasks.AsNoTracking().Where(n => n.Manager).Select(n => n.FileName).ToListAsync();
+        return files.Where(n => !string.IsNullOrEmpty(n)).Select(TaskExcuteService.LogDirNameFrom).Distinct().ToList();
+    }
+
+    /// <summary>
+    /// 该日志行是否属 Manager 任务（详情读取兜底：不能只靠列表过滤，LogId 可被直接猜测访问）。
+    /// </summary>
+    public async Task<bool> IsManagerTaskLogAsync(LogModel meta)
+    {
+        if (meta == null)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(meta.DirectoryName) && (await ManagerLogDirsAsync()).Contains(meta.DirectoryName))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrEmpty(meta.Id)
+            && await _dbContext.TaskRuns.AsNoTracking().AnyAsync(r => r.LogId == meta.Id && r.ManagerSnapshot);
     }
 
     /// <summary>
