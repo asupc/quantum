@@ -296,3 +296,21 @@ G0 门禁的「找回缺失文档」一项已确认为**不可完成**：`git lo
 `TaskService.AddAsync` 会抛 `NullReferenceException`，堆栈原文经 ExceptionFilter 回进响应 `Message`。
 已补 `saveModel == null` 的干净业务文案；非空但字段缺失的形态未逐一定位，留作单独修复项
 （同类信息泄露面：未处理异常的 `Message` 含堆栈，建议后续统一在 ExceptionFilter 侧收口）。
+
+## 10. 生产升级实施记录（2026-09-26）
+
+按运维手册 §1-§2 走完全程，全程只对本机一次性容器与生产库操作，未留下任何临时容器/文件：
+
+1. **备份**：`mysqldump --single-transaction --routines --triggers` 导出（1005 行 / 632 KB），存仓库外目录。
+2. **恢复演练**：还原到本地实例，逐项比对与生产一致（表数 29；`t_task=9`、`t_log=1109`、
+   `t_chat_message=121`、`t_app_notification=60`）。未演练通过的备份不算备份。
+3. **沙箱预演发现真实缺陷**：对还原副本直接跑 `database update` 报 `Table 't_ai_conversation' already exists`
+   ——生产迁移历史表**缺 `Init` 基线行**，且 `HasFullCurrentSchema` 的"代理表"判定已过期，
+   会把三条新迁移一起误标为已应用、新表永不创建。修复判定（逐实体逐列比对模型）后再继续（见提交 382c9dd）。
+4. **等价性证明**：用 EF 从零建一份纯 `Init` 库与还原副本做**逐表逐列 + 逐索引**比对，
+   差异仅为生产侧两张历史遗留表（`t_user`、一张带日期的 `t_custom_data_title_*`），
+   共享表的列级与索引级差异为 0 —— 由此才能断言"补记 Init 历史行"不跳过任何 Init 步骤。
+5. **生产执行**：补 `Init` 历史行 → `database update` 只应用两条新迁移 → 复核新表/新列/唯一索引与业务行数（见 §7.1）。
+
+> 部署提示：线上镜像仍是升级前的代码。在其更新到含本期改动的版本之前，新表处于"已建但无人写"状态，
+> 不影响旧功能；正式切换时按 §3 的阶段表推进（默认全部关闭，灰度开重试与凭据）。
