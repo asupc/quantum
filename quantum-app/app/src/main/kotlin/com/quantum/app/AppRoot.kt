@@ -194,8 +194,13 @@ class ShellViewModel @Inject constructor(
         }
         tokenStore.saveBaseUrl(normalized)
         sessionManager.updateBaseUrl(normalized)
-        return probe()
+        // 探活成功也返回文案（徽标与绿色状态行要用），这里必须折叠成 null：
+        // 否则调用方按「非 null=错误」把「连接成功」渲染成红色的登录错误提示
+        return probe()?.takeUnless { it == probeOkText }
     }
+
+    /** 探活成功文案（「在线」徽标与服务器卡片的绿色状态行共用）。 */
+    private val probeOkText = "连接成功"
 
     /**
      * 探活客户端：只建一次（每次点击新建会各自带一套连接池/线程池）。
@@ -220,7 +225,7 @@ class ShellViewModel @Inject constructor(
                 .url("${sessionManager.currentBaseUrl}/api/SystemConfig/footer")
                 .build()
             probeClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) "连接成功" else "服务返回 HTTP ${response.code}"
+                if (response.isSuccessful) probeOkText else "服务返回 HTTP ${response.code}"
             }
         } catch (e: Exception) {
             // message 允许为空（NetworkOnMainThreadException 即无 message），兜底到异常类名
