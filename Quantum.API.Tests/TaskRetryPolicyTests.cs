@@ -234,4 +234,105 @@ public class TaskRetryPolicyTests : TaskRunTestBase
         Assert.Equal(TaskRunStatus.Interrupted, (await _db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == stale.Id)).Status);
         Assert.Equal(TaskRunStatus.Running, (await _db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == fresh.Id)).Status);
     }
+
+    // ============================================================ 到期重试的实际执行（TaskService 侧）
+
+    private async Task<TaskRunModel> NewPendingRetry(string taskId, string script, string runId = "RETRY1")
+    {
+        var run = new TaskRunModel
+        {
+            Id = runId,
+            RootRunId = "ROOT1",
+            Attempt = 2,
+            TaskId = taskId,
+            TaskNameSnapshot = "重试执行任务",
+            ScriptFileSnapshot = script,
+            TriggerSource = TaskTriggerSource.Retry,
+            Status = TaskRunStatus.Pending,
+            IsRetry = true,
+            LogId = "LOG-RETRY-1"
+        };
+        _db.TaskRuns.Add(run);
+        await _db.SaveChangesAsync();
+        return run;
+    }
+
+    private TaskService TaskServiceOverTheSameDb() => new TaskService(_db,
+        new AppMessageService(_db, NullLogger<AppMessageService>.Instance),
+        new ScriptVersionService(_db), _runs);
+
+    [Fact]
+    public async Task ExecuteRetryAsync_RunsScriptAndWritesTerminalState()
+    {
+        Directory.CreateDirectory("scripts/quantum");
+        var scriptPath = Path.Combine("scripts", "quantum", "g3retry_ok.cs");
+        await File.WriteAllTextAsync(scriptPath, """
+            using Quantum.Plugins;
+            public class G3RetryOkTask : IQuantumTask
+            {
+                public Task RunAsync(QuantumTaskContext ctx, CancellationToken ct)
+                {
+                    ctx.Log("重试跑成功了");
+                    return Task.CompletedTask;
+                }
+            }
+            """);
+        try
+        {
+            CacheManager.Set(new List<TaskModel>
+            {
+                new() { Id = "T1", Name = "重试执行任务", FileName = "g3retry_ok.cs", Enable = true, WaitTime = 5 }
+            });
+            var run = await NewPendingRetry("T1", "g3retry_ok.cs");
+
+            await TaskServiceOverTheSameDb().ExecuteRetryAsync(run);
+
+            var stored = await _db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == run.Id);
+            Assert.Equal(TaskRunStatus.Succeeded, stored.Status);
+            Assert.NotNull(stored.StartedAtUtc);
+            Assert.NotNull(stored.FinishedAtUtc);
+            // 重试行走的是同一条终态落库链路：日志行也必须存在且指向该 RunId 预分配的 LogId
+            var log = await _db.Logs.AsNoTracking().SingleOrDefaultAsync(n => n.Id == run.LogId);
+            Assert.NotNull(log);
+            Assert.True(log.Success);
+            Assert.Equal(TaskRunStatus.Succeeded, stored.Status);
+            Assert.Null(stored.NextAttemptAtUtc);
+        }
+        finally
+        {
+            File.Delete(scriptPath);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteRetryAsync_AbandonsWhenTaskGoneAfterClaim()
+    {
+        // 领取到执行之间任务被删：以 Canceled 收口并留原因，绝不跑一个来路不明的脚本
+        CacheManager.Set(new List<TaskModel>());
+        var run = await NewPendingRetry("T-GONE", "whatever.cs");
+
+        await TaskServiceOverTheSameDb().ExecuteRetryAsync(run);
+
+        var stored = await _db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == run.Id);
+        Assert.Equal(TaskRunStatus.Canceled, stored.Status);
+        Assert.Contains("任务已删除", stored.CancelReason);
+        Assert.Null(stored.NextAttemptAtUtc);
+        Assert.Equal(0, await _db.Logs.CountAsync());
+    }
+
+    [Fact]
+    public async Task ExecuteRetryAsync_AbandonsWhenScriptChangedAfterClaim()
+    {
+        CacheManager.Set(new List<TaskModel>
+        {
+            new() { Id = "T1", Name = "重试执行任务", FileName = "new_script.cs", Enable = true }
+        });
+        var run = await NewPendingRetry("T1", "old_script.cs");
+
+        await TaskServiceOverTheSameDb().ExecuteRetryAsync(run);
+
+        var stored = await _db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == run.Id);
+        Assert.Equal(TaskRunStatus.Canceled, stored.Status);
+        Assert.Contains("脚本已变更", stored.CancelReason);
+    }
 }

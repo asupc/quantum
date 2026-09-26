@@ -122,7 +122,7 @@ public class MigrationChainTests
 
             Assert.NotNull(await db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == "R1"));
             Assert.Equal(2, (await db.TaskFailurePolicies.AsNoTracking().SingleAsync(n => n.TaskId == "T1")).RetryCount);
-            Assert.Equal(0, db.Database.GetPendingMigrations().Count());
+            Assert.Empty(db.Database.GetPendingMigrations());
         }
     }
 
