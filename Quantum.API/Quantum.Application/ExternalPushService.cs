@@ -122,8 +122,9 @@ public class ExternalPushService
         await EnforceQuotaAsync(credential);
 
         var msgId = Guid.NewGuid().ToString();
+        // 通知标题只用请求的 Title：会话身份由 SessionTitle/DisplayTitle 单独承载（契约 §6.4「不得互换」）
         var result = await _push.SendNotificationWithSideEffectAsync(
-            $"【{normalizedSession}】{normalizedTitle}", normalizedContent, "system", jump: null,
+            normalizedTitle, normalizedContent, "system", jump: null,
             sessionKey: sessionKey, sessionTitle: normalizedSession, msgIdOverride: msgId,
             preCommit: async () =>
             {

@@ -264,6 +264,8 @@ public class ExternalPushTests : IDisposable
         Assert.Equal(ExternalPushService.NormalizeTitle("机房监控"), message.SessionTitle);
         var notification = await _db.AppNotifications.AsNoTracking().SingleAsync(n => n.MsgId == outcome.MsgId);
         Assert.Equal("system", notification.Category);
+        // 通知标题不折叠会话标题（否则会话列表与通知横幅双重前缀）
+        Assert.Equal("标题", notification.Title);
     }
 
     [Fact]
