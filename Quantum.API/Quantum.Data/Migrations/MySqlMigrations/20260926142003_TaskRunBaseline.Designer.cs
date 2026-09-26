@@ -2,20 +2,25 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Quantum.Data;
 
 #nullable disable
 
-namespace Quantum.Migrations.SqliteMigrations
+namespace Quantum.Migrations.MySqlMigrations
 {
-    [DbContext(typeof(QuantumSqliteDbContext))]
-    partial class QuantumSqliteDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(QuantumMySqlDbContext))]
+    [Migration("20260926142003_TaskRunBaseline")]
+    partial class TaskRunBaseline
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             modelBuilder.Entity("Quantum.Entities.Model.AiConversationModel", b =>
                 {
@@ -23,19 +28,19 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("AllowEnvValues")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<DateTime?>("LastMessageTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Title")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("UpdateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 
@@ -48,28 +53,28 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Content")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ConversationId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Kind")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Payload")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Role")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("RunId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<long>("Seq")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -84,37 +89,37 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("ContextWindow")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("DisplayName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("Enable")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("IsDefault")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<int>("MaxOutputTokens")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("ModelId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ProviderId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<int>("Sort")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<double>("Temperature")
-                        .HasColumnType("REAL");
+                        .HasColumnType("double");
 
                     b.Property<DateTime?>("UpdateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 
@@ -129,46 +134,46 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime?>("AppliedTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("AppliedVersionId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("BaseHash")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ConversationId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Diagnostics")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("FileName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("MessageId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("NewContent")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("NewHash")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Status")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("Summary")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TestRunLogId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TestStatus")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -183,49 +188,49 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ApiKey")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("BaseUrl")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("Enable")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("LastTestMessage")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool?>("LastTestOk")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime?>("LastTestTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("MaxRetries")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("Name")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Protocol")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("Sort")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("SupportsTools")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("TimeoutSeconds")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("UsePlatformProxy")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.HasKey("Id");
 
@@ -238,43 +243,43 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("CompletionTokens")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("ConversationId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<long>("DurationMs")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Error")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("FinishTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Model")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("PromptTokens")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("ProviderId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("Rounds")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("Status")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TargetFile")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TriggerType")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -287,52 +292,52 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("AllowCustomDataManage")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("AllowEnvManage")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("AllowScriptDelete")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("AllowTaskManage")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("AutoAnalyzeOnFailure")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("Enable")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<int>("KeepVersionsPerFile")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("LogTailLines")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("MaxRounds")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("RunTimeoutSeconds")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<bool>("SaveFullPrompt")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("SystemPromptExtra")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TestRunNotifyMode")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("TestRunRequireConfirm")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime?>("UpdateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 
@@ -345,28 +350,28 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Arguments")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<long>("DurationMs")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Kind")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Name")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Result")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("RunId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<int>("Seq")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -381,22 +386,22 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("DeviceId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("DeviceName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("Enabled")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime>("LastSeenAt")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Platform")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -409,22 +414,22 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ContentType")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Ext")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("FileName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Path")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<long>("Size")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -439,25 +444,25 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Category")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Content")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Jump")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("MsgId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Title")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -469,25 +474,25 @@ namespace Quantum.Migrations.SqliteMigrations
             modelBuilder.Entity("Quantum.Entities.Model.AppNotifySettingModel", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("DndEnd")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("DndStart")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("SecurityPush")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("SystemPush")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("TaskPush")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime>("UpdateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 
@@ -500,22 +505,22 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("DeviceId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("Revoked")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("RevokedReason")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TokenHash")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -528,32 +533,32 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Description")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("IconUrl")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("IsFolder")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("ParentId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("SortOrder")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Url")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -566,34 +571,34 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Content")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ContentText")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ContentType")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("Direction")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("MsgId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Payload")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<long>("Seq")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("SessionKey")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -608,16 +613,16 @@ namespace Quantum.Migrations.SqliteMigrations
             modelBuilder.Entity("Quantum.Entities.Model.ChatSessionModel", b =>
                 {
                     b.Property<string>("SessionKey")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<long>("LastReadSeq")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<long>("LastSeq")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.HasKey("SessionKey");
 
@@ -630,25 +635,25 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("CommunicationType")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<bool>("Enable")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("EnableRegex")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Key")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Message")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("MessageType")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("Remark")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -661,58 +666,58 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Data1")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data10")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data11")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data12")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data13")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data14")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data15")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data2")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data3")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data4")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data5")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data6")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data7")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data8")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Data9")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Type")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<DateTime>("UpdateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 
@@ -727,58 +732,58 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("Hide")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Title1")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title10")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title11")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title12")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title13")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title14")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title15")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title2")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title3")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title4")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title5")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title6")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title7")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title8")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Title9")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Type")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TypeName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -791,22 +796,22 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("Enable")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Name")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Remark")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("UpdateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Value")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -819,46 +824,46 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("DirectoryName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<long?>("ElapsedMs")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Exception")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("LogPath")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("LogType")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("Module")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Operator")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Remark")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("RequestPath")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("Severity")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<bool>("Success")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Title")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("UserIP")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -873,34 +878,34 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Component")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("HideInBread")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("HideInMenu")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Icon")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("IsDefault")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Name")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ParentName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Path")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("Sort")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("Title")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -913,33 +918,33 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("Enable")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("EnableProxy")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("EnablePush")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Envs")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("HttpMethod")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Secret")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("SrciptFile")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Whitelist")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -954,37 +959,37 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Content")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Creator")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("FileName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<string>("Hash")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("IsPinned")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<int>("LineCount")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("Remark")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("Size")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("Source")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TaskId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -999,25 +1004,25 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("AlertType")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("ConsecutiveFailures")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<DateTime?>("DeliveredAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("DeliveryAttempts")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("DeliveryError")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("DeliveryStatus")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("RootRunId")
                         .HasColumnType("nvarchar(64)");
@@ -1026,7 +1031,7 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SafeSummary")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TaskId")
                         .HasColumnType("nvarchar(64)");
@@ -1047,22 +1052,22 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("ConsecutiveFailures")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("LastFinalRunId")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime?>("LastSentAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("Open")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("TaskId")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 
@@ -1078,31 +1083,31 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("AlertAfterConsecutiveFailures")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("BackoffSeconds")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("CooldownMinutes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<bool>("Enabled")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<int>("RetryCount")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<bool>("SendRecovery")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("TaskId")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
@@ -1118,73 +1123,73 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Command")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("CommandEnv")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("CommunicationTypes")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreateTime")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<string>("Cron")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("DayLimit")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<bool>("Enable")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("EnableProxy")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("EnablePush")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("EnableRegex")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("FileName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("Manager")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Name")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("PushGroup")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Remark")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("Revocation")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("SessionName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(100)");
 
                     b.Property<string>("TaskEndNotify")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TaskStartNotify")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("TaskStatus")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("TaskThreadId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("TextToPicture")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<int>("WaitTime")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1197,70 +1202,70 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Attempt")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("FailureCode")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("FinishedAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("IsRetry")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("LogDirectoryName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("LogFileName")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("LogId")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("ManagerSnapshot")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<DateTime?>("NextAttemptAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("RetryDeferrals")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("RootRunId")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SafeSummary")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ScriptFileSnapshot")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("ScriptHashSnapshot")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime?>("StartedAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("TaskId")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TaskNameSnapshot")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("TriggerRef")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<int>("TriggerSource")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1282,31 +1287,31 @@ namespace Quantum.Migrations.SqliteMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Command")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("CommandEnv")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("EnableRegex")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Name")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("Remark")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("longtext");
 
                     b.Property<bool>("Revocation")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<int>("Sort")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("TaskId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("varchar(255)");
 
                     b.Property<int>("WaitTime")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 

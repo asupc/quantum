@@ -96,6 +96,21 @@ public class TaskController : BaseController
     }
 
     /// <summary>
+    /// 执行脚本任务并返回每项的 RunId（一期 G2 新增端点）。
+    /// 语义与 exec-task 一致（受理即返回），差别只在这里回的是**运行记录 Id**：
+    /// 客户端可凭 RunId 直达执行详情/日志，不再靠「接口返回 true」推断脚本跑成功。
+    /// </summary>
+    [HttpPost("execute-runs")]
+    [ActionLogFilter("执行量子脚本任务")]
+    public async Task<List<TaskExecuteReceipt>> ExecuteRunsAsync([FromBody] List<string> ids)
+    {
+        _taskService.EnsureAccessible(ids, IsManager);
+        var receipts = await _taskService.AcceptAndRunAsync(ids, TaskTriggerSource.Manual,
+            triggerRef: GetUserId());
+        return receipts.Select(n => new TaskExecuteReceipt { TaskId = n.TaskId, RunId = n.RunId }).ToList();
+    }
+
+    /// <summary>
     /// 获取脚本字符串（管理员专用：脚本内容属服务端代码，不对普通 App 用户开放）
     /// </summary>
     /// <param name="fileName">文件名</param>

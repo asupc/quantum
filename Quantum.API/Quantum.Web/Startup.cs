@@ -82,6 +82,8 @@ public class Startup
         services.AddSingleton<AppWebSocketMiddleware>();
         // §1-12：WS 心跳巡检由每连接一个 Task 合并为进程内单 PeriodicTimer 全局扫描
         services.AddHostedService<AppWebSocketHeartbeatService>();
+        // 一期 G2~G4：运行记录启动恢复 + 到期重试领取 + 告警事件投递 + 保留期清理（单实例调度约束）
+        services.AddHostedService<TaskExecutionMaintenanceService>();
 
         // 标准鉴权中间件（W6 二期遗留项落地）：仅负责验签并填充 HttpContext.User，
         // 接口放行/拦截仍由 CustomAuthorizationFilter 决定，行为保持向后兼容；
@@ -144,6 +146,8 @@ public class Startup
         services.AddTransient(typeof(MessageProcess));
 
         services.AddScoped(typeof(TaskService));
+        services.AddScoped(typeof(TaskRunService));
+        services.AddScoped(typeof(TaskAlertService));
         services.AddScoped(typeof(CommandService));
         services.AddScoped(typeof(EnvService));
         services.AddScoped(typeof(NotifyService));

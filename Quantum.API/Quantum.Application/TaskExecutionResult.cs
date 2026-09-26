@@ -7,47 +7,6 @@ using Quantum.Utils;
 namespace Quantum.Application;
 
 /// <summary>
-/// 单次执行终态。只有在脚本真正结束后才允许出现这里面的任何一个值——
-/// 「HTTP 受理成功」「日志已排队」都不是终态。
-/// </summary>
-public enum TaskExecutionOutcome
-{
-    /// <summary>脚本正常返回且未收到取消信号</summary>
-    Succeeded = 0,
-
-    /// <summary>脚本抛出异常</summary>
-    Failed = 1,
-
-    /// <summary>脚本根本没跑起来：路径非法/文件缺失/扩展名不支持/读取失败/门禁拒绝/编译失败/加载失败</summary>
-    Rejected = 2,
-
-    /// <summary>协作取消生效（停机信号或 ForceEndTime），含脚本响应取消后自行正常返回</summary>
-    Canceled = 3,
-
-    /// <summary>进程重启后扫描到的残留 Running，真实结果不可知</summary>
-    Interrupted = 4
-}
-
-/// <summary>
-/// 受控失败码。数据库、通知与 AI 输入只携带码 + 安全摘要，不携带堆栈明文。
-/// </summary>
-public enum TaskFailureCode
-{
-    None = 0,
-    InvalidScriptPath = 1,
-    ScriptMissing = 2,
-    UnsupportedScriptExtension = 3,
-    ScriptReadFailed = 4,
-    GateBlocked = 5,
-    CompileFailed = 6,
-    AssemblyLoadFailed = 7,
-    ScriptException = 8,
-    CanceledByShutdown = 9,
-    CanceledByForceEndTime = 10,
-    EngineFault = 11
-}
-
-/// <summary>
 /// 任务执行结构化结果（一期 G1）：取代「写日志后 return」的隐式成功口径。
 /// 由 <see cref="TaskExcuteService"/> 产出，所有入口（手动/定时/指令/外触/AI 影子试运行）消费同一份结论，
 /// 不允许再出现按日志文本猜测结果的第二套判定。

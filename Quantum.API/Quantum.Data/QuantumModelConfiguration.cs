@@ -58,5 +58,22 @@ public static class QuantumModelConfiguration
 
         // 待确认提案按状态筛选（应用/过期清理）
         modelBuilder.Entity<AiProposalModel>().HasIndex(n => n.Status);
+
+        // 运行记录按「任务 + 受理时间」分页（执行历史列表主查询），以及按根执行取整条重试链
+        modelBuilder.Entity<TaskRunModel>().HasIndex(n => new { n.TaskId, n.CreatedAtUtc });
+        modelBuilder.Entity<TaskRunModel>().HasIndex(n => new { n.RootRunId, n.Attempt }).IsUnique();
+        // 到期重试领取与启动中断扫描都走这个复合索引（Status + NextAttemptAtUtc）
+        modelBuilder.Entity<TaskRunModel>().HasIndex(n => new { n.Status, n.NextAttemptAtUtc });
+        modelBuilder.Entity<TaskRunModel>().HasIndex(n => n.LogId);
+
+        // 失败策略一任务一条：唯一键是 Upsert 并发的前提
+        modelBuilder.Entity<TaskFailurePolicyModel>().HasIndex(n => n.TaskId).IsUnique();
+
+        // 告警状态一任务一条
+        modelBuilder.Entity<TaskAlertStateModel>().HasIndex(n => n.TaskId).IsUnique();
+
+        // 告警事件按「任务 + 类型 + 根执行」去重（同一根执行不得重复开/恢复），投递扫描按状态取
+        modelBuilder.Entity<TaskAlertEventModel>().HasIndex(n => new { n.TaskId, n.AlertType, n.RootRunId }).IsUnique();
+        modelBuilder.Entity<TaskAlertEventModel>().HasIndex(n => new { n.DeliveryStatus, n.CreatedAtUtc });
     }
 }

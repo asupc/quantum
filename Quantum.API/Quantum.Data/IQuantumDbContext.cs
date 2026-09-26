@@ -33,6 +33,10 @@ public interface IQuantumDbContext
     DbSet<AiRunModel> AiRuns { get; set; }
     DbSet<AiStepModel> AiSteps { get; set; }
     DbSet<AiProposalModel> AiProposals { get; set; }
+    DbSet<TaskRunModel> TaskRuns { get; set; }
+    DbSet<TaskFailurePolicyModel> TaskFailurePolicies { get; set; }
+    DbSet<TaskAlertStateModel> TaskAlertStates { get; set; }
+    DbSet<TaskAlertEventModel> TaskAlertEvents { get; set; }
 
     DatabaseFacade Database { get; }
     EntityEntry Entry(object entity);

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using log4net;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 using Quartz;
 using Quantum.Utils;
@@ -22,6 +23,7 @@ public class TaskService
     readonly IQuantumDbContext _dbContext;
     readonly AppMessageService _appMessageService;
     readonly ScriptVersionService _scriptVersionService;
+    readonly TaskRunService _runService;
 
     /// <summary>会话名长度上限（与迁移列型 varchar(100) 对齐）。</summary>
     internal const int MaxSessionNameLength = 100;
@@ -40,22 +42,51 @@ public class TaskService
         AgentTestRunService.StagingDir
     };
 
-    public TaskService(IQuantumDbContext dbContext, AppMessageService appMessageService, ScriptVersionService scriptVersionService)
+    public TaskService(IQuantumDbContext dbContext, AppMessageService appMessageService,
+        ScriptVersionService scriptVersionService, TaskRunService runService = null)
     {
         _dbContext = dbContext;
         _appMessageService = appMessageService;
         _scriptVersionService = scriptVersionService;
+        // 缺省时按同一 DbContext 现装一条运行记录链路，避免出现「有运行记录/无运行记录」两套执行结论
+        _runService = runService ?? new TaskRunService(dbContext,
+            NullLogger<TaskRunService>.Instance,
+            new TaskAlertService(dbContext, NullLogger<TaskAlertService>.Instance));
     }
 
     /// <summary>
-    /// 批量执行任务（fire-and-forget：立即返回，后台执行）
+    /// 批量执行任务（fire-and-forget：立即返回，后台执行）。
+    /// 旧端点契约不变（仍返回 bool），内部已改走运行记录链路：受理即写 Pending 行，RunId 由新端点返回。
     /// </summary>
     public void ExecTask(List<string> ids)
     {
         // fire-and-forget 保留（调用方多处依赖立即返回），但显式观察后台异常，避免成为无人处理的 UnobservedTaskException
-        _ = ExecTaskAsync(ids).ContinueWith(
+        _ = AcceptAndRunAsync(ids, TaskTriggerSource.Manual).ContinueWith(
             t => _log.Error("批量执行任务后台异常", t.Exception),
             TaskContinuationOptions.OnlyOnFaulted);
+    }
+
+    /// <summary>
+    /// 受理一批执行：同步写入 Pending 运行行并返回每条的 TaskId/RunId，后台各自领取执行。
+    /// 「HTTP 受理成功」在此处只等于「运行记录已落库」，绝不等于「脚本跑成功了」。
+    /// </summary>
+    public async Task<List<TaskRunReceipt>> AcceptAndRunAsync(List<string> ids, TaskTriggerSource source,
+        string triggerRef = null, CancellationToken ct = default)
+    {
+        var receipts = new List<TaskRunReceipt>();
+        foreach (var taskInfo in (ids ?? []).Distinct()
+                     .Select(id => CacheManager.Get<TaskModel>().FirstOrDefault(n => n.Id == id))
+                     .Where(n => n != null))
+        {
+            var run = await _runService.AcceptAsync(taskInfo.Id, taskInfo.Name, taskInfo.FileName,
+                source, triggerRef, taskInfo.Manager);
+            receipts.Add(new TaskRunReceipt(taskInfo.Id, run.Id));
+            _ = RunTrackedAsync(taskInfo, run, ct).ContinueWith(
+                t => _log.Error($"任务执行后台异常（{taskInfo.Name}）", t.Exception),
+                TaskContinuationOptions.OnlyOnFaulted);
+        }
+
+        return receipts;
     }
 
     /// <summary>
@@ -63,83 +94,104 @@ public class TaskService
     /// 定时触发（TaskJob）走本方法以便停机时 WaitForJobsToComplete 等到脚本完成；
     /// 每个任务并行执行、单任务异常只记日志不影响其他任务。
     /// </summary>
-    public Task ExecTaskAsync(List<string> ids, CancellationToken ct = default)
+    public async Task ExecTaskAsync(List<string> ids, CancellationToken ct = default)
     {
-        return Task.Run(async () =>
+        var runs = new List<Task>();
+        foreach (var taskInfo in (ids ?? []).Distinct()
+                     .Select(id => CacheManager.Get<TaskModel>().FirstOrDefault(n => n.Id == id))
+                     .Where(n => n != null))
         {
-            var tasks = CacheManager.Get<TaskModel>().Where(n => ids.Contains(n.Id));
-            await Task.WhenAll(tasks.Select(taskInfo => RunSingleTaskAsync(taskInfo, ct)));
-        });
+            var run = await _runService.AcceptAsync(taskInfo.Id, taskInfo.Name, taskInfo.FileName,
+                TaskTriggerSource.Cron, null, taskInfo.Manager);
+            runs.Add(RunTrackedAsync(taskInfo, run, ct));
+        }
+
+        await Task.WhenAll(runs);
     }
 
-    private static async Task RunSingleTaskAsync(TaskModel taskInfo, CancellationToken ct = default)
+    /// <summary>
+    /// 执行一次已受理的运行：条件领取 → 跑脚本 → 终态与 t_log 同事务落库 → 按策略决定是否走旧式通知。
+    /// 领取失败（已被别的入口拿走）直接返回，不产生第二条终态。
+    /// </summary>
+    private async Task RunTrackedAsync(TaskModel taskInfo, TaskRunModel run, CancellationToken ct)
     {
-        var dateTime = DateTime.Now;
-        var log = new LogModel
+        if (!await _runService.ClaimAsync(run.Id))
         {
-            CreateTime = DateTime.Now,
-            LogType = LogType.任务日志,
-            Operator = "System",
-            Remark = "执行脚本任务",
-            // 先置 false：真实终态由执行结果回填（G1）。旧实现这里写 true，
-            // 而 ExecTask 的失败分支被吞在方法内部，日志几乎永远是「成功」。
-            Success = false,
-            Title = taskInfo.Name,
-            // 与 TaskExcuteService 写入侧同款净化：日志目录名剔除路径分隔符，保证记录与落盘目录一致可读
-            DirectoryName = TaskExcuteService.LogDirNameFrom(taskInfo.FileName),
-            LogPath = $"{dateTime:yyyyMMddHHmmssfff}.log"
-        };
+            return;
+        }
+
+        TaskExecutionResult result;
         try
         {
-            //环境变量（扁平化：全部启用中的变量统一注入；代理/推送开关与临时令牌概念随进程内直调消失，
-            //改由 ctx.EnableProxy/ctx.EnablePush 表达）
-            var envs = CacheManager.Get<EnvModel>().Where(n => n.Enable).ToList();
-            envs.Add(new EnvModel
-            {
-                Name = "IsSystem",
-                Value = "true"
-            });
-            var temp = new TaskCommandStep
-            {
-                Task = taskInfo,
-                CreateTime = dateTime,
-                // WaitTime=0 的缺省强制结束窗 60min（原 24h：取消只是协作信号，不检查 ct 的挂死脚本
-                // 会占满一天；显式配置过 WaitTime 的任务不受影响）
-                ForceEndTime = DateTime.Now.AddMinutes(taskInfo.WaitTime == 0 ? 60 : taskInfo.WaitTime),
-                HasChildTask = false,
-                UpdateTime = DateTime.Now,
-                Envs = envs
-            };
-
-            var result = await temp.Run(ct);
-            result.ApplyToLog(log);
-            // 异步入库有 3 秒窗口，必须在执行结束后再入队：入队早于回填会让落库线程捞到初始 Success=true
-            LogServiceHelper.Logs.Enqueue(log);
-
-            // 结果真实后才有意义的动作：只有确定失败才告警/送 AI，取消与被拒绝不算「脚本写错了」
-            if (result.Outcome == TaskExecutionOutcome.Failed || result.Outcome == TaskExecutionOutcome.Rejected)
-            {
-                // 任务失败通知（A5.4 接线，受众=管理员；App 离线走 REST 增量补拉兜底）
-                NotifyManagersAsync(taskInfo.Id, taskInfo.Name,
-                    $"任务「{taskInfo.Name}」执行失败（{result.OutcomeLabel}）：{result.SafeSummary}");
-                // AI 自动分析（2026-09-20 接线）：仅当全局设置打开「失败自动分析」时才会真正发起，否则空转返回
-                AgentAutoAnalyze.OnTaskFailure(taskInfo.Id, taskInfo.Name, taskInfo.FileName, result.SafeSummary);
-            }
+            result = await ExecuteOnceAsync(taskInfo, run.CreatedAtUtc, ct);
         }
         catch (Exception e)
         {
-            Console.WriteLine($"[{taskInfo.Name}]自动执行时出现异常：[{e.Message}]");
-            log.Success = false;
-            log.Severity = LogSeverity.Error;
-            log.Module = "Task";
-            log.Exception = e.StackTrace;
-            log.Remark = $"执行链路异常：{e.Message}";
-            LogServiceHelper.Logs.Enqueue(log);
-            // 任务失败通知（A5.4 接线，受众=管理员；App 离线走厂商推送/通知中心兜底）
-            NotifyManagersAsync(taskInfo.Id, taskInfo.Name, $"任务「{taskInfo.Name}」执行失败：{e.Message}");
-            // AI 自动分析（2026-09-20 接线）：仅当全局设置打开「失败自动分析」时才会真正发起，否则空转返回
-            AgentAutoAnalyze.OnTaskFailure(taskInfo.Id, taskInfo.Name, taskInfo.FileName, e.Message);
+            // 执行链路自身的意外异常（不是脚本抛的）：同样必须落确定终态，绝不无声
+            _log.Error($"[{taskInfo.Name}]自动执行时出现异常", e);
+            result = TaskExecutionResult.Failed(TaskFailureCode.EngineFault,
+                $"执行链路异常：{e.GetType().Name}: {e.Message}",
+                DateTime.UtcNow, DateTime.UtcNow,
+                TaskExcuteService.LogDirNameFrom(taskInfo.FileName), $"{run.CreatedAtUtc:yyyyMMddHHmmssfff}.log");
         }
+
+        var completion = await _runService.CompleteAsync(run, result, LogType.任务日志);
+
+        // R-03 兼容口径：未配置/未启用策略的任务保留「一次失败一条旧式通知 + 一次 AI 分析」；
+        // 策略一旦启用，通知改由告警事件投递（含重试链的「最后一次确定失败」时点），旧路径必须让位。
+        if (result.IsFinalFailure && !completion.PolicyOwned)
+        {
+            NotifyManagersAsync(taskInfo.Id, taskInfo.Name,
+                $"任务「{taskInfo.Name}」执行失败（{result.OutcomeLabel}）：{result.SafeSummary}");
+            AgentAutoAnalyze.OnTaskFailure(taskInfo.Id, taskInfo.Name, taskInfo.FileName, result.SafeSummary);
+        }
+    }
+
+    /// <summary>
+    /// 执行一次到期重试（G3）：再核验任务仍启用且脚本未变，再走与手动/定时完全相同的执行链路。
+    /// 校验不过就按取消收口——绝不悄悄执行另一个版本。
+    /// </summary>
+    public async Task ExecuteRetryAsync(TaskRunModel run, CancellationToken ct = default)
+    {
+        var task = CacheManager.Get<TaskModel>().FirstOrDefault(n => n.Id == run.TaskId);
+        var reason = task == null ? "任务已删除"
+            : !task.Enable ? "任务已禁用"
+            : !string.Equals(task.FileName, run.ScriptFileSnapshot, StringComparison.Ordinal) ? "脚本已变更"
+            : null;
+        if (reason != null)
+        {
+            await _runService.AbandonPendingRetryAsync(run, reason);
+            return;
+        }
+
+        await RunTrackedAsync(task, run, ct);
+    }
+
+    /// <summary>组装一次性执行上下文并跑脚本，只返回结构化终态（日志与运行记录由调用方落）。</summary>
+    private static async Task<TaskExecutionResult> ExecuteOnceAsync(TaskModel taskInfo, DateTime createdAt,
+        CancellationToken ct)
+    {
+        //环境变量（扁平化：全部启用中的变量统一注入；代理/推送开关与临时令牌概念随进程内直调消失，
+        //改由 ctx.EnableProxy/ctx.EnablePush 表达）
+        var envs = CacheManager.Get<EnvModel>().Where(n => n.Enable).ToList();
+        envs.Add(new EnvModel
+        {
+            Name = "IsSystem",
+            Value = "true"
+        });
+        var temp = new TaskCommandStep
+        {
+            Task = taskInfo,
+            CreateTime = createdAt,
+            // WaitTime=0 的缺省强制结束窗 60min（原 24h：取消只是协作信号，不检查 ct 的挂死脚本
+            // 会占满一天；显式配置过 WaitTime 的任务不受影响）
+            ForceEndTime = DateTime.Now.AddMinutes(taskInfo.WaitTime == 0 ? 60 : taskInfo.WaitTime),
+            HasChildTask = false,
+            UpdateTime = DateTime.Now,
+            Envs = envs
+        };
+
+        return await temp.Run(ct);
     }
 
     /// <summary>
@@ -519,6 +571,12 @@ public class TaskService
         await _dbContext.TaskSubs.Where(n => idList.Contains(n.TaskId)).ExecuteDeleteAsync();
         await _dbContext.DeleteByIdsAsync<TaskModel>(idList);
         CacheManager.Refresh<TaskSubModel>();
+        // 任务删除后历史运行记录保留（不级联删），但待重试排程必须立即作废
+        foreach (var id in idList)
+        {
+            await _runService.CancelRetriesForDeletedTaskAsync(id);
+        }
+
         return true;
     }
 
@@ -546,6 +604,8 @@ public class TaskService
         {
             task.Enable = false;
             await task.DeleteQuartzJob();
+            // 禁用即取消后续待重试：否则停掉的任务会被后台一轮轮悄悄拉起
+            await _runService.CancelPendingRetriesAsync(task.Id, "任务已禁用，取消待重试");
         }
         await _dbContext.SaveChangesAsync();
         CacheManager.Refresh<TaskModel>();

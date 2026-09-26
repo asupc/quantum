@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
@@ -127,6 +127,11 @@ public static class DbInitializer
         {
             return false;
         }
+        finally
+        {
+            // 同 MarkAllMigrationsAsApplied：探测完必须归还连接，否则启动路径永久持有库文件句柄
+            db.Database.CloseConnection();
+        }
     }
 
     /// <summary>
@@ -142,6 +147,9 @@ public static class DbInitializer
         }
         db.Database.OpenConnection();
         var conn = db.Database.GetDbConnection();
+        // OpenConnection 不自愈：缺 CloseConnection 会把连接（连同它持有的库文件句柄）留到进程结束
+        try
+        {
         using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = db.Database.IsSqlite()
@@ -162,6 +170,11 @@ public static class DbInitializer
             using var cmd = conn.CreateCommand();
             cmd.CommandText = $"INSERT INTO __EFMigrationsHistory (MigrationId, ProductVersion) VALUES ('{migration}', '10.0.12')";
             cmd.ExecuteNonQuery();
+        }
+        }
+        finally
+        {
+            db.Database.CloseConnection();
         }
     }
 

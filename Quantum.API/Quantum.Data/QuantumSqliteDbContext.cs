@@ -82,4 +82,12 @@ public class QuantumSqliteDbContext : DbContext, IQuantumDbContext
     public DbSet<AiStepModel> AiSteps { get; set; }
 
     public DbSet<AiProposalModel> AiProposals { get; set; }
+
+    public DbSet<TaskRunModel> TaskRuns { get; set; }
+
+    public DbSet<TaskFailurePolicyModel> TaskFailurePolicies { get; set; }
+
+    public DbSet<TaskAlertStateModel> TaskAlertStates { get; set; }
+
+    public DbSet<TaskAlertEventModel> TaskAlertEvents { get; set; }
 }

@@ -995,6 +995,125 @@ namespace Quantum.Migrations.MySqlMigrations
                     b.ToTable("t_script_version");
                 });
 
+            modelBuilder.Entity("Quantum.Entities.Model.TaskAlertEventModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("AlertType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("DeliveredAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("DeliveryAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DeliveryError")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("DeliveryStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RootRunId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("RunId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SafeSummary")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("TaskId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveryStatus", "CreatedAtUtc");
+
+                    b.HasIndex("TaskId", "AlertType", "RootRunId")
+                        .IsUnique();
+
+                    b.ToTable("t_task_alert_event");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.TaskAlertStateModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LastFinalRunId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("LastSentAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("Open")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("TaskId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId")
+                        .IsUnique();
+
+                    b.ToTable("t_task_alert_state");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.TaskFailurePolicyModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("AlertAfterConsecutiveFailures")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BackoffSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CooldownMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("SendRecovery")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("TaskId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId")
+                        .IsUnique();
+
+                    b.ToTable("t_task_failure_policy");
+                });
+
             modelBuilder.Entity("Quantum.Entities.Model.TaskModel", b =>
                 {
                     b.Property<string>("Id")
@@ -1072,6 +1191,91 @@ namespace Quantum.Migrations.MySqlMigrations
                     b.HasKey("Id");
 
                     b.ToTable("t_task");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.TaskRunModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("FailureCode")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FinishedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsRetry")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("LogDirectoryName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("LogFileName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("LogId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("ManagerSnapshot")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("RetryDeferrals")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RootRunId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SafeSummary")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("ScriptFileSnapshot")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("ScriptHashSnapshot")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TaskId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("TaskNameSnapshot")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("TriggerRef")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("TriggerSource")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LogId");
+
+                    b.HasIndex("RootRunId", "Attempt")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextAttemptAtUtc");
+
+                    b.HasIndex("TaskId", "CreatedAtUtc");
+
+                    b.ToTable("t_task_run");
                 });
 
             modelBuilder.Entity("Quantum.Entities.Model.TaskSubModel", b =>

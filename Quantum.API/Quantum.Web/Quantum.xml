@@ -1165,6 +1165,13 @@
             <param name="ids"></param>
             <returns></returns>
         </member>
+        <member name="M:Quantum.Web.Controllers.TaskController.ExecuteRunsAsync(System.Collections.Generic.List{System.String})">
+            <summary>
+            执行脚本任务并返回每项的 RunId（一期 G2 新增端点）。
+            语义与 exec-task 一致（受理即返回），差别只在这里回的是**运行记录 Id**：
+            客户端可凭 RunId 直达执行详情/日志，不再靠「接口返回 true」推断脚本跑成功。
+            </summary>
+        </member>
         <member name="M:Quantum.Web.Controllers.TaskController.ScriptsAsync(System.String)">
             <summary>
             获取脚本字符串（管理员专用：脚本内容属服务端代码，不对普通 App 用户开放）
@@ -1246,6 +1253,37 @@
         <member name="M:Quantum.Web.Controllers.TaskController.Scripts">
             <summary>
             获取所有的脚本文件
+            </summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.TaskRunController">
+            <summary>
+            任务执行历史与失败策略（一期 G2/G3）。
+            权限口径：列表与详情按任务正向 Manager claim 过滤（非 Manager 拿不到 Manager 任务的执行记录）；
+            策略写入与手动重新执行是管理动作，一律 [ManagerOnly]。Open/匿名令牌不开放运行历史。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskRunController.Index(Quantum.Entities.DTOs.TaskRunQuery)">
+            <summary>执行历史分页（排序 UTC+Id 倒序，分页上限 1~100）</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskRunController.Detail(System.String)">
+            <summary>
+            单条执行详情：含同一根执行的尝试时间轴与日志可达性。
+            越权与不存在一律返回「执行记录不存在」，不区分（避免用详情接口探测 RunId）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskRunController.RetryAsync(System.String)">
+            <summary>
+            手动重新执行（管理员）：产生**新的**根执行 Id，不复用旧执行链、也不计入旧链的重试次数；
+            留操作日志。被拒绝的脚本仍可手动重跑（例如已修好脚本后补跑一次）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskRunController.GetPolicy(System.String)">
+            <summary>读失败策略（无配置即返回全默认值：重试 0 次、策略未启用）</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.TaskRunController.SavePolicy(System.String,Quantum.Entities.DTOs.TaskFailurePolicyDto)">
+            <summary>
+            写失败策略（管理员）。所有限值在此处服务端二次 clamp，不信任 UI。
+            注意：策略里的告警/路由细节不对非 Manager 开放；非 Manager 只能读自己可见任务的执行记录。
             </summary>
         </member>
         <member name="T:Quantum.Web.Controllers.UploadController">

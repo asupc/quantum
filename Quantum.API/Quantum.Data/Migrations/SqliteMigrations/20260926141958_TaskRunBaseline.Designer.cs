@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Quantum.Data;
 
@@ -10,9 +11,11 @@ using Quantum.Data;
 namespace Quantum.Migrations.SqliteMigrations
 {
     [DbContext(typeof(QuantumSqliteDbContext))]
-    partial class QuantumSqliteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926141958_TaskRunBaseline")]
+    partial class TaskRunBaseline
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
