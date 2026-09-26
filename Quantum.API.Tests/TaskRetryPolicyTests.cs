@@ -235,6 +235,32 @@ public class TaskRetryPolicyTests : TaskRunTestBase
         Assert.Equal(TaskRunStatus.Running, (await _db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == fresh.Id)).Status);
     }
 
+    /// <summary>
+    /// 只在启动后扫一次会漏掉「崩溃前 2 分钟内启动、重启后仍在宽限期内」的行：
+    /// 维护轮询按本进程启动时刻补扫时必须判它中断，而本进程自己在跑的行绝不触碰。
+    /// </summary>
+    [Fact]
+    public async Task BootBoundedRecovery_CatchesRowInsideGrace_NeverTouchesOwnRuns()
+    {
+        var boot = DateTime.UtcNow;
+        var fromPreviousProcess = await AcceptAsync("T1");
+        await _runs.ClaimAsync(fromPreviousProcess.Id);
+        await _db.TaskRuns.Where(n => n.Id == fromPreviousProcess.Id)
+            .ExecuteUpdateAsync(n => n.SetProperty(p => p.StartedAtUtc, boot.AddSeconds(-30)));
+
+        var mine = await AcceptAsync("T2");
+        await _runs.ClaimAsync(mine.Id);
+
+        Assert.Equal(1, await RunsOverTheSameDb().RecoverInterruptedAsync(startedBeforeUtc: boot));
+        Assert.Equal(TaskRunStatus.Interrupted,
+            (await _db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == fromPreviousProcess.Id)).Status);
+        Assert.Equal(TaskRunStatus.Running,
+            (await _db.TaskRuns.AsNoTracking().SingleAsync(n => n.Id == mine.Id)).Status);
+
+        // 纯宽限期口径在当时还不该动它：要靠每轮的启动时刻补扫收敛
+        Assert.Equal(0, await RunsOverTheSameDb().RecoverInterruptedAsync());
+    }
+
     // ============================================================ 到期重试的实际执行（TaskService 侧）
 
     private async Task<TaskRunModel> NewPendingRetry(string taskId, string script, string runId = "RETRY1")

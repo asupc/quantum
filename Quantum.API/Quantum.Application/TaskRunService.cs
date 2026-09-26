@@ -329,10 +329,12 @@ public class TaskRunService
 
     /// <summary>
     /// 进程启动恢复：超过宽限期仍挂在 Running 的记录判为 Interrupted（真实结果不可知，既不重放也不判成功）。
+    /// 传 <paramref name="startedBeforeUtc"/>（本进程启动时刻）时改为只看该时刻：早于本次启动的 Running 行
+    /// 不可能还在本进程里跑，无需等宽限期即可判中断；本进程自己启动的行绝不触碰（长任务跑超宽限期是正常态）。
     /// </summary>
-    public async Task<int> RecoverInterruptedAsync(TimeSpan? grace = null)
+    public async Task<int> RecoverInterruptedAsync(TimeSpan? grace = null, DateTime? startedBeforeUtc = null)
     {
-        var cutoff = DateTime.UtcNow.Subtract(grace ?? RunningGracePeriod);
+        var cutoff = startedBeforeUtc ?? DateTime.UtcNow.Subtract(grace ?? RunningGracePeriod);
         var affected = await UpdateRunsAsync(
             n => n.Status == TaskRunStatus.Running && n.StartedAtUtc < cutoff,
             n => n.SetProperty(p => p.Status, TaskRunStatus.Interrupted)

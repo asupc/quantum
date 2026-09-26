@@ -25,6 +25,13 @@ public class TaskExecutionMaintenanceService : BackgroundService
     private readonly ILogger<TaskExecutionMaintenanceService> _log;
     private int _roundsSincePrune;
 
+    /// <summary>
+    /// 本进程启动时刻（取构造时刻，宁早勿晚）：早于它仍挂 Running 的行一定不是本进程在跑的。
+    /// 只在启动后 20 秒扫一次会漏掉「崩溃前 2 分钟内启动、重启后仍在宽限期内」的行——
+    /// 那类行会永远停在 Running，故每轮都按本时刻补扫一次。
+    /// </summary>
+    private readonly DateTime _bootTimeUtc = DateTime.UtcNow;
+
     public TaskExecutionMaintenanceService(IServiceScopeFactory scopeFactory,
         ILogger<TaskExecutionMaintenanceService> log)
     {
@@ -119,6 +126,9 @@ public class TaskExecutionMaintenanceService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var runService = scope.ServiceProvider.GetRequiredService<TaskRunService>();
         var alertService = scope.ServiceProvider.GetRequiredService<TaskAlertService>();
+
+        // 每轮补扫启动时仍在宽限期内、现已确认不属于本进程的运行记录（否则它们永远停在 Running）
+        await runService.RecoverInterruptedAsync(startedBeforeUtc: _bootTimeUtc);
 
         var due = await runService.ClaimDueRetriesAsync();
         foreach (var run in due)
