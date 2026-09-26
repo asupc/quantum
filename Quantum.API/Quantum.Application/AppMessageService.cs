@@ -94,7 +94,7 @@ public class AppMessageService
     /// </summary>
     public async Task<ChatMessageModel> AppendNoSaveAsync(ChatMessageDirection direction, string content,
         string contentType = "text", ChatMessageStatus status = ChatMessageStatus.发送中, string msgId = null,
-        string contentText = null, string sessionKey = null, string payload = null)
+        string contentText = null, string sessionKey = null, string payload = null, string sessionTitle = null)
     {
         var max = await _dbContext.ChatMessages.AsNoTracking()
             .MaxAsync(n => (long?)n.Seq) ?? 0;
@@ -111,6 +111,8 @@ public class AppMessageService
             SessionKey = string.IsNullOrWhiteSpace(sessionKey) ? null : sessionKey.Trim(),
             // 结构化载荷为脚本组装的 JSON（选项/封面），不做 RemoveEmoji——客户端解析失败自会降级
             Payload = string.IsNullOrWhiteSpace(payload) ? null : payload.Trim(),
+            // 会话标题快照（G-Push）：只有外部会话写入；REST 增量补拉据此在离线端还原标题
+            SessionTitle = string.IsNullOrWhiteSpace(sessionTitle) ? null : sessionTitle.Trim(),
             CreateTime = DateTime.Now
         };
         _dbContext.ChatMessages.Add(message);
@@ -135,12 +137,22 @@ public class AppMessageService
                 SessionKey = normalizedKey,
                 CreateTime = message.CreateTime,
                 LastSeq = message.Seq,
-                LastReadSeq = Math.Min(existingMax, message.Seq)
+                LastReadSeq = Math.Min(existingMax, message.Seq),
+                DisplayTitle = message.SessionTitle
             });
         }
-        else if (message.Seq > session.LastSeq)
+        else
         {
-            session.LastSeq = message.Seq;
+            if (message.Seq > session.LastSeq)
+            {
+                session.LastSeq = message.Seq;
+            }
+
+            // 外部会话标题只在缺失时补写：会话键已按标题哈希定名，不做隐式改名
+            if (string.IsNullOrEmpty(session.DisplayTitle) && !string.IsNullOrEmpty(message.SessionTitle))
+            {
+                session.DisplayTitle = message.SessionTitle;
+            }
         }
         return message;
     }
@@ -542,7 +554,9 @@ public class AppMessageService
                 Total = head?.Total ?? 0,
                 Unread = unread,
                 ReadSeq = readSeq,
-                Last = last
+                Last = last,
+                // 外部会话展示标题（G-Push）：任务会话恒 null，前端按既有规则推导
+                SessionTitle = session.DisplayTitle
             });
         }
         var maxSeq = heads.Count > 0 ? heads.Max(n => n.LastSeq) : 0;

@@ -75,5 +75,14 @@ public static class QuantumModelConfiguration
         // 告警事件按「任务 + 类型 + 根执行」去重（同一根执行不得重复开/恢复），投递扫描按状态取
         modelBuilder.Entity<TaskAlertEventModel>().HasIndex(n => new { n.TaskId, n.AlertType, n.RootRunId }).IsUnique();
         modelBuilder.Entity<TaskAlertEventModel>().HasIndex(n => new { n.DeliveryStatus, n.CreatedAtUtc });
+
+        // 外部推送：幂等键按「凭据 + 键」唯一（同键并发只有一个能提交，冲突后回查去重）
+        modelBuilder.Entity<ExternalPushRequestModel>()
+            .HasIndex(n => new { n.CredentialId, n.IdempotencyKey }).IsUnique();
+        // 配额计数与过期清理都按「凭据 + 时间」扫描
+        modelBuilder.Entity<ExternalPushRequestModel>().HasIndex(n => new { n.CredentialId, n.CreatedAtUtc });
+
+        // 外部推送凭据按启用态检索（列表/校验路径）
+        modelBuilder.Entity<ExternalPushCredentialModel>().HasIndex(n => n.Enabled);
     }
 }

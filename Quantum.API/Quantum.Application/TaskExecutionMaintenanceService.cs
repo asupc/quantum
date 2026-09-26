@@ -44,6 +44,7 @@ public class TaskExecutionMaintenanceService : BackgroundService
         }
 
         await RecoverOnceAsync(stoppingToken);
+        await ScanExternalSessionPrefixOnceAsync();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -70,6 +71,30 @@ public class TaskExecutionMaintenanceService : BackgroundService
             {
                 break;
             }
+        }
+    }
+
+    /// <summary>
+    /// 上线前置检查（G-Push）：<c>external:</c> 前缀固定留给外部会话。若存量任务 Id / 任务会话名 /
+    /// 会话键已占用该前缀，必须以 ERROR 留痕先做安全迁移——绝不覆盖合并，也绝不能让外部会话与任务会话串台。
+    /// </summary>
+    private async Task ScanExternalSessionPrefixOnceAsync()
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var conflicts = await scope.ServiceProvider
+                .GetRequiredService<ExternalPushService>().FindSessionPrefixConflictsAsync();
+            if (conflicts.Count > 0)
+            {
+                LogServiceHelper.Error("外部会话前缀冲突",
+                    $"以下任务/会话键占用了 external: 前缀，启用外部推送前必须先迁移：{string.Join(", ", conflicts.Take(20))}",
+                    "ExternalPush");
+            }
+        }
+        catch (Exception e)
+        {
+            _log.LogError(e, "外部会话前缀冲突扫描失败");
         }
     }
 
@@ -109,6 +134,8 @@ public class TaskExecutionMaintenanceService : BackgroundService
         {
             _roundsSincePrune = 0;
             await alertService.PruneAsync(QuantumRuntimeOptions.RunRetentionDays);
+            // 外部推送幂等记录按 72 小时窗口清理（清理前同键恒按原请求去重，见 R-07）
+            await scope.ServiceProvider.GetRequiredService<ExternalPushService>().PruneIdempotencyRecordsAsync();
         }
     }
 }

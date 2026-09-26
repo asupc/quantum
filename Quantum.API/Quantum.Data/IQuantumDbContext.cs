@@ -37,6 +37,8 @@ public interface IQuantumDbContext
     DbSet<TaskFailurePolicyModel> TaskFailurePolicies { get; set; }
     DbSet<TaskAlertStateModel> TaskAlertStates { get; set; }
     DbSet<TaskAlertEventModel> TaskAlertEvents { get; set; }
+    DbSet<ExternalPushCredentialModel> ExternalPushCredentials { get; set; }
+    DbSet<ExternalPushRequestModel> ExternalPushRequests { get; set; }
 
     DatabaseFacade Database { get; }
     EntityEntry Entry(object entity);

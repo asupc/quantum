@@ -34,4 +34,11 @@ public class ChatSessionOverview
     /// 该会话最后一条消息（会话内最新 Seq）
     /// </summary>
     public ChatMessageModel Last { get; set; }
+
+    /// <summary>
+    /// 会话展示标题（可选，G-Push）：外部推送会话非空，前端优先用它；
+    /// 原任务会话/默认会话为 null，前端沿用「任务名 ‖ 会话键」推导规则。
+    /// 字段名与 WS notify 帧、消息行的 SessionTitle 三处一致（审核项 R-11），旧客户端忽略未知字段即可。
+    /// </summary>
+    public string SessionTitle { get; set; }
 }

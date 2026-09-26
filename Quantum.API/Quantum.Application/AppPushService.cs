@@ -84,12 +84,25 @@ public class AppPushService
     /// </summary>
     public async Task<AppNotificationModel> SendNotificationAsync(string title, string content,
         string category = "system", string jump = null, string sessionKey = null)
+        => await SendNotificationWithSideEffectAsync(title, content, category, jump, sessionKey);
+
+    /// <summary>
+    /// 站内通知发送的完整形态，额外支撑 G-Push 的两件事：
+    /// <paramref name="sessionTitle"/>（外部会话展示标题，与镜像行同事务落库）与
+    /// <paramref name="preCommit"/>（在同一事务内追加写调用方自己的行，如幂等记录）。
+    ///
+    /// 提交后语义（审核项 R-06）：事务提交即为成功事实；其后的 WS 广播与「标送达」都是 best-effort，
+    /// 失败只留痕，绝不把已入库的请求改写成失败。
+    /// </summary>
+    public async Task<AppNotificationModel> SendNotificationWithSideEffectAsync(string title, string content,
+        string category = "system", string jump = null, string sessionKey = null, string sessionTitle = null,
+        string msgIdOverride = null, Func<Task> preCommit = null)
     {
         if (string.IsNullOrEmpty(title))
         {
             return null;
         }
-        var msgId = Guid.NewGuid().ToString();
+        var msgId = string.IsNullOrEmpty(msgIdOverride) ? Guid.NewGuid().ToString() : msgIdOverride;
         var notification = new AppNotificationModel
         {
             Id = Guid.NewGuid().ToString().Replace("-", ""),
@@ -104,7 +117,7 @@ public class AppPushService
         // 统一在会话流中展示：以机器人下发消息写入 t_chat_message（共用 msgId 保证幂等），
         // 与通知行同事务提交——会话流是通知在 App 内的唯一展示面，不允许出现"通知有、会话没有"
         var chatContent = string.IsNullOrEmpty(title) ? content : $"【{title}】\n{content}";
-        var mirror = await SaveNotificationWithMirrorAsync(notification, chatContent, sessionKey);
+        var mirror = await SaveNotificationWithMirrorAsync(notification, chatContent, sessionKey, sessionTitle, preCommit);
 
         var frame = JsonSerializer.Serialize(new
         {
@@ -118,6 +131,8 @@ public class AppPushService
             jump = notification.Jump,
             // 会话键（= 任务 Id 或任务配置的会话名）：任务类通知归对应任务会话，system/security 无此字段（默认会话）
             session = mirror.SessionKey,
+            // 会话展示标题（可选，G-Push）：外部会话才非空；旧客户端忽略未知字段仍能收到消息
+            SessionTitle = string.IsNullOrEmpty(sessionTitle) ? null : sessionTitle,
             createTime = mirror.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
         }, FrameJsonOptions);
         if (!await TryPushOnlineAsync(frame))
@@ -126,7 +141,15 @@ public class AppPushService
         }
         else
         {
-            await _messageService.MarkDeliveredAsync(msgId);
+            try
+            {
+                await _messageService.MarkDeliveredAsync(msgId);
+            }
+            catch (Exception e)
+            {
+                // 提交后的送达标记失败不回改成功结论：行已入库，客户端补拉照样能拿到
+                _logger.LogWarning(e, "通知已入库但标记送达失败（msgId={MsgId}），留给补拉收敛", msgId);
+            }
         }
         return notification;
     }
@@ -136,7 +159,7 @@ public class AppPushService
     /// 任一写入失败则两侧都不落库并把异常交给调用方——避免"通知表有、会话流没有"的半成品状态。
     /// </summary>
     private async Task<ChatMessageModel> SaveNotificationWithMirrorAsync(AppNotificationModel notification,
-        string chatContent, string sessionKey)
+        string chatContent, string sessionKey, string sessionTitle = null, Func<Task> preCommit = null)
     {
         for (var attempt = 0; ; attempt++)
         {
@@ -148,7 +171,12 @@ public class AppPushService
                 await _dbContext.SaveChangesAsync();
                 mirror = await _messageService.AppendNoSaveAsync(ChatMessageDirection.发送, chatContent,
                     AppMessageService.NotifyContentType, ChatMessageStatus.发送中, notification.MsgId,
-                    sessionKey: sessionKey);
+                    sessionKey: sessionKey, sessionTitle: sessionTitle);
+                // 调用方的同事务副作用（G-Push 幂等记录）：与通知、镜像、会话标题一起原子提交
+                if (preCommit != null)
+                {
+                    await preCommit();
+                }
                 await _dbContext.SaveChangesAsync();
                 await tx.CommitAsync();
                 return mirror;
@@ -163,6 +191,13 @@ public class AppPushService
                 }
                 // AppendNoSaveAsync 同批 upsert 的会话行（t_chat_session）一并脱离跟踪（同上原因）
                 _messageService.DetachPendingSessionRows();
+                // 调用方在本事务里追加的行同样要脱离跟踪，否则重试会重复插入
+                // （整事务已回滚：通知行/镜像/会话行/副作用行都会在重试时重建，预提交回调也会被重新调用）
+                foreach (var entry in _dbContext.ChangeTracker.Entries()
+                             .Where(n => n.State == EntityState.Added).ToList())
+                {
+                    entry.State = EntityState.Detached;
+                }
                 _logger.LogWarning(e, "通知与镜像写入冲突，整事务重试（{Attempt}/3）", attempt + 1);
             }
         }

@@ -454,6 +454,11 @@ public class TaskService
         {
             throw new BusinessException($"会话名长度不能超过 {MaxSessionNameLength} 个字符！");
         }
+        // G-Push：external: 前缀固定留给外部推送会话，任务侧不得占用（否则外部会话与任务会话串台）
+        if (name.StartsWith(ExternalPushService.SessionPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException($"会话名不能以 {ExternalPushService.SessionPrefix} 开头（该前缀保留给外部推送会话）！");
+        }
         // §2-18：只判定「是否存在 Id==name 的任务」（Id 是主键，命中至多一行），改服务端 AnyAsync 走主键 seek；
         // 旧实现每次把全表 Id 拉进内存再 Contains，导入逐条调用即 O(N²)
         if (await _dbContext.Tasks.AsNoTracking().AnyAsync(n => n.Id == name))

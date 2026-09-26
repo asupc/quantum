@@ -148,6 +148,8 @@ public class Startup
         services.AddScoped(typeof(TaskService));
         services.AddScoped(typeof(TaskRunService));
         services.AddScoped(typeof(TaskAlertService));
+        services.AddScoped(typeof(ExternalPushService));
+        services.AddScoped(typeof(ExternalPushCredentialService));
         services.AddScoped(typeof(CommandService));
         services.AddScoped(typeof(EnvService));
         services.AddScoped(typeof(NotifyService));

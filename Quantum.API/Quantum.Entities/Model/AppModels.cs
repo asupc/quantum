@@ -200,6 +200,14 @@ public class ChatMessageModel : BaseModel
     /// 创建时间
     /// </summary>
     public DateTime CreateTime { get; set; } = DateTime.Now;
+
+    /// <summary>
+    /// 会话标题快照（G-Push）：外部会话消息在同一事务写入，供「仅消息增量补拉」的离线端
+    /// 在没拿到会话列表时也能还原标题；原任务会话消息保持 null，前端按既有规则推导。
+    /// 字段名在 REST 增量接口、WS notify 帧与本实体三处保持一致（审核项 R-11），不做别名映射。
+    /// </summary>
+    [Column(TypeName = "nvarchar(200)")]
+    public string SessionTitle { get; set; }
 }
 
 /// <summary>
@@ -234,6 +242,13 @@ public class ChatSessionModel
     /// 消息最大 Seq（保留的历史不计未读，见 AppMessageService.AppendNoSaveAsync）。
     /// </summary>
     public long LastReadSeq { get; set; }
+
+    /// <summary>
+    /// 会话展示标题（G-Push）：仅外部接入方会话写入，原任务会话/默认会话保持 null，
+    /// 由前端沿用「任务名 ‖ 会话键」的既有推导规则。同接入方改标题 = 新会话，不做隐式改名/搬迁。
+    /// </summary>
+    [Column(TypeName = "nvarchar(200)")]
+    public string DisplayTitle { get; set; }
 }
 
 /// <summary>

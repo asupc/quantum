@@ -885,6 +885,44 @@
             启用环境变量(id)（授权访问或localhost访问）
             </summary>
         </member>
+        <member name="T:Quantum.Web.Controllers.ExternalPushController">
+            <summary>
+            第三方受限富文本消息推送（G-Push）。鉴权只认 <c>Authorization: PushKey {id}.{secret}</c>，
+            不接受 JWT/匿名/Open AppKey；本端点不能执行指令、脚本或任何管理操作。
+            响应恒 HTTP 200，成功 Data 表示**已持久化**（不代表设备已收到），第三方必须判断信封 Code。
+            </summary>
+        </member>
+        <member name="F:Quantum.Web.Controllers.ExternalPushController.IdempotencyHeader">
+            <summary>幂等头（8~128 个 ASCII 可打印字符且无空白）</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ExternalPushController.SendMessage(Quantum.Entities.DTOs.ExternalPushMessageRequest)">
+            <summary>推送一条受限富文本通知到当前管理员设备，并为其指定独立会话标题。</summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.ExternalPushCredentialController">
+            <summary>
+            外部推送接入凭据管理（管理员专用）：创建/列表元数据/轮换/启停/删除。
+            与发送端点分离，且本控制器走普通 JWT + [ManagerOnly]——PushKey 凭据到不了这里。
+            明文密钥只在创建/轮换那一次回显；列表与操作日志都不含密钥或摘要。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ExternalPushCredentialController.Index">
+            <summary>凭据列表（元数据）</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ExternalPushCredentialController.Create(Quantum.Web.Controllers.ExternalPushCredentialCreateDto)">
+            <summary>创建凭据（默认禁用，需再显式启用）</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ExternalPushCredentialController.Rotate(System.String)">
+            <summary>轮换密钥（旧密钥立即失效，新明文只回显一次）</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ExternalPushCredentialController.SetEnabled(System.String,System.Boolean)">
+            <summary>启用/禁用（禁用即吊销投递能力，已存消息不抹除）</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ExternalPushCredentialController.Delete(System.String)">
+            <summary>删除凭据（连带清理其幂等记录；已投递的通知与会话消息保留）</summary>
+        </member>
+        <member name="T:Quantum.Web.Controllers.ExternalPushCredentialCreateDto">
+            <summary>凭据创建入参</summary>
+        </member>
         <member name="M:Quantum.Web.Controllers.LoginController.Login(Quantum.Entities.Config.Setting)">
             <summary>
             用户登录
@@ -1311,6 +1349,27 @@
             任务临时令牌（后两类无 Manager claim，且匿名/低信任来源）一律拒绝。
             本项目 HTTP 状态码恒为 200，拒绝同样以 body Code=401 表达（与 CustomAuthorizationFilter 一致）。
             </summary>
+        </member>
+        <member name="T:Quantum.Web.Filters.PushKeyAuthAttribute">
+             <summary>
+             外部推送专用鉴权（G-Push）：只解析 <c>Authorization: PushKey {id}.{secret}</c>。
+            
+             与其他鉴权面的隔离：
+             - 本过滤器**不读 JWT、不产出 ClaimsPrincipal**，因此 PushKey 拿不到任何身份/角色（更不可能 Manager=true），
+               也无法访问挂 [CustomAuthorizationFilter]/[ManagerOnly] 的旧端点；
+             - 反向同理：旧 Open AppKey、普通用户令牌、Manager JWT 都过不了本过滤器（它们没有 PushKey 头）；
+             - 挂本过滤器的控制器不得再挂 [AllowAnonymous]，也不参与默认认证方案。
+             失败统一 HTTP 200 + 信封 Code=401，且不区分「Id 不存在/密钥错/已吊销/已过期」，避免被用来探测凭据。
+             </summary>
+        </member>
+        <member name="F:Quantum.Web.Filters.PushKeyAuthAttribute.CredentialItemKey">
+            <summary>校验通过后凭据实体在 HttpContext.Items 里的键</summary>
+        </member>
+        <member name="F:Quantum.Web.Filters.PushKeyAuthAttribute.MaxFailuresPerWindow">
+            <summary>同一来源 IP 在窗口内允许的凭据校验失败次数（超过后窗口内直接拒绝，不再打库）</summary>
+        </member>
+        <member name="M:Quantum.Web.Filters.PushKeyAuthAttribute.ResetFailuresForTest">
+            <summary>测试专用：清空 IP 失败计数。</summary>
         </member>
         <member name="T:Quantum.Web.Middleware.AppWebSocketMiddleware">
             <summary>

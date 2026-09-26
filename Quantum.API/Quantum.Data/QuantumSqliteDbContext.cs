@@ -90,4 +90,8 @@ public class QuantumSqliteDbContext : DbContext, IQuantumDbContext
     public DbSet<TaskAlertStateModel> TaskAlertStates { get; set; }
 
     public DbSet<TaskAlertEventModel> TaskAlertEvents { get; set; }
+
+    public DbSet<ExternalPushCredentialModel> ExternalPushCredentials { get; set; }
+
+    public DbSet<ExternalPushRequestModel> ExternalPushRequests { get; set; }
 }

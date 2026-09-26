@@ -592,6 +592,9 @@ namespace Quantum.Migrations.SqliteMigrations
                     b.Property<string>("SessionKey")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SessionTitle")
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
 
@@ -612,6 +615,9 @@ namespace Quantum.Migrations.SqliteMigrations
 
                     b.Property<DateTime>("CreateTime")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayTitle")
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<long>("LastReadSeq")
                         .HasColumnType("INTEGER");
@@ -811,6 +817,90 @@ namespace Quantum.Migrations.SqliteMigrations
                     b.HasKey("Id");
 
                     b.ToTable("t_env");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.ExternalPushCredentialModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DailyQuota")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastUsedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RateLimitPerMinute")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Remark")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SecretHash")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("TotalSent")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Enabled");
+
+                    b.ToTable("t_external_push_credential");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.ExternalPushRequestModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CredentialId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MsgId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NotificationId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("PayloadBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequestHash")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SessionKey")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId", "CreatedAtUtc");
+
+                    b.HasIndex("CredentialId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("t_external_push_request");
                 });
 
             modelBuilder.Entity("Quantum.Entities.Model.LogModel", b =>
