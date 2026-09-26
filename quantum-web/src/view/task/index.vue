@@ -80,6 +80,8 @@
         <n-data-table ref="EnvTable" :columns="TaskColumns" :data="CommadnData" :row-key="(row) => row.Id"
             :checked-row-keys="CheckedRowKeys" @update:checked-row-keys="onCheckedRowKeys" :scroll-x="1200"
             :bordered="true" size="small" />
+        <run-history-drawer v-model:show="RunHistory.Show" :task="RunHistory.Task"
+            :focus-run-id="RunHistory.FocusRunId" />
         <div style="margin: 10px; overflow: hidden">
             <div style="float: right">
                 <n-pagination :item-count="PageInfo.Total" :page="QueryForm.PageIndex" :page-size="QueryForm.PageSize"
@@ -209,6 +211,8 @@
 <script>/*  eslint-disable  */
 import { h } from 'vue'
 import { renderOpActions, OpColor } from '@/utils/op-actions'
+import RunHistoryDrawer from './runHistory.vue'
+import { ExecuteRuns } from '@/api/taskRun.js'
 import {
   GetTask,
   PostTask,
@@ -223,9 +227,12 @@ import config from "@/config";
 
 export default {
   name: 'TaskIndex',
+  components: { RunHistoryDrawer },
   data() {
     return {
       listSeq: 0,
+      // 执行记录抽屉（一期 G2）：挂现有任务页，不新造顶级菜单分组
+      RunHistory: { Show: false, Task: null, FocusRunId: '' },
       CheckedRowKeys: [],
       BaseUrl: "",
       TaskColumns: [{
@@ -318,7 +325,8 @@ export default {
         fixed: "right",
         render: (row, index) =>
           renderOpActions(h, [
-            { icon: "fa-play", title: "执行", color: OpColor.Run, onClick: () => this.execTask([row.Id]) },
+            { icon: "fa-play", title: "执行", color: OpColor.Run, onClick: () => this.execTaskTracked(row) },
+            { icon: "fa-clock-rotate-left", title: "执行记录", color: OpColor.Info, onClick: () => this.openRunHistory(row) },
             { icon: "fa-pencil", title: "编辑", color: OpColor.Edit, onClick: () => this.editTask(index) },
             { icon: "fa-trash", title: "删除", color: OpColor.Delete, onClick: () => this.delete([row.Id]) }
           ])
@@ -518,6 +526,31 @@ export default {
         onPositiveClick: function () {
           ExecTask(ids).then((res) => {
             that.$message.success(`执行请求成功!`);
+          });
+        }
+      });
+    },
+    openRunHistory(row) {
+      this.RunHistory.Task = row;
+      this.RunHistory.FocusRunId = '';
+      this.RunHistory.Show = true;
+    },
+    // 单任务执行改走受理式端点：拿到 RunId 后直接落到该次执行详情，
+    // 不再用「接口返回成功」推断脚本跑成功（批量执行仍走旧端点，行为不变）
+    execTaskTracked(row) {
+      var that = this;
+      this.$dialog.warning({
+        title: "执行确认",
+        content: `确定执行任务「${row.Name}」吗?`,
+        positiveText: "确认",
+        negativeText: "取消",
+        onPositiveClick: function () {
+          ExecuteRuns([row.Id]).then((res) => {
+            const receipt = (res && res[0]) || null;
+            that.$message.success('执行已受理，可查看运行记录');
+            that.RunHistory.Task = row;
+            that.RunHistory.FocusRunId = receipt ? receipt.RunId : '';
+            that.RunHistory.Show = true;
           });
         }
       });

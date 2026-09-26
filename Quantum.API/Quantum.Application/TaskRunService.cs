@@ -125,7 +125,7 @@ public class TaskRunService
             CreateTime = DateTime.Now,
             LogType = logType,
             Operator = operatorName,
-            Remark = remark ?? $"执行脚本任务 → {result.Outcome}/{result.FailureCode}"
+            Remark = remark ?? $"执行脚本任务 RunId={run.Id} → {result.Outcome}/{result.FailureCode}"
                 + (string.IsNullOrEmpty(result.SafeSummary) ? "" : $"：{result.SafeSummary}"),
             Success = result.IsSuccess,
             Severity = result.Severity,

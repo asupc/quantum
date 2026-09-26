@@ -926,7 +926,7 @@
         </member>
         <member name="M:Quantum.Web.Controllers.LogsController.Index(Quantum.Entities.DTOs.LogQuery)">
             <summary>
-            获取日志信息（非管理员仅任务/指令触发两类）
+            获取日志信息（非管理员仅任务/指令触发两类，且其中的 Manager 任务日志按服务端过滤隐藏）
             </summary>
             <param name="query"></param>
             <returns></returns>
@@ -950,7 +950,7 @@
         </member>
         <member name="M:Quantum.Web.Controllers.LogsController.GetDetails(System.String)">
             <summary>
-            获取详细日志（受限类型的详情对非管理员隐藏）
+            获取详细日志（受限类型的详情对非管理员隐藏；Manager 任务的执行日志同样不得直读）
             </summary>
             <param name="id"></param>
             <returns></returns>
