@@ -191,19 +191,6 @@ public class OpenTriggerTaskService
 
         DateTime startTime = DateTime.Now;
 
-        var logModel = new LogModel
-        {
-            CreateTime = startTime,
-            Id = Guid.NewGuid().ToString(),
-            LogType = LogType.外触内执,
-            Operator = "System",
-            Success = true,
-            Title = "外触内置",
-            UserIP = ip,
-            DirectoryName = TaskExcuteService.LogDirNameFrom(task.SrciptFile),
-            LogPath = $"{startTime:yyyyMMddHHmmssfff}.log"
-        };
-
         // serverAddres/临时令牌随进程内直调消失；代理/推送开关改由 ctx.EnableProxy/ctx.EnablePush 表达
         List<EnvModel> envModels = [
                         new EnvModel
@@ -234,9 +221,7 @@ public class OpenTriggerTaskService
                 EnablePush = task.EnablePush
             }
         };
-        var runResult = await commandTask.Run();
-        // 外触同样记录真实结果：旧实现恒写 Success=true，脚本没跑起来也对调用方「已执行」
-        runResult.ApplyToLog(logModel);
-        LogServiceHelper.Logs.Enqueue(logModel);
+        // 外触走运行记录链路（G2 入口矩阵）：真实终态 + t_log 同事务落库；本入口不参与自动重试与告警
+        await TaskRunRecorder.RunStepAsync(commandTask, TaskTriggerSource.OpenTrigger, ip, LogType.外触内执);
     }
 }

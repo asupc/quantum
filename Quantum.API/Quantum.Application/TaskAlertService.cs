@@ -38,6 +38,13 @@ public class TaskAlertService
             return AlertEvaluation.NotManaged;
         }
 
+        // 影子试运行/指令/外触不进生产失败链：它们不是「任务自己跑失败」的样本，
+        // 尤其 AI 影子试运行的 TaskId 可能是真实任务 Id，若不拦会污染该任务的连续失败计数
+        if (run.TriggerSource is not (TaskTriggerSource.Manual or TaskTriggerSource.Cron or TaskTriggerSource.Retry))
+        {
+            return AlertEvaluation.NotManaged;
+        }
+
         var policy = await _db.TaskFailurePolicies.AsNoTracking().FirstOrDefaultAsync(n => n.TaskId == run.TaskId);
         if (policy == null || !policy.Enabled)
         {

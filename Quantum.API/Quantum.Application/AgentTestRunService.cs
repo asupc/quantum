@@ -123,7 +123,8 @@ public class AgentTestRunService
             };
 
             var watch = System.Diagnostics.Stopwatch.StartNew();
-            var runResult = await step.Run(ct);
+            var runResult = await TaskRunRecorder.RunStepAsync(step, TaskTriggerSource.Shadow,
+                $"ai-test-run:{hash[..System.Math.Min(8, hash.Length)]}", LogType.任务日志, "AI");
             watch.Stop();
 
             var logDir = TaskExcuteService.LogDirNameFrom(stagingRel);

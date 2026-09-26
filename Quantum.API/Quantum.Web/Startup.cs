@@ -266,6 +266,8 @@ public class Startup
         CacheManager.InitCacheDatas();
         app.ApplicationServices.InitMessageQueue();
         AppPushDispatcher.Init(app.ApplicationServices.GetRequiredService<IServiceScopeFactory>());
+        // 非 DI 入口（指令/外触/影子）的运行记录包装：与 AppPushDispatcher 同一套 scopeFactory 注入方式
+        TaskRunRecorder.Init(app.ApplicationServices.GetRequiredService<IServiceScopeFactory>());
         // 任务执行引擎桥：静态执行链路（TaskExcuteService）经此为每次执行创建独立 DI scope（门面直调 scoped 服务）
         TaskPluginHost.Configure(app.ApplicationServices);
         // AI Agent 桥：任务失败自动分析（开关默认关）+ 启动清理（中断运行/影子文件/过期提案）

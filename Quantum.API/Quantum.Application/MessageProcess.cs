@@ -260,28 +260,16 @@ public class MessageProcess
             }
             foreach (var item in taskCommandSteps)
             {
-                var trigLog = new LogModel
-                {
-                    CreateTime = DateTime.Now,
-                    LogType = LogType.指令触发,
-                    Operator = $"{message.user_name}({message.user_id})",
-                    Remark = message.message,
-                    // 与任务日志同口径：真实终态由执行结果回填，不再预置成功
-                    Success = false,
-                    Title = item.Task.Name + (string.IsNullOrEmpty(item.SubTaskName) ? "" : "-" + item.SubTaskName),
-                    DirectoryName = TaskExcuteService.LogDirNameFrom(item.Task.FileName),
-                    LogPath = $"{item.CreateTime:yyyyMMddHHmmssfff}.log"
-                };
                 taskList.Add(Task.Run(async () =>
                 {
                     if (!string.IsNullOrEmpty(item.Task.TaskStartNotify) && (!item.IsChildTask))
                     {
                         message.SendMessage(item.Task.TaskStartNotify, item.Task.TextToPicture);
                     }
-                    var result = await item.Run();
-                    result.ApplyToLog(trigLog);
-                    // 执行结束后再入队：日志线程每 3 秒排空一次，早入队会把初始 Success 写进库
-                    LogServiceHelper.Logs.Enqueue(trigLog);
+                    // 指令触发改走运行记录链路（G2 入口矩阵）：真实终态 + t_log 同事务落库，
+                    // 本入口只记录结果，不参与自动重试与告警计数
+                    var result = await TaskRunRecorder.RunStepAsync(item, TaskTriggerSource.Command,
+                        message.user_id, LogType.指令触发, $"{message.user_name}({message.user_id})");
                     if (item.HasChildTask)
                     {
                         return;

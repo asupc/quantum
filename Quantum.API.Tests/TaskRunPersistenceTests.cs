@@ -381,6 +381,36 @@ public class TaskRunPersistenceTests : IDisposable
         Assert.False((await _runs.CompleteAsync(run, Boom(run), LogType.任务日志)).Scheduled);
     }
 
+    /// <summary>影子试运行的 TaskId 可能正是真实任务 Id：若不按入口来源拦截，会污染该任务的连续失败计数。</summary>
+    [Fact]
+    public async Task ShadowAndCommandRuns_DoNotPolluteAlertState()
+    {
+        await _runs.SavePolicyAsync("T1", new TaskFailurePolicyModel
+        {
+            RetryCount = 0,
+            AlertAfterConsecutiveFailures = 1,
+            CooldownMinutes = 0,
+            Enabled = true
+        }, "admin");
+        CacheManager.Set(new List<TaskModel> { new() { Id = "T1", Name = "任务", FileName = "run_test.cs", Enable = true } });
+
+        foreach (var source in new[] { TaskTriggerSource.Shadow, TaskTriggerSource.Command, TaskTriggerSource.OpenTrigger })
+        {
+            var run = await AcceptAsync("T1", source: source);
+            await _runs.ClaimAsync(run.Id);
+            await _runs.CompleteAsync(run, Boom(run), LogType.任务日志);
+        }
+
+        Assert.Equal(0, await _db.TaskAlertEvents.CountAsync());
+        Assert.Equal(0, await _db.TaskAlertStates.CountAsync(n => n.ConsecutiveFailures > 0));
+
+        // 同任务的一次真实定时失败才计入
+        var cron = await AcceptAsync("T1", source: TaskTriggerSource.Cron);
+        await _runs.ClaimAsync(cron.Id);
+        await _runs.CompleteAsync(cron, Boom(cron), LogType.任务日志);
+        Assert.Equal(1, await _db.TaskAlertEvents.CountAsync(n => n.AlertType == TaskAlertType.FailureOpened));
+    }
+
     // ============================================================ 启动恢复
 
     [Fact]
