@@ -13,6 +13,7 @@ namespace Quantum.Web.Controllers;
 /// 策略写入与手动重新执行是管理动作，一律 [ManagerOnly]。Open/匿名令牌不开放运行历史。
 /// </summary>
 [CustomAuthorizationFilter]
+[RealPrincipal]
 public class TaskRunController : BaseController
 {
     readonly TaskRunService _runService;

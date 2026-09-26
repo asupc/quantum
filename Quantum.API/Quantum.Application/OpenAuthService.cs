@@ -1,4 +1,4 @@
-using Microsoft.IdentityModel.Tokens;
+﻿using Microsoft.IdentityModel.Tokens;
 using Quantum.Utils;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -51,7 +51,8 @@ public class OpenAuthService
         else if (AppKey == installConfig.AppKey)
         {
             var time = DateTime.Now;
-            var appTokenName = "______App-Key-Auth";
+            // 主体名常量放在 Utils.HttpContextExtension.OpenAppTokenName（唯一事实源，供端点判定用）
+            var appTokenName = HttpContextExtension.OpenAppTokenName;
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Nbf,$"{new DateTimeOffset(DateTime.Now).ToUnixTimeSeconds()}") ,

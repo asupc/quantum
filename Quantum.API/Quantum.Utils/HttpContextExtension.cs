@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 
 namespace Quantum.Utils;
 
@@ -43,4 +43,16 @@ public static class HttpContextExtension
     {
         return string.Equals(context.User?.FindFirst("Manager")?.Value, "true", StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// 当前令牌是否 Open AppKey 换取的匿名式令牌（"Name" 恒为固定标记、无用户/设备身份）。
+    /// 供「不开放给第三方匿名调用」的端点判定：它只验签的过滤器挡不住，必须正向识别主体。
+    /// </summary>
+    public static bool IsOpenAppToken(this HttpContext context)
+    {
+        return string.Equals(context.User?.FindFirst("Name")?.Value, OpenAppTokenName, StringComparison.Ordinal);
+    }
+
+    /// <summary>Open AppKey 令牌的固定主体名（与 OpenAuthService.AppKeyTokenName 同值；Utils 不引用 Application，故在此侧留常量并注释同源）。</summary>
+    public const string OpenAppTokenName = "______App-Key-Auth";
 }

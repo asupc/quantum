@@ -191,8 +191,13 @@ curl -X POST https://<host>/api/ExternalPush/messages \
 - 归一化：trim + Unicode NFKC，大小写敏感；`Notification.Title`（单条通知标题）与 `SessionTitle`（会话标题）独立，不得互换。
 - 同接入方改标题 = 新会话，**不隐式改名、不搬迁旧消息**。
 - `ChatSessionModel.DisplayTitle` 与 `ChatMessageModel.SessionTitle`（消息标题快照）在同一事务写入，
-  使「仅做消息增量补拉」的离线端也能还原标题；`ChatSessionOverview.SessionTitle` 与 WS `notify` 帧的 `SessionTitle`
-  **字段名三处一致**，旧客户端忽略未知字段仍能收消息（可能短暂显示 opaque 会话键）。
+  使「仅做消息增量补拉」的离线端也能还原标题；`ChatSessionOverview.SessionTitle` 同名字段随会话列表返回。
+- **两套命名风格各自内部一致**（审核项 R-11 的落地口径）：
+  REST 一律 PascalCase（`SessionTitle`，服务端实体/DTO 原名直出）；WS 帧沿用本仓库既有的手写小写驼峰
+  （`msgId/seq/session/contentType/...`，故 notify 帧里的键是 `sessionTitle`）。
+  App 侧两套各有独立 DTO（`ChatMessageDto` 用 `@SerialName("SessionTitle")`、`WsFrame` 用 `sessionTitle`），
+  映射到同一个本地列 `chat_message.sessionTitle`。
+  旧客户端忽略未知字段仍能收消息（可能短暂显示 opaque 会话键）。
 - `external:` 前缀固定留给外部会话：任务新增/修改/导入的会话名入口已禁止该前缀；启动时扫描存量冲突并以 ERROR 留痕，
   有冲突须先安全迁移再启用凭据。
 
