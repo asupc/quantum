@@ -62,14 +62,16 @@ import com.quantum.app.core.network.dto.TaskDto
  * + 触底加载更多 + 行增删动画；搜索语义不变。
  * 任务分组已在服务端整体移除，列表为平铺形态（不再按分组粘性标题）。
  *
- * 行语义（2026-09-18 调整；2026-09-20 再调整）：点行 = 打开编辑弹层；行内「执行」单任务直发
- * （多选批量执行已移除——真机反馈多选勾选麻烦，单行执行一步到位），「日志」跳任务日志，
+ * 行语义（2026-09-18 调整；2026-09-20 再调整；2026-09-26 补执行记录入口）：点行 = 打开编辑弹层；
+ * 行内「执行」单任务直发（多选批量执行已移除——真机反馈多选勾选麻烦，单行执行一步到位），
+ * 「历史」看该任务的最近执行记录（一期 G2 App 只读），「日志」跳任务日志，
  * 行内开关直接启停；「任务总览」大卡已移除（计数已在标题副行）。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TaskScreen(
     onOpenLog: (String) -> Unit,
+    onOpenRuns: (String) -> Unit = {},
     viewModel: TaskViewModel = hiltViewModel()
 ) {
     val page by viewModel.page.collectAsState()
@@ -202,6 +204,8 @@ fun TaskScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         // 单任务执行（多选批量已移除）：结果经任务通知推送
                                         TextButton(onClick = { viewModel.exec(listOf(task.id)) }) { Text("执行") }
+                                        // 最近执行记录（只读列表 → 执行详情）：路由 task/{id}/runs
+                                        TextButton(onClick = { onOpenRuns(task.id) }) { Text("历史") }
                                         // 任务日志：按任务名过滤日志中心（路由 task/{id}/log）
                                         TextButton(onClick = { onOpenLog(task.id) }) { Text("日志") }
                                         // 启停：直接切换并原位刷新该行（不再整页重载）

@@ -5,7 +5,9 @@ import java.net.URLEncoder
 /**
  * 通知深链路由表（与服务端 AppPushService 约定一致）：
  * quantum://chat（默认回退）、quantum://notify、quantum://session/{taskId}（直达任务会话）、
- * quantum://task/{id}/log、quantum://mine/devices、quantum://ai（AI 助手会话列表）
+ * quantum://task/{id}/log、quantum://task/{id}/runs（最近执行列表）、
+ * quantum://task/{id}/runs/{runId}（执行详情，告警通知形态）、
+ * quantum://mine/devices、quantum://ai（AI 助手会话列表）
  */
 data class DeepLink(val route: String) {
 
@@ -41,6 +43,7 @@ data class DeepLink(val route: String) {
          * 只放行已知形态的 NavHost 路由；未知子路径（mine/x）、多段 taskId（task/a/b/log）、
          * 空 taskId（task//log）等一律回退会话页——未注册路由会让 navController.navigate
          * 抛 IllegalArgumentException（quantum:// 为 BROWSABLE，网页可远程触发崩溃）。
+         * 唯一例外：task/{taskId}/runs 的畸形形态回退**该任务的日志页**（见下方注释）。
          */
         private fun routeFor(body: String): String {
             val segments = body.split('/')
@@ -56,6 +59,18 @@ data class DeepLink(val route: String) {
                     "chat/${encodeSegment(segments[1])}"
                 // task/{taskId}/log：taskId 必须为单段非空
                 segments.size == 3 && segments[0] == "task" && segments[2] == "log" && segments[1].isNotEmpty() ->
+                    "task/${encodeSegment(segments[1])}/log"
+                // task/{taskId}/runs：该任务的最近执行列表（一期 G2 App 只读视图）
+                segments.size == 3 && segments[0] == "task" && segments[2] == "runs" && segments[1].isNotEmpty() ->
+                    "task/${encodeSegment(segments[1])}/runs"
+                // task/{taskId}/runs/{runId}：告警通知直达执行详情（服务端 TaskAlertService 即发此形态）
+                segments.size == 4 && segments[0] == "task" && segments[2] == "runs" &&
+                    segments[1].isNotEmpty() && segments[3].isNotEmpty() ->
+                    "task/${encodeSegment(segments[1])}/runs/${encodeSegment(segments[3])}"
+                // task/{taskId}/runs 的畸形形态（runId 空段/多余段）：回退该任务的日志页——
+                // 通知本来就是「看这次任务怎么了」，甩回会话页等于把上下文丢了；
+                // taskId 本身非法（空段）时仍落到会话页
+                segments.size >= 3 && segments[0] == "task" && segments[2] == "runs" && segments[1].isNotEmpty() ->
                     "task/${encodeSegment(segments[1])}/log"
                 body in KNOWN_MINE_ROUTES -> body
                 else -> NAV_CHAT_ROUTE

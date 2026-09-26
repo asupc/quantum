@@ -24,6 +24,8 @@ import com.quantum.app.core.network.dto.ScriptSaveResultDto
 import com.quantum.app.core.network.dto.ScriptTreeDto
 import com.quantum.app.core.network.dto.SystemSettingDto
 import com.quantum.app.core.network.dto.TaskDto
+import com.quantum.app.core.network.dto.TaskRunDetailDto
+import com.quantum.app.core.network.dto.TaskRunRowDto
 import com.quantum.app.core.network.dto.UpdatePasswordRequest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -110,6 +112,26 @@ interface AdminApi {
 
     @GET("api/Logs/statistics")
     suspend fun logStatistics(@Query("days") days: Int = 7): EnvelopeDto<LogStatisticsDto>
+
+    // ---- 任务执行记录（一期 G2，只读）----
+    /**
+     * 执行历史分页（GET api/TaskRun，服务端按 CreatedAtUtc+Id 倒序，PageSize 上限 100）。
+     * query 用后端模型的小写名（taskId/status/page/pageSize/days），与旧列表接口的
+     * PageIndex/PageSize/Key 风格**不同**，属 TaskRun 控制器自身契约，勿"顺手统一"。
+     * status 传枚举名字符串（如 Failed）；权限由服务端按正向 Manager claim 过滤，客户端不自行显隐。
+     */
+    @GET("api/TaskRun")
+    suspend fun taskRuns(
+        @Query("taskId") taskId: String? = null,
+        @Query("status") status: String? = null,
+        @Query("page") page: Int = 1,
+        @Query("pageSize") pageSize: Int = 20,
+        @Query("days") days: Int = 90
+    ): EnvelopeDto<PageResultDto<TaskRunRowDto>>
+
+    /** 单条执行详情（含同一根执行的尝试时间轴与日志可达性）；越权与不存在同为「执行记录不存在」。 */
+    @GET("api/TaskRun/{runId}")
+    suspend fun taskRunDetail(@Path("runId") runId: String): EnvelopeDto<TaskRunDetailDto>
 
     // ---- 环境变量 ----
     @GET("api/Env")

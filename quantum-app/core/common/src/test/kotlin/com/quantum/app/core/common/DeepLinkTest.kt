@@ -63,4 +63,52 @@ class DeepLinkTest {
             DeepLink.resolve("quantum://session/百分之百").route
         )
     }
+
+    @Test
+    fun taskRunDeepLink_MapsToRunDetailRoute() {
+        // 告警通知（服务端 TaskAlertService）发 quantum://task/{taskId}/runs/{runId} → 直达执行详情
+        assertEquals(
+            "task/t1/runs/r1",
+            DeepLink.resolve("quantum://task/t1/runs/r1").route
+        )
+    }
+
+    @Test
+    fun taskRunsListDeepLink_MapsToRunListRoute() {
+        // 三段形态 = 该任务的最近执行列表页
+        assertEquals("task/t1/runs", DeepLink.resolve("quantum://task/t1/runs").route)
+    }
+
+    @Test
+    fun taskRunDeepLink_WithoutRunId_FallsBackToTaskLog() {
+        // 解析不出 runId（空段/多余段）时回退该任务的日志页：通知本来就是「看这次任务怎么了」，
+        // 甩回会话页等于把上下文丢了
+        assertEquals("task/t1/log", DeepLink.resolve("quantum://task/t1/runs/").route)
+        assertEquals("task/t1/log", DeepLink.resolve("quantum://task/t1/runs/r1/r2").route)
+        // 第二段（runId 位）为空的畸形四段同样回退
+        assertEquals("task/t1/log", DeepLink.resolve("quantum://task/t1/runs/").route)
+    }
+
+    @Test
+    fun taskRunDeepLink_BlankTaskId_FallsBackToChat() {
+        // taskId 本身非法（空段）时无法回退日志页（那也会命中未注册路由），一律会话页
+        assertEquals("chat", DeepLink.resolve("quantum://task//runs/r1").route)
+        assertEquals("chat", DeepLink.resolve("quantum://task//log").route)
+    }
+
+    @Test
+    fun taskRunDeepLink_IdsArePercentEncodedIntoRoute() {
+        // runId/taskId 含特殊字符须编码进 route（导航库 getPathSegments 取参时自动还原）
+        assertEquals(
+            "task/t%201/runs/r%232",
+            DeepLink.resolve("quantum://task/t 1/runs/r#2").route
+        )
+    }
+
+    @Test
+    fun taskLogDeepLink_StillMapsToLogRoute() {
+        // 既有 task/{id}/log 形态不受新增 runs 分支影响
+        assertEquals("task/t1/log", DeepLink.resolve("quantum://task/t1/log").route)
+        assertEquals("chat", DeepLink.resolve("quantum://task/t1/log/extra").route)
+    }
 }

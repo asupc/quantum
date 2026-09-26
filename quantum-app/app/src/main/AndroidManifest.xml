@@ -31,7 +31,9 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 通知深链：quantum://chat / quantum://notify / quantum://task/{id}/log / quantum://mine/devices -->
+            <!-- 通知深链：quantum://chat / quantum://notify / quantum://task/{id}/log /
+                 quantum://task/{id}/runs / quantum://task/{id}/runs/{runId}（执行详情，告警通知）/
+                 quantum://mine/devices；未注册形态由 DeepLink.resolve 回退会话页 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

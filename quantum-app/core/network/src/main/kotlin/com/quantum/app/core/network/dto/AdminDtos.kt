@@ -112,6 +112,52 @@ data class LogStatisticsDto(
     @SerialName("ErrorCount") val errorCount: Int = 0
 )
 
+/**
+ * 任务执行记录单行（GET api/TaskRun 与详情内 Attempts 同一模型，一期 G2 App 只读）。
+ *
+ * 口径（对齐服务端 `Quantum.Entities.DTOs.TaskRunRow`）：
+ * - `Status`/`TriggerSource`/`FailureCode` 服务端给的是**枚举名字符串**，沿用现有 DTO 的字符串风格
+ *   （不引入新序列化机制），未知值由展示层原样回退，App 侧不再维护一套枚举；
+ * - 时间一律 **UTC**、经服务端全局 DateFormatString 输出为 "yyyy-MM-dd HH:mm:ss"（无时区标记），
+ *   展示前须按 UTC 解读再转本地时区（见 feature:task 的 TaskRunDisplay），不能直接当本地时间串用；
+ * - 服务端还有 `ScriptFile`（脚本相对路径快照），**刻意不解码**：执行记录界面不拼接、不显示任何文件路径，
+ *   声明了就有可能被某处顺手渲染出去（ignoreUnknownKeys 会静默丢弃它）。
+ */
+@Serializable
+data class TaskRunRowDto(
+    @SerialName("Id") val id: String,
+    @SerialName("RootRunId") val rootRunId: String? = null,
+    @SerialName("Attempt") val attempt: Int = 1,
+    @SerialName("TaskId") val taskId: String? = null,
+    @SerialName("TaskName") val taskName: String? = null,
+    @SerialName("TriggerSource") val triggerSource: String? = null,
+    @SerialName("Status") val status: String? = null,
+    @SerialName("FailureCode") val failureCode: String? = null,
+    @SerialName("SafeSummary") val safeSummary: String? = null,
+    @SerialName("StartedAtUtc") val startedAtUtc: String? = null,
+    @SerialName("FinishedAtUtc") val finishedAtUtc: String? = null,
+    @SerialName("NextAttemptAtUtc") val nextAttemptAtUtc: String? = null,
+    @SerialName("CreatedAtUtc") val createdAtUtc: String? = null,
+    @SerialName("IsRetry") val isRetry: Boolean = false,
+    @SerialName("CancelReason") val cancelReason: String? = null,
+    /** 耗时毫秒：起止时间齐了服务端才算得出（Pending/Running 为 null，展示为「-」而不是 0）。 */
+    @SerialName("ElapsedMs") val elapsedMs: Long? = null
+)
+
+/**
+ * 执行详情（GET api/TaskRun/{runId}）：本次执行 + 同一根执行的尝试时间轴 + 日志可达性。
+ * 服务端越权与不存在一律 Code=500「执行记录不存在」，故这里不再区分两种空态。
+ * `LogAvailable=false` 表示日志已清理或尚未落库——只能显示占位文案，没有路径可拼。
+ */
+@Serializable
+data class TaskRunDetailDto(
+    @SerialName("Run") val run: TaskRunRowDto? = null,
+    /** 同一根执行（含每次重试），服务端按 Attempt 升序返回；客户端仍再排一次以防契约变动。 */
+    @SerialName("Attempts") val attempts: List<TaskRunRowDto> = emptyList(),
+    @SerialName("LogAvailable") val logAvailable: Boolean = false,
+    @SerialName("LogId") val logId: String? = null
+)
+
 @Serializable
 data class CommandDto(
     @SerialName("Id") val id: String,

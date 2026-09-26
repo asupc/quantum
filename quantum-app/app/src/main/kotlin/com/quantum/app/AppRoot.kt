@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
@@ -120,6 +121,8 @@ import com.quantum.app.feature.mine.ScanScreen
 import com.quantum.app.feature.notify.NotifyScreen
 import com.quantum.app.feature.task.LogDetailScreen
 import com.quantum.app.feature.task.LogsScreen
+import com.quantum.app.feature.task.TaskRunDetailScreen
+import com.quantum.app.feature.task.TaskRunsScreen
 import com.quantum.app.feature.task.TaskScreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -674,10 +677,12 @@ private fun MainScaffold(
     val inSessionDetail = current == "chat" || current == "notify" ||
         (current != null && current.startsWith("chat/"))
     // 管理子页与日志/容器详情页同样沉浸（2026-09-20）：进入子页后底部功能按钮隐藏，
-    // 返回靠各页统一返回头；任务列表（manage/tasks）是「任务」tab 根页面，保留底栏
+    // 返回靠各页统一返回头；任务列表（manage/tasks）是「任务」tab 根页面，保留底栏；
+    // 执行记录相关子页（task/{id}/runs、task/{id}/runs/{runId}、manage/runs）同属子页（一期 G2）
     val inManageSubPage = current == "manage/env" || current == "manage/docker" ||
-        current == "manage/setting" || current == "manage/logs" ||
+        current == "manage/setting" || current == "manage/logs" || current == "manage/runs" ||
         current == "task/{taskId}/log" ||
+        current == "task/{taskId}/runs" || current == "task/{taskId}/runs/{runId}" ||
         (current != null && (current.startsWith("manage/logs/") || current.startsWith("manage/docker/logs/") ||
             current.startsWith("ai/")))
 
@@ -765,7 +770,23 @@ private fun MainScaffold(
             composable("manage/setting") {
                 SystemSettingScreen(onBack = { navController.popBackStack() })
             }
-            composable("manage/tasks") { TaskScreen(onOpenLog = { id -> navController.navigate("task/$id/log") }) }
+            composable("manage/tasks") {
+                TaskScreen(
+                    // 任务日志（通知深链同款路由）与最近执行列表（一期 G2 App 只读）
+                    onOpenLog = { id -> navigateSafely(navController, "task/${Uri.encode(id)}/log") },
+                    onOpenRuns = { id -> navigateSafely(navController, taskRunsRoute(id)) }
+                )
+            }
+            // 全平台执行记录（管理宫格入口）：不带 taskId 的同一列表页
+            composable("manage/runs") {
+                TaskRunsScreen(
+                    taskId = null,
+                    onBack = { navController.popBackStack() },
+                    onOpenRun = { runId, rowTaskId ->
+                        navigateSafely(navController, runDetailRoute(rowTaskId, runId))
+                    }
+                )
+            }
             composable("manage/logs") {
                 LogsScreen(
                     onBack = { navController.popBackStack() },
@@ -828,6 +849,26 @@ private fun MainScaffold(
                     onOpenDetails = { logId -> navController.navigate("manage/logs/$logId") }
                 )
             }
+            // 任务最近执行（一期 G2，App 只读）：列表 → 详情 → 日志详情（复用 manage/logs/{logId}）
+            composable("task/{taskId}/runs") { entry ->
+                val taskId = entry.arguments?.getString("taskId").orEmpty()
+                TaskRunsScreen(
+                    taskId = taskId,
+                    onBack = { navController.popBackStack() },
+                    onOpenRun = { runId, rowTaskId ->
+                        navigateSafely(navController, runDetailRoute(rowTaskId ?: taskId, runId))
+                    }
+                )
+            }
+            // 执行详情：路由里的 taskId 只用于与深链 quantum://task/{taskId}/runs/{runId} 同形
+            // （详情接口只需 runId）；影子试运行/已删任务的行没有 taskId，用占位段 "-" 保住四段结构。
+            composable("task/{taskId}/runs/{runId}") { entry ->
+                TaskRunDetailScreen(
+                    runId = entry.arguments?.getString("runId").orEmpty(),
+                    onBack = { navController.popBackStack() },
+                    onOpenLog = { logId -> navigateSafely(navController, "manage/logs/${Uri.encode(logId)}") }
+                )
+            }
         }
 
         // 音频续播悬浮控制：与 NavHost 同层后写者盖上（悬浮层自身不消费未展开时的触摸）。
@@ -851,6 +892,13 @@ private fun navigateSafely(navController: NavHostController, route: String) {
         .onFailure { android.util.Log.w("AppRoot", "deep link route rejected: $route", it) }
 }
 
+/** 任务最近执行列表路由（与深链 quantum://task/{id}/runs 同形；taskId 须编码）。 */
+private fun taskRunsRoute(taskId: String): String = "task/${Uri.encode(taskId)}/runs"
+
+/** 执行详情路由（与深链 quantum://task/{id}/runs/{runId} 同形；两段都须编码）。 */
+private fun runDetailRoute(taskId: String?, runId: String): String =
+    "task/${Uri.encode(taskId?.takeIf { it.isNotBlank() } ?: "-")}/runs/${Uri.encode(runId)}"
+
 @Composable
 private fun ManageHub(navController: NavHostController) {
     val items = remember {
@@ -858,6 +906,7 @@ private fun ManageHub(navController: NavHostController) {
             // 任务调度入口已移除（2026-09-20 用户要求）：「任务」tab 即 manage/tasks 根页，宫格重复入口收掉
             // AI 助手入口已移除（2026-09-21 用户要求）：升级为底部 tab（与会话平级），宫格重复入口收掉
             ManageItem("日志中心", "系统与审计日志", "manage/logs", Icons.Default.Terminal, Color(0xFF6366F1)),
+            ManageItem("执行记录", "任务运行历史（只读）", "manage/runs", Icons.Default.History, Color(0xFFF59E0B)),
             ManageItem("环境变量", "凭据与配置参数", "manage/env", Icons.Default.Code, Color(0xFF10B981)),
             ManageItem("Docker", "容器与镜像控制", "manage/docker", Icons.Default.Dns, Color(0xFF0284C7)),
             ManageItem("系统设置", "全局参数与网络", "manage/setting", Icons.Default.Tune, Color(0xFF0284C7))
