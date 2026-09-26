@@ -15,6 +15,13 @@ public interface IQuantumFile
     /// 网络失败/取消时清理未写完的残片。返回最终落盘全路径与字节数。
     /// </summary>
     Task<QuantumFileResult> DownloadAsync(string url, string fileName, string subDir = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// 把脚本自身产出的文本**覆盖**写入「下载根目录/subDir/fileName」（ACME 证书等需原地更新的产物用本通道，
+    /// DownloadAsync 的重名追加序号语义对这类产物不适用）。约束与 DownloadAsync 同源：subDir 只允许根内相对路径、
+    /// fileName 自动清洗；先写临时文件再原子替换，读侧不会看到半截内容。内容上限 1 MiB。
+    /// </summary>
+    Task<QuantumFileResult> SaveTextAsync(string content, string fileName, string subDir = null, CancellationToken ct = default);
 }
 
 /// <summary>文件落盘结果：FullPath 最终落盘全路径、FileName 清洗后的文件名、Length 字节数、

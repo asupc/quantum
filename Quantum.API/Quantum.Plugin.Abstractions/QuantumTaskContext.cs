@@ -36,11 +36,14 @@ public sealed class QuantumTaskContext
     /// <summary>受控文件落盘门面：产物文件下载保存的唯一通道，可写范围限定在下载根目录内。</summary>
     public IQuantumFile File { get; }
 
+    /// <summary>Docker 运维门面：仅暴露容器重启与探活（证书续期后重载 nginx 用），其余 docker 能力不放开。</summary>
+    public IQuantumDocker Docker { get; }
+
     /// <summary>由执行器构造，任务代码只读使用。</summary>
     public QuantumTaskContext(string taskName, bool enableProxy, bool enablePush,
         IReadOnlyDictionary<string, string> variables, Action<string> log, HttpClient http,
         IQuantumEnv env, IQuantumNotify notify, IQuantumCustomData customData,
-        IQuantumFile file = null)
+        IQuantumFile file = null, IQuantumDocker docker = null)
     {
         TaskName = taskName;
         EnableProxy = enableProxy;
@@ -52,6 +55,7 @@ public sealed class QuantumTaskContext
         Notify = notify;
         CustomData = customData;
         File = file;
+        Docker = docker;
     }
 
     /// <summary>console.log 等价：实时日志 + 落盘。</summary>
