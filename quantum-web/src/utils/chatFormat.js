@@ -135,9 +135,14 @@ export function formatBytes(size) {
  * 会话键可能是任务 Id（命中 taskMap 显示任务名）或任务配置的会话名（本身就是可读文本），
  * 映射不到任务时直接显示会话键原文（原「任务 前8位」回退仅对任务 Id 有意义）。
  */
-export function sessionTitle(sessionKey, taskMap = {}) {
+export function sessionTitle(sessionKey, taskMap = {}, displayTitle = '') {
     if (!sessionKey) {
         return '默认会话';
+    }
+    // 外部推送会话（G-Push）优先用服务端下发的展示标题；任务会话与默认会话仍走任务名推导
+    const title = displayTitle && String(displayTitle).trim();
+    if (title) {
+        return title;
     }
     return taskMap[sessionKey] || sessionKey;
 }

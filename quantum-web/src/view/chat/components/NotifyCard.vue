@@ -6,7 +6,7 @@
             <span class="notify-time">{{ timeText }}</span>
         </div>
         <div v-if="title" class="notify-title">{{ title }}</div>
-        <div class="notify-body">{{ body }}</div>
+        <rich-text class="notify-body" :text="body" :support-fold="false" />
         <div v-if="jump" class="notify-jump">点按查看 ›</div>
     </div>
 </template>
@@ -18,9 +18,11 @@
  * 关联不到时退化为从正文首行「【标题】」还原标题，避免卡片丢标题（与 App 降级路径一致）。
  */
 import { formatTimeLabel } from '@/utils/chatFormat'
+import RichText from './RichText.vue'
 
 export default {
     name: 'NotifyCard',
+    components: { RichText },
     props: {
         meta: {
             type: Object,
