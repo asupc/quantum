@@ -4,7 +4,8 @@
 // 涵盖：ctx.Log / ctx.Variables / ctx.TaskName / ctx.EnableProxy / ctx.EnablePush /
 //       ctx.Env（增查改启停删）/ ctx.Notify（文本/图片/视频/音频/可点选项/富文本标记）/
 //       ctx.CustomData（Data1-15 查询、新增、按 Id 更新、删除、表头）/
-//       ctx.Http（外部请求，可选）/ ctx.File（受控文件落盘，可选）/
+//       ctx.Http（外部请求，可选）/ ctx.File（受控文件落盘：下载不覆盖 + 文本覆盖写，可选）/
+//       ctx.Docker（容器重启与探活，可选且会真的重启容器）/
 //       Newtonsoft.Json 与 System.Text.Json / 哈希与 AES（BCL）/ HtmlAgilityPack / SQLite(:memory:)/
 //       子任务替代方案（原「子任务/多步骤任务链」的顺序拆步、按输入分流、循环定时、跨任务交接四类写法）
 // 注意：文件系统/进程/反射等在保存门禁中拦截；日志一律 ctx.Log；长循环检查 ct。
@@ -240,6 +241,60 @@ public class AllFeaturesDemoTask : IQuantumTask
         else
         {
             ctx.Log("未配置 DemoFileUrl 变量，跳过文件落盘实测。");
+        }
+
+        // ------------------------------------------------------------------ 8.5 ctx.File 文本覆盖落盘（证书这类需原地更新的产物）
+        // DownloadAsync 的「重名自动追加序号不覆盖」对证书/配置类产物不适用：SaveTextAsync 同名直接覆盖，
+        // 先写同目录临时文件再原子替换（读侧不会看到半截内容），内容上限 1 MiB，目录与文件名约束同上。
+        if (ctx.Variables.TryGetValue("DemoSaveText", out var textBody) && !string.IsNullOrEmpty(textBody))
+        {
+            try
+            {
+                var written = await ctx.File.SaveTextAsync(textBody, "全接口示例.txt", "demo", ct);
+                ctx.Log($"SaveTextAsync 落盘：{written.RelativePath}（{written.Length} 字节）→ {written.FullPath}；再跑一次原地覆盖");
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                ctx.Log($"文本落盘失败（不影响后续步骤）：{e.Message}");
+            }
+        }
+        else
+        {
+            ctx.Log("未配置 DemoSaveText 变量，跳过文本覆盖落盘实测。");
+        }
+
+        // ------------------------------------------------------------------ 8.6 ctx.Docker 容器运维（只放开「重启 + 探活」）
+        // 供「产物落盘后要让服务重载」的脚本使用（实战：scripts/acme_cert.cs 续签证书后重启 nginx）。
+        // 停止/删除/exec/镜像/网络/卷一律不放开；容器名取自环境变量，勿硬编码，结果应回显到通知。
+        if (!ctx.Variables.TryGetValue("DemoDockerContainer", out var container) || string.IsNullOrEmpty(container))
+        {
+            ctx.Log("未配置 DemoDockerContainer 变量，跳过容器重启实测（填了会真的重启该容器，慎填）。");
+        }
+        else if (ctx.Docker == null)
+        {
+            ctx.Log("当前后端未提供 ctx.Docker 门面，跳过。");
+        }
+        else
+        {
+            try
+            {
+                ctx.Log($"探活 {container}：运行中 = {await ctx.Docker.IsRunningAsync(container, ct)}");
+                await ctx.Docker.RestartAsync(container, waitBeforeKillSeconds: 10, ct: ct);
+                await Task.Delay(TimeSpan.FromSeconds(3), ct);
+                ctx.Log($"重启指令已发出，复核 {container}：运行中 = {await ctx.Docker.IsRunningAsync(container, ct)}");
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                ctx.Log($"容器重启失败（不影响后续步骤）：{e.Message}");
+            }
         }
 
         // ------------------------------------------------------------------ 9. 通知门面（落 App 会话；是否发送建议自判 EnablePush）
