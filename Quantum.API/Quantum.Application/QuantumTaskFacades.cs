@@ -1,4 +1,5 @@
 using System.Text;
+using Docker.DotNet;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 using Quantum.Plugins;
@@ -255,6 +256,9 @@ internal sealed class QuantumFileFacade : IQuantumFile
 {
     private const int MaxFileNameLength = 120;
 
+    /// <summary>SaveTextAsync 的文本上限（1 MiB）：挡误用（把日志/大文件当产物写盘）撑爆下载目录。</summary>
+    private const int MaxTextContentLength = 1024 * 1024;
+
     private readonly HttpClient _http;
     private readonly string _rootFullPath;
 
@@ -312,6 +316,44 @@ internal sealed class QuantumFileFacade : IQuantumFile
             Path.GetRelativePath(_rootFullPath, finalPath).Replace('\\', '/'));
     }
 
+    /// <summary>
+    /// 文本覆盖落盘：目录约束与文件名清洗与 DownloadAsync 同源，但同名直接覆盖
+    /// （证书这类需原地更新的产物，追加「 (n)」序号会让读侧永远拿不到新文件）。
+    /// 先写同目录临时文件再原子替换，避免 nginx 这类读侧看到半截证书。
+    /// </summary>
+    public async Task<QuantumFileResult> SaveTextAsync(string content, string fileName, string subDir = null, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (content == null)
+        {
+            throw new BusinessException("落盘内容不能为 null！");
+        }
+        if (content.Length > MaxTextContentLength)
+        {
+            throw new BusinessException($"落盘内容超出上限 {MaxTextContentLength / 1024} KB！");
+        }
+        var targetDir = SafeMediaPath.ResolveDirectory(_rootFullPath, subDir);
+        Directory.CreateDirectory(targetDir);
+        var finalPath = Path.Combine(targetDir, SanitizeFileName(fileName));
+        var tempPath = finalPath + ".tmp";
+        try
+        {
+            // 无 BOM：PEM 前置 BOM 会让 openssl/nginx 解析失败
+            await File.WriteAllTextAsync(tempPath, content, new UTF8Encoding(false), ct);
+            File.Move(tempPath, finalPath, overwrite: true);
+        }
+        catch
+        {
+            try { File.Delete(tempPath); } catch { /* 残片清理失败不掩盖原始异常 */ }
+            throw;
+        }
+
+        AppMediaService.InvalidateScanCache();
+        var realLength = new FileInfo(finalPath).Length;
+        return new QuantumFileResult(finalPath, Path.GetFileName(finalPath), realLength,
+            Path.GetRelativePath(_rootFullPath, finalPath).Replace('\\', '/'));
+    }
+
     /// <summary>清洗文件名：非法字符/控制字符替换为 _，去结尾点与空格，空名兜底 download，超长截断保留扩展名。</summary>
     private static string SanitizeFileName(string fileName)
     {
@@ -354,6 +396,61 @@ internal sealed class QuantumFileFacade : IQuantumFile
             }
         }
         throw new BusinessException("同名文件过多，请清理下载目录后重试。");
+    }
+}
+
+/// <summary>
+/// Docker 运维门面：脚本可用的容器操作收敛为「重启 + 探活」（见 IQuantumDocker 注释为何不放开更多能力）。
+/// DockerManagementService 经工厂延迟解析——多数任务不碰 docker，不该每次执行都新建一个 DockerClient；
+/// 守护进程的原始异常在此转成含容器名的中文 BusinessException，任务日志可直接定位。
+/// </summary>
+internal sealed class QuantumDockerFacade : IQuantumDocker
+{
+    private readonly Func<DockerManagementService> _docker;
+
+    public QuantumDockerFacade(Func<DockerManagementService> docker)
+    {
+        _docker = docker;
+    }
+
+    public async Task RestartAsync(string container, uint waitBeforeKillSeconds = 10, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var name = RequireContainer(container);
+        try
+        {
+            await _docker().RestartContainerAsync(name, waitBeforeKillSeconds);
+        }
+        catch (DockerApiException e)
+        {
+            throw new BusinessException($"重启容器「{name}」失败（HTTP {(int)e.StatusCode}）：{e.Message}");
+        }
+    }
+
+    public async Task<bool> IsRunningAsync(string container, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var name = RequireContainer(container);
+        try
+        {
+            var info = await _docker().InspectContainerAsync(name);
+            return info?.State?.Running == true;
+        }
+        catch (DockerApiException)
+        {
+            // 容器不存在/守护进程不可达统一按「未运行」返回：探活用于重启后复核，不该自身抛
+            return false;
+        }
+    }
+
+    private static string RequireContainer(string container)
+    {
+        var name = (container ?? string.Empty).Trim();
+        if (name.Length == 0)
+        {
+            throw new BusinessException("未指定容器名！重启/探活均需传入容器名（建议取自任务环境变量）。");
+        }
+        return name;
     }
 }
 

@@ -335,7 +335,9 @@ public static class TaskExcuteService
                     ResolveSessionKey(taskCommand.Task)),
                 new QuantumCustomDataFacade(provider.GetRequiredService<CustomDataService>(),
                     provider.GetRequiredService<CustomDataTitleService>()),
-                new QuantumFileFacade(SystemConfigHelper.GetSetting().FileDownloadRoot, taskHttp));
+                new QuantumFileFacade(SystemConfigHelper.GetSetting().FileDownloadRoot, taskHttp),
+                // Docker 门面只放开「重启 + 探活」（证书续期后重载 nginx）；服务延迟解析，不碰 docker 的任务零开销
+                new QuantumDockerFacade(() => provider.GetRequiredService<DockerManagementService>()));
 
             // 链接外部取消令牌（§1-2：TaskJob 把 Quartz 停机 ct 传下来）+ ForceEndTime 定时，二者任一触发即协作取消
             using var forceEndCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
