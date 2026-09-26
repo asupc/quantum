@@ -139,6 +139,13 @@ class ChatRepository @Inject constructor(
         chatMessageDao.sessionUnread(sessionId, afterSeq)
 
     /**
+     * 会话展示标题（G-Push）：外部推送会话的会话键是 `external:<凭据>:<哈希>`，不可读也不可猜，
+     * 标题只存在本地会话行（落库时由消息的 sessionTitle 快照回填）。
+     */
+    suspend fun sessionDisplayTitle(sessionId: String): String? =
+        chatSessionDao.byKeys(listOf(sessionId)).firstOrNull()?.displayTitle
+
+    /**
      * 未读聚合一（2.2）：一条 SQL 得到全部会话的未读数（sessionId → unread，miss = 0），
      * 与逐会话 [sessionUnread] 完全同口径（水位合并缺省 0），替代列表/红点刷新的 N+1 COUNT。
      * Room 盯 chat_message 失效：消息落库/删除即重查；水位变化由上层 flatMapLatest 换新查询。

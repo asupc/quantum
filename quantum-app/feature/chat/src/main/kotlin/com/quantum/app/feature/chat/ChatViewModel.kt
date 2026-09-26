@@ -79,6 +79,10 @@ class ChatViewModel @Inject constructor(
                 if (!name.isNullOrBlank()) {
                     _title.value = name
                 }
+                // 外部推送会话没有对应任务，标题取本地会话行的 displayTitle（后应用，优先于会话键原文）
+                chatRepository.sessionDisplayTitle(sessionId)?.takeIf { it.isNotBlank() }?.let {
+                    _title.value = it.trim()
+                }
             }
         }
         // 进入会话即推进本地已读水位（会话列表未读角标清零）
