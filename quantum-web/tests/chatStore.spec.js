@@ -97,8 +97,9 @@ describe('pickOption 点选透传来源任务（方案 §2.4）', () => {
             targetTask: 'task-9'
         })
         expect(SubmitCommand).not.toHaveBeenCalled()
-        // 点选成功写本地已选态
-        expect(store.chosen[5]).toBe('1')
+        // 点选成功写本地已选态：chosen[seq] 自「已选态多值化」起就是 key 数组
+        // （可重复点选下每个点过的 key 都标已选，见 stores/chat.js 第 33/172 行口径与读取归一逻辑）
+        expect(store.chosen[5]).toEqual(['1'])
     })
 
     it('WS 未连接回落 REST：请求体带 TargetTaskId（PascalCase）', async () => {
