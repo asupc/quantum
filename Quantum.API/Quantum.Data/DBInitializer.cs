@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
@@ -107,31 +109,138 @@ public static class DbInitializer
     }
 
     /// <summary>
-    /// 是否已具备当前模型的标志性结构（以最晚迁移建的表为准）：
-    /// 用于区分「EnsureCreated 全量建出的库」与「迁移链中途断掉的库」（后者不能整链标已应用）。
+    /// 库是否已具备**当前模型的全部表与列**（逐实体逐列比对，而非查某一张"最近建的表"当代理）。
+    /// <para>
+    /// 为什么必须做成模型全集判定：旧实现只查 <c>t_app_notify_setting</c>（当时链上最晚一条迁移建的表）。
+    /// 一旦后续再新增迁移，这个代理就会长期为真——于是「EnsureCreated 建的老库 + 空的 __EFMigrationsHistory」
+    /// 会被 <see cref="MarkAllMigrationsAsApplied"/> 把**包含尚未应用的新迁移在内**整链标为已应用并直接返回，
+    /// 新表永远不会被建出来，功能在运行期以 Unknown table 静默失败（2026-09-26 沙箱恢复生产备份时实测复现）。
+    /// 现在：模型要求的表/列缺任意一个 → 判为不完整 → 走增量迁移路径，而不是回填。
+    /// </para>
     /// </summary>
-    private static bool HasFullCurrentSchema<TContext>(TContext db) where TContext : DbContext
+    internal static bool HasFullCurrentSchema<TContext>(TContext db) where TContext : DbContext
     {
         try
         {
-            db.Database.OpenConnection();
-            var conn = db.Database.GetDbConnection();
-            using var cmd = conn.CreateCommand();
-            // t_app_notify_setting 由迁移链最晚一条（NotifySetting）创建
-            cmd.CommandText = db.Database.IsSqlite()
-                ? "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='t_app_notify_setting'"
-                : "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_app_notify_setting'";
-            return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
+            var expected = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entityType in db.Model.GetEntityTypes())
+            {
+                var table = entityType.GetTableName();
+                if (string.IsNullOrEmpty(table))
+                {
+                    // 视图/Keyless 类型不建表，不参与"库是否完整"的判定
+                    continue;
+                }
+
+                if (!expected.TryGetValue(table, out var columns))
+                {
+                    columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    expected[table] = columns;
+                }
+
+                var storeTable = StoreObjectIdentifier.Table(table, entityType.GetSchema());
+                foreach (var property in entityType.GetProperties())
+                {
+                    var column = property.GetColumnName(storeTable);
+                    if (!string.IsNullOrEmpty(column))
+                    {
+                        columns.Add(column);
+                    }
+                }
+            }
+
+            var actual = LoadSchemaColumns(db);
+            foreach (var pair in expected)
+            {
+                if (!actual.TryGetValue(pair.Key, out var have))
+                {
+                    Console.WriteLine($"库结构不完整：缺表 {pair.Key}");
+                    return false;
+                }
+
+                foreach (var column in pair.Value)
+                {
+                    if (!have.Contains(column))
+                    {
+                        Console.WriteLine($"库结构不完整：{pair.Key} 缺列 {column}");
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
         catch
         {
             return false;
         }
+    }
+
+    /// <summary>读库里实际存在的表→列集合（MySQL 走 information_schema，SQLite 走 sqlite_master + PRAGMA）。</summary>
+    private static Dictionary<string, HashSet<string>> LoadSchemaColumns(DbContext db)
+    {
+        var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        db.Database.OpenConnection();
+        try
+        {
+            var conn = db.Database.GetDbConnection();
+            if (db.Database.IsSqlite())
+            {
+                var tables = new List<string>();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table'";
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        tables.Add(reader.GetString(0));
+                    }
+                }
+
+                foreach (var table in tables)
+                {
+                    // 表名取自 sqlite_master 自身且仅接受标识符形态，不拼用户可控值
+                    if (!Regex.IsMatch(table, @"^[A-Za-z_][A-Za-z0-9_]*$"))
+                    {
+                        continue;
+                    }
+
+                    var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $"PRAGMA table_info({table})";
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        columns.Add(reader.GetString(1));
+                    }
+
+                    map[table] = columns;
+                }
+            }
+            else
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    var table = reader.GetString(0);
+                    if (!map.TryGetValue(table, out var columns))
+                    {
+                        columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        map[table] = columns;
+                    }
+
+                    columns.Add(reader.GetString(1));
+                }
+            }
+        }
         finally
         {
-            // 同 MarkAllMigrationsAsApplied：探测完必须归还连接，否则启动路径永久持有库文件句柄
             db.Database.CloseConnection();
         }
+
+        return map;
     }
 
     /// <summary>

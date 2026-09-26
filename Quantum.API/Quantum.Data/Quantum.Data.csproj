@@ -1,9 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- 项目名与命名空间解耦：源码 namespace Quantum.DB / Quantum.Migrations.* / Quantum.DB.DesignTime 原样保留 -->
     <RootNamespace>Quantum.Data</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Quantum.API.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- CacheManager 的 IMemoryCache / IServiceScopeFactory 依赖框架引用 -->
