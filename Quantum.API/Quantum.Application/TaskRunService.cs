@@ -125,16 +125,11 @@ public class TaskRunService
             CreateTime = DateTime.Now,
             LogType = logType,
             Operator = operatorName,
-            Remark = remark ?? $"执行脚本任务 RunId={run.Id} → {result.Outcome}/{result.FailureCode}"
-                + (string.IsNullOrEmpty(result.SafeSummary) ? "" : $"：{result.SafeSummary}"),
-            Success = result.IsSuccess,
-            Severity = result.Severity,
-            Module = "Task",
-            Title = run.TaskNameSnapshot,
-            DirectoryName = run.LogDirectoryName,
-            LogPath = run.LogFileName,
-            ElapsedMs = (long)result.Duration.TotalMilliseconds
+            Remark = remark ?? $"执行脚本任务 RunId={run.Id}",
+            Title = run.TaskNameSnapshot
         };
+        // 终态→日志行的映射只此一处口径（Success/Severity/Module/耗时/日志定位/结果后缀全在 ApplyToLog 里）
+        result.ApplyToLog(log);
 
         try
         {
