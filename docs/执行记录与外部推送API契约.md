@@ -61,6 +61,8 @@
 
 手动重新执行：产生**新的**根执行 Id（不复用旧执行链、不计入旧链重试次数），并留操作日志。任务已删除或该执行无持久任务时返回业务失败。
 
+入口：Web 任务页 →「执行记录」抽屉 → 详情内「按当前脚本与环境变量再跑一次」（带确认弹窗，受理成功后详情直接跳到新 RunId）。App 首期不提供（写操作，见 `TaskRunsScreen` 注释）。
+
 ## 2. 失败策略（G3）
 
 ### 2.1 `GET /api/TaskRun/policy/{taskId}`
@@ -224,18 +226,22 @@ curl -X POST https://<host>/api/ExternalPush/messages \
 
 | 项 | 结果 |
 |---|---|
-| `dotnet test` | 651 全绿（SQLite 内存库；含 5 个新测试类 + 迁移链 + 鉴权隔离） |
+| `dotnet test` | 658 全绿（SQLite 内存库；含 5 个新测试类 + 迁移链 + 鉴权隔离。项数以命令实测为准） |
 | SQLite 迁移链 | 从空库真跑 `Migrate()`：Init→TaskRunBaseline→ExternalPushBaseline，6 张新表、`DisplayTitle`/`SessionTitle` 两列、4 个 `CREATE UNIQUE INDEX` 均在，`GetPendingMigrations()` 为空，重复 `(RootRunId,Attempt)` 被唯一索引拒 |
 | **MySQL 迁移链** | 本地一次性 `mysql:8.4` 容器（localhost:33069，用后即删）实跑：**新库全链 Up** → 校验 6 表 + 5 唯一索引 + 2 标题列齐备；**Down 回 Init** → 新表与新列全部消失、业务表数回到 27；**旧库增量升级**（停在 Init 再 Up）→ 只应用新两条迁移。**未触碰生产 NAS MySQL** |
 | 大数据量压测 §3.6 | 各 50 000 行 `t_task_run`：SQLite 文件库 插入 0.16s／列表计数 0.26ms／分页 20 条 0.21ms／到期重试扫描 0.20ms／深分页 offset 20000 为 21.1ms；MySQL 8.4 插入 2.15s／计数 0.35ms／分页 3.4ms／到期扫描 3.2ms／深分页 offset 20000 为 32.2ms。`EXPLAIN` 实证命中 `IX_t_task_run_TaskId_CreatedAtUtc`（range + Backward index scan + Using index）与 `IX_t_task_run_Status_NextAttemptAtUtc`（range + Using index） |
-| `quantum-web` | `npm run test` 85/85 全绿、`npm run build` 通过 |
+| `quantum-web` | `npm run test` 88/88 全绿、`npm run build` 通过 |
+| **浏览器点击冒烟** | 隔离 SQLite 实例 + `npm run dev`，真浏览器点完 G2/G3/G-Push 新 UI，**四个只在真点时暴露的缺陷已修**（抽屉刷新按钮落在不存在的 `#header-extra` 插槽、会话标题三处未传 `SessionTitle`、通知标题被双重 `【】` 包裹、自动刷新撞上「判失败/排定重试」两次写入的间隙而永久停机）。全过程与留证见 §9.2 |
 | `quantum-app` | 全模块 `testDebugUnitTest` 通过；Room **v7→v8 非破坏迁移**双重验证——JVM 侧用真 SQLite 造 v7 库跑迁移 SQL，**Android 15（API 35）模拟器真机升级**：先装旧版建出 v7 库并播种 `outbox` 待发正文与带 `pickedKeys` 的消息，覆盖安装新版后实测 `user_version` 7→8、`chat_message.sessionTitle` 与 `chat_session.displayTitle` 均建出、两条前置数据**逐字存活**、启动无崩溃。注：`assembleDebug` 首次构建因本检出残留了另一份检出（`D:\gitee\quantum`）的 Gradle 缓存/中间产物而失败（dexing 报"文件位于根目录之外"），`clean` + 删 `.gradle`/`build` 后重建成功 |
 | **生产 MySQL 升级** | 已执行（备份 → 恢复演练 → 沙箱预演 → 等价性证明 → 生产应用）。6 张新表 + 2 列 + 5 个新唯一索引落地；表数 29→35；业务行数与升级前逐项一致（`t_task=9`、`t_log=1109`、`t_chat_message=121`、`t_app_notification=60`、`t_env=28`）。详见 §10 |
 
 ### 7.2 仍未验证（不得当作已验证）
 
 - 生产 MySQL 的**应用侧验证**：库结构已升级，但线上镜像仍是升级前代码，新界面/新端点在正式镜像下的运行需随下次发布一起做。
-- 浏览器端与安卓真机的端到端点击行为（本轮为编译 + 单元/集成级验证，无真机）。
+- 浏览器点击冒烟已做（§9.2，隔离实例 + 真浏览器）；**未做**的是：正式发布镜像/正式前端产物下的点击复跑
+  （冒烟跑在 `npm run dev` + 本地检出后端上），以及第三方 App 客户端真实推送 SDK 的现场联调。
+- 安卓真机：Room v7→v8 升级已在 Android 15（API 35）模拟器实测（见 §7.1），但**执行记录页与外部推送会话
+  的真机 UI 点击**未单独走查（该两端 DTO/展示口径单测已覆盖）。
 - 第三方 SDK 实调与真实反向代理/TLS/限流配置下的行为（含 §6.5 与 R-08 的边缘层 413 边界）。
 - 真实生产数据量下的容量与增长评估（压测用的是合成数据）。
 - 时区口径的现场确认：后端 `DateTimeZoneHandling.Local` + `DateFormatString="yyyy-MM-dd HH:mm:ss"` 输出**不带时区标记**，
@@ -267,6 +273,8 @@ G0 门禁的「找回缺失文档」一项已确认为**不可完成**：`git lo
 
 ## 9. 隔离实例端到端冒烟结论（2026-09-26）
 
+### 9.1 接口级冒烟
+
 在仓库外的临时目录用**独立 SQLite 库**起了一个后端实例（scratch `appsettings.json` 指向
 `DBType=Sqlite` + 自定口令，绝不触碰生产库），用真实 HTTP 走了一遍新链路。
 
@@ -297,6 +305,52 @@ G0 门禁的「找回缺失文档」一项已确认为**不可完成**：`git lo
 `TaskService.AddAsync` 会抛 `NullReferenceException`，堆栈原文经 ExceptionFilter 回进响应 `Message`。
 已补 `saveModel == null` 的干净业务文案；非空但字段缺失的形态未逐一定位，留作单独修复项
 （同类信息泄露面：未处理异常的 `Message` 含堆栈，建议后续统一在 ExceptionFilter 侧收口）。
+
+### 9.2 浏览器点击冒烟（2026-09-27，同一隔离实例）
+
+同一隔离实例（SQLite + 独立口令，绝不触碰生产库）配 `npm run dev`（8080），用真浏览器把新 UI 点了一遍：
+登录 → 任务页 →「执行」确认弹窗 → 抽屉自动打开并聚焦本次 RunId → 失败策略表单读写 → 详情尝试时间轴 →
+「查看实时日志」→ 登记菜单 `external-push/index` → 外部推送凭据创建/启用/密钥一次性展示 →
+会话列表与会话页渲染受限富文本。
+
+**四个只在真点时才暴露的缺陷（本轮全部修掉）**：
+
+1. `NDrawerContent` 只有 `header`/`default`/`footer` 三个插槽，**没有 `header-extra`**：「刷新」按钮写在
+   `#header-extra` 里被 Vue 静默丢弃，DOM 里根本没有这个节点（`npm run build` 与单测都照不出来）。改放正文首行。
+2. Web 会话列表 / 会话页顶栏 / 搜索结果三处调用 `sessionTitle(key, taskMap)` 漏传第三个参数 `SessionTitle`，
+   外部推送会话只显示 `external:<凭据Id>:<sha>` 原始会话键。三处补传——原单测只覆盖 util 自身，
+   **测不到组件装配**，这正是漏网原因。
+3. `ExternalPushService` 把会话标题折进通知标题（`【会话】标题`），而 `AppPushService` 又按通知约定再包一层
+   `【】`，页面显示成 `【【机房监控】机房温度过高】`。改为通知标题**只用请求 `Title`**，会话身份由
+   `SessionTitle`/`DisplayTitle` 单独承载（契约 §6.4「不得互换」），并加后端断言 `notification.Title == 请求 Title`。
+4. 抽屉自动刷新的写入间隙竞态：终态落库与「排定下一次重试」是先后两次写入，刚判失败的一瞬列表里
+   既无活动行也无 `NextAttemptAtUtc`，轮询就此永久停机、重试链在页面上再也刷不出来。改为**连续 4 轮判空才停**，
+   并把判据抽成纯函数 `hasOpenChain(runs)` 补 3 例单测（浏览器环境无法稳定复现节流后的时序，逻辑改由单测锁）。
+
+顺带补上 Web 缺失的「重新执行」入口：§1.4 端点早已实现/已测/已写文档，但 Web 只有 `api/taskRun.js` 的导出、
+没有任何按钮（App 侧按设计不提供），等于只能 curl。现于详情面板加确认弹窗后 `POST /api/TaskRun/{runId}/retry`，
+受理成功即把详情跳到新的 RunId。
+
+实测留证（本地时间，界面与库两侧对齐）：
+
+- 完整重试链 `00:56:58 手动 → 00:57:35 自动重试 → 00:58:45 自动重试`（退避 30s/60s + 10s 领取轮询粒度），
+  三条尝试在同一抽屉里**无需手点**逐条出现，时间轴同步补齐。
+- 「重新执行」→ 新行 `Attempt=1`、`RootRunId=自身`、`TriggerSource=Manual`、`IsRetry=0`（确认未并入旧链、
+  不占旧链重试次数）；旧链第三条的 `TriggerRef=retry-of:<旧 RunId>` 语义保持不变。
+  注：`TriggerRef` 超 24 字符按既有规则哈希成 `ref:<16 hex>`，故手动重跑的 `manual-retry:<RunId>` 落库为
+  `ref:...`——完整动作仍在操作日志里，运行记录只留不可逆摘要。
+- `SafeSummary` 全程 `password=*** Bearer ***`；而「查看实时日志」正文里脚本自己打的原文照旧完整保留
+  （脱敏只作用于摘要面：列表、App、AI 提示、推送），日志仍仅 Manager 可读。
+- 告警台账随链推进：`ConsecutiveFailures` 1→2→3，每条 `DeliveryStatus=1`、创建到送达约 10s（维护轮询粒度）。
+- 鉴权与内容契约同批复测：禁用凭据推送 401「推送凭据无效」；Manager JWT 打推送端点是**同一句**401 文案
+  （不可区分）；PushKey 打 `GET /api/TaskRun` 得 401「Token验证失败」；裸链/尖括号/未知标记/缺幂等键各返回
+  对应 500 文案；同键同内容重放 `Duplicate=true` 且 `MsgId`/`NotificationId` 不变；
+  `{{tag:red|紧急}}` 与 `{{link:详情|https://...}}` 在 Web 会话页渲染成样式文本与命名链接，无 `{{}}` 泄漏。
+
+**本环境的观测口径（不影响结论，但记录以免被误读）**：内置浏览器无可见视口（指针点击报
+`NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`），交互一律经页面内 JS 派发真实 DOM 事件，驱动的是真 SPA、真 XHR、真渲染；
+页面处于 `hidden` 状态时 Chrome 会把 2s 的 `setInterval` 节流到约每分钟一次，因此抽屉自动刷新在本环境表现为
+「分钟级」——真实可见标签页不受此限，且该判据已由单测锁定。
 
 ## 10. 生产升级实施记录（2026-09-26）
 
