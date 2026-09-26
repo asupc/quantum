@@ -2,6 +2,7 @@ package com.quantum.app.feature.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.quantum.app.core.common.RichTextParser
 import com.quantum.app.core.network.api.AdminApi
 import com.quantum.app.core.network.api.unwrap
 import com.quantum.app.core.storage.prefs.PrefsStore
@@ -60,7 +61,7 @@ class ConversationListViewModel @Inject constructor(
                 sessions.map { row ->
                     ConversationUi(
                         sessionId = row.sessionKey,
-                        title = titleOf(row.sessionKey, names),
+                        title = titleOf(row.sessionKey, names, row.displayTitle),
                         preview = row.lastContent?.let { previewOf(row.lastContentType, it) },
                         time = row.lastCreateTime,
                         unread = unread[row.sessionKey] ?: 0
@@ -81,22 +82,26 @@ class ConversationListViewModel @Inject constructor(
         }
     }
 
-    /** 标题：默认会话固定文案；其余 miss 任务名时直接显示会话键原文（自定义会话名本身可读）。 */
-    private fun titleOf(sessionId: String, names: Map<String, String>): String =
+    /**
+     * 标题：默认会话固定文案；外部推送会话（G-Push）优先用服务端下发的展示标题；
+     * 其余 miss 任务名时直接显示会话键原文（自定义会话名本身可读）。
+     */
+    private fun titleOf(sessionId: String, names: Map<String, String>, displayTitle: String? = null): String =
         when {
             sessionId.isEmpty() -> "默认会话"
+            !displayTitle.isNullOrBlank() -> displayTitle.trim()
             else -> names[sessionId] ?: sessionId
         }
 
-    /** 列表预览：通知取标题行、媒体取类型占位、文本取首行。 */
+    /** 列表预览：通知取标题行、媒体取类型占位、文本取首行（一律剥成纯文本，会话列表不渲染富文本标记）。 */
     private fun previewOf(contentType: String?, content: String): String = when (contentType) {
-        ChatRepository.NOTIFY_CONTENT_TYPE -> content.lineSequence().firstOrNull()
+        ChatRepository.NOTIFY_CONTENT_TYPE -> RichTextParser.plainText(content).lineSequence().firstOrNull()
             ?.removePrefix("【")?.substringBefore("】")?.ifBlank { null }
-            ?: content.lineSequence().firstOrNull().orEmpty()
+            ?: RichTextParser.plainText(content).lineSequence().firstOrNull().orEmpty()
         ChatRepository.CONTENT_TYPE_IMAGE -> "[图片]"
         ChatRepository.CONTENT_TYPE_VIDEO -> "[视频]"
         ChatRepository.CONTENT_TYPE_FILE -> "[文件]"
-        else -> content.lineSequence().firstOrNull().orEmpty()
+        else -> RichTextParser.plainText(content).lineSequence().firstOrNull().orEmpty()
     }
 
     /** 删除会话（长按列表项确认后调用）：服务端+本地一起删，列表随 Room Flow 自动移除。 */

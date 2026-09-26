@@ -18,7 +18,7 @@ quantum-app/
 ├─ core:media          媒体核心（MediaFormat/MediaSeek/MediaSessionService/PlayerManager，播放器与系统媒体会话）
 ├─ feature:chat        会话 IM（同步引擎/发送链路/三型气泡/上传/快捷指令）
 ├─ feature:notify      通知中心（三来源 msgId 幂等/分类 tab/已读）
-├─ feature:task        任务列表/执行 + 日志中心
+├─ feature:task        任务列表/执行 + 执行记录只读（列表/详情时间轴）+ 日志中心
 ├─ feature:docker      Docker 面板（启停二次确认）
 ├─ feature:admin       环境变量/系统设置（单管理员体系，用户管理已随用户体系移除）
 ├─ feature:ai          AI 助手（会话/对话/diff 提案三级页，AiMarkdown/AiLineDiff/影子试运行）

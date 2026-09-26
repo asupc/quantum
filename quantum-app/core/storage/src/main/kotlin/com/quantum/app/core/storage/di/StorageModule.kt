@@ -29,6 +29,9 @@ object StorageModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): QuantumDatabase =
         Room.databaseBuilder(context, QuantumDatabase::class.java, "quantum.db")
+            // G-Push v7→v8 是显式非破坏迁移（会话标题两列）：outbox 待发正文与选项已选态
+            // 服务端没有副本，绝不能被重建清掉。fallback 只对更早的历史版本差生效。
+            .addMigrations(*QuantumDatabase.ALL_MIGRATIONS)
             .fallbackToDestructiveMigration()
             .build()
 

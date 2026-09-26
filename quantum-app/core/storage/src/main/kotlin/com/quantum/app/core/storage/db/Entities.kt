@@ -55,6 +55,12 @@ data class ChatMessageEntity(
     val pickedKeys: String? = null,
     /** 点选代发标记（本端单端记忆）：非空 = 该「接收」行由点选选项产生，渲染为居中系统提示 */
     val pickLabel: String? = null,
+    /**
+     * 会话标题快照（G-Push）：服务端 SessionTitle 原样落地，外部推送会话才有值。
+     * 存到消息行的目的是让「只做消息增量补拉」的离线端在会话行尚未到位时也能还原标题
+     * （重启/断网后标题不能退化成一长串 opaque 会话键）。
+     */
+    val sessionTitle: String? = null,
     /** outbox 发送中标记（同步回包确认后清除） */
     val pending: Boolean = false
 ) {
@@ -206,7 +212,12 @@ data class ChatSessionEntity(
     /** 会话首见时间（首条消息落库时刻，本地时钟毫秒；仅空会话排序兜底用，不展示） */
     val createTime: Long,
     /** 本会话已见最大消息 Seq（排序用）；消息行删除（清空）后保留原值 */
-    val lastSeq: Long
+    val lastSeq: Long,
+    /**
+     * 会话展示标题（G-Push）：外部推送会话由服务端 DisplayTitle/消息标题快照回填；
+     * 任务会话与默认会话保持 null，列表仍按「任务名 ‖ 会话键」推导。本地不做隐式改名。
+     */
+    val displayTitle: String? = null
 )
 
 /** 会话列表行：会话表为主 LEFT JOIN 每会话最后一条消息；空会话（无消息行）last* 字段为 null。 */
@@ -219,7 +230,9 @@ data class SessionLastMessageRow(
     /** 最后消息类型（预览用）；空会话 null */
     val lastContentType: String? = null,
     /** 最后消息服务端时间串；空会话 null（列表不显示时间） */
-    val lastCreateTime: String? = null
+    val lastCreateTime: String? = null,
+    /** 会话展示标题（G-Push 外部会话）；任务会话/默认会话为 null */
+    val displayTitle: String? = null
 )
 
 @Dao
@@ -242,7 +255,9 @@ interface ChatSessionDao {
             ChatSessionEntity(
                 sessionKey = key,
                 createTime = old?.createTime ?: now,
-                lastSeq = maxOf(old?.lastSeq ?: 0L, maxSeq)
+                lastSeq = maxOf(old?.lastSeq ?: 0L, maxSeq),
+                // 标题只在缺失时补写：会话键已按标题哈希定名，本地不做隐式改名/搬迁
+                displayTitle = old?.displayTitle ?: group.lastOrNull { it.sessionTitle != null }?.sessionTitle
             )
         }
         upsertAll(rows)
@@ -260,7 +275,8 @@ interface ChatSessionDao {
      */
     @Query(
         """SELECT s.sessionKey AS sessionKey, s.createTime AS createTime, s.lastSeq AS lastSeq,
-           m.content AS lastContent, m.contentType AS lastContentType, m.createTime AS lastCreateTime
+           m.content AS lastContent, m.contentType AS lastContentType, m.createTime AS lastCreateTime,
+           s.displayTitle AS displayTitle
            FROM chat_session s
            LEFT JOIN chat_message m ON m.sessionId = s.sessionKey AND m.pending = 0
                 AND m.seq = (SELECT MAX(seq) FROM chat_message WHERE sessionId = s.sessionKey AND pending = 0)

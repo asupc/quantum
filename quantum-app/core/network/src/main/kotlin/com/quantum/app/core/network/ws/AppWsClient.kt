@@ -39,6 +39,12 @@ data class WsFrame(
     val contentText: String? = null,
     /** 会话键（message/notify 帧）：= 任务 Id，客户端据此归档到对应脚本会话；缺省 null = 默认会话 */
     val session: String? = null,
+    /**
+     * 会话展示标题（message/notify 帧，G-Push）：外部推送会话才非空。
+     * 帧内键按本文件约定为小写驼峰（REST 侧同一字段是服务端实体的 PascalCase `SessionTitle`，
+     * 两套风格各自内部一致——见 docs/执行记录与外部推送API契约.md §6.4）。
+     */
+    val sessionTitle: String? = null,
     /** 点选来源任务 Id（command 帧上行）：合并会话内点选代发的精确路由依据；手打/重发缺省 null */
     val targetTask: String? = null,
     /** 结构化富交互载荷（message 帧，JSON 字符串）：可点选项/视频封面，缺省 null = 普通消息 */

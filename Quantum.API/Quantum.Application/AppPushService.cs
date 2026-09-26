@@ -131,8 +131,9 @@ public class AppPushService
             jump = notification.Jump,
             // 会话键（= 任务 Id 或任务配置的会话名）：任务类通知归对应任务会话，system/security 无此字段（默认会话）
             session = mirror.SessionKey,
-            // 会话展示标题（可选，G-Push）：外部会话才非空；旧客户端忽略未知字段仍能收到消息
-            SessionTitle = string.IsNullOrEmpty(sessionTitle) ? null : sessionTitle,
+            // 会话展示标题（可选，G-Push）：外部会话才非空；旧客户端忽略未知字段仍能收到消息。
+            // 键名按本帧既有约定用小写驼峰（REST 侧同义字段是实体 PascalCase SessionTitle，两套风格各自内部一致）
+            sessionTitle = string.IsNullOrEmpty(sessionTitle) ? null : sessionTitle,
             createTime = mirror.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
         }, FrameJsonOptions);
         if (!await TryPushOnlineAsync(frame))

@@ -334,7 +334,8 @@ class ChatRepository @Inject constructor(
                     status = ChatMessageEntity.STATUS_DELIVERED,
                     createTime = frame.createTime.orEmpty(),
                     // movesMap 命中优先：迁移帧先到时 echo 的 session 还是来源会话，直接落库会把行写回旧会话
-                    sessionId = movesMap.remove(msgId) ?: frame.session.orEmpty()
+                    sessionId = movesMap.remove(msgId) ?: frame.session.orEmpty(),
+                    sessionTitle = frame.sessionTitle
                 )
             )
         )
@@ -390,7 +391,9 @@ class ChatRepository @Inject constructor(
                     contentType = frame.contentType ?: NOTIFY_CONTENT_TYPE,
                     status = ChatMessageEntity.STATUS_DELIVERED,
                     createTime = frame.createTime.orEmpty(),
-                    sessionId = frame.session.orEmpty()
+                    sessionId = frame.session.orEmpty(),
+                    // 外部推送会话的展示标题随行落库：断网重启后会话列表不退化成一长串会话键
+                    sessionTitle = frame.sessionTitle
                 )
             )
         )
@@ -595,5 +598,6 @@ fun com.quantum.app.core.network.dto.ChatMessageDto.toEntity(): ChatMessageEntit
         payload = payload,
         status = status,
         createTime = createTime,
-        sessionId = sessionKey.orEmpty()
+        sessionId = sessionKey.orEmpty(),
+        sessionTitle = sessionTitle
     )

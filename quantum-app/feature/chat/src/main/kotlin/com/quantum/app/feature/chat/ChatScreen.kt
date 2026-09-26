@@ -693,7 +693,7 @@ private fun NotificationCard(
                     }
                 }
                 // 标题与正文放在同一个 SelectionContainer 内：可跨行拖选、一次性复制整段。
-                // 正文超过 3 行会被省略号截断，截断部分不可选——全文在通知中心（点按卡片跳转）
+                // 正文超长时由 RichMessageText 自行折叠（展开态可选全文），全文也始终在通知中心可见
                 SelectionContainer {
                     Column {
                         meta?.title?.takeIf { it.isNotBlank() }?.let {
@@ -704,11 +704,11 @@ private fun NotificationCard(
                                 modifier = Modifier.padding(top = 6.dp)
                             )
                         }
-                        Text(
+                        // 正文走聊天气泡同一套受控富文本渲染（G-Push：外部通知的色标/胶囊/命名链接要可见），
+                        // 折叠由 RichMessageText 自己按行数判定，不影响上方标题行
+                        RichMessageText(
                             body,
                             style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }

@@ -69,7 +69,9 @@ data class SessionOverviewItemDto(
     @SerialName("Total") val total: Long = 0,
     @SerialName("Unread") val unread: Long = 0,
     @SerialName("ReadSeq") val readSeq: Long = 0,
-    @SerialName("Last") val last: ChatMessageDto? = null
+    @SerialName("Last") val last: ChatMessageDto? = null,
+    /** 会话展示标题（G-Push 外部会话）：任务会话/默认会话为 null，列表仍按任务名推导 */
+    @SerialName("SessionTitle") val sessionTitle: String? = null
 )
 
 /** 会话列表快照结果（POST api/App/sessions/overview）。 */
@@ -108,7 +110,12 @@ data class ChatMessageDto(
     /** 会话键（= 任务 Id）：旧服务端缺省 null → 默认会话 */
     @SerialName("SessionKey") val sessionKey: String? = null,
     /** 结构化富交互载荷（JSON 字符串，可空）：{"poster","options":[{key,label,reply,color,desc}]} */
-    @SerialName("Payload") val payload: String? = null
+    @SerialName("Payload") val payload: String? = null,
+    /**
+     * 会话标题快照（G-Push）：服务端 `ChatMessageModel.SessionTitle` 原名直出，
+     * 使只做消息增量补拉的离线端在会话行到位前也能还原标题（R-11 的三处一致即指此处）。
+     */
+    @SerialName("SessionTitle") val sessionTitle: String? = null
 )
 
 @Serializable

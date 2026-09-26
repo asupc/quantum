@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.quantum.app.core.common.RichTextParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -72,17 +73,20 @@ class SystemNotifier @Inject constructor(@ApplicationContext private val context
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        // OS 通知栏没有富文本渲染器：标记一律剥成纯文本，既不让语法泄露，也不把富文本当可执行内容
+        val plainTitle = RichTextParser.plainText(title)
+        val plainContent = RichTextParser.plainText(content)
         val style = if (largeImage != null) {
             NotificationCompat.BigPictureStyle()
                 .bigPicture(largeImage)
-                .setSummaryText(content)
+                .setSummaryText(plainContent)
         } else {
-            NotificationCompat.BigTextStyle().bigText(content)
+            NotificationCompat.BigTextStyle().bigText(plainContent)
         }
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(title)
-            .setContentText(content)
+            .setContentTitle(plainTitle)
+            .setContentText(plainContent)
             .setStyle(style)
             .setAutoCancel(true)
             .setContentIntent(pending)

@@ -49,6 +49,24 @@ object RichTextParser {
     fun hasMarkup(raw: String): Boolean =
         raw.contains("{{") && (anyMarkRegex.containsMatchIn(raw) || raw.contains("{{link:"))
 
+    /**
+     * 剥离标记得到纯文本（G-Push 口径）：系统通知栏、OS 摘要、会话列表预览、搜索与日志一律走这里——
+     * 这些位置没有富文本渲染器，把 `{{red|x}}` 原样显示会把语法泄露给用户，
+     * 也绝不能把富文本当作可执行代码/HTML 处理。命名链接只保留显示文字，不保留 URL。
+     */
+    fun plainText(raw: String): String {
+        if (raw.isEmpty() || !hasMarkup(raw)) {
+            return raw
+        }
+        return parse(raw).joinToString("") { span ->
+            when (span) {
+                is RichSpan.Plain -> span.text
+                is RichSpan.Styled -> span.text
+                is RichSpan.Link -> span.text
+            }
+        }
+    }
+
     fun parse(raw: String): List<RichSpan> {
         if (!hasMarkup(raw)) {
             return listOf(RichSpan.Plain(raw))
