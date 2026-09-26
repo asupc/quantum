@@ -240,3 +240,26 @@ curl -X POST https://<host>/api/ExternalPush/messages \
 - 时区口径的现场确认：后端 `DateTimeZoneHandling.Local` + `DateFormatString="yyyy-MM-dd HH:mm:ss"` 输出**不带时区标记**，
   本功能所有 `*Utc` 字段按 UTC 墙钟持久化，Web/App 侧均已按「补 Z 当 UTC 解读再转本地时区」处理；
   存量非 UTC 字段（如 `t_log.CreateTime`）仍按本地墙钟解读，两套并存，改动前须逐字段确认。
+
+## 8. 计划审查台账闭环（R-01~R-12）
+
+对应 `docs/功能增强分期实施计划.md` 的三轮审核记录。**计划文档本身不由本仓库实施方改写**（它可能是他人维护的评审件），
+闭环状态记录在此处，供所有者核对后自行回写。
+
+| 编号 | 原级别 | 闭环状态 | 代码/测试证据 |
+|---|---|---|---|
+| R-01 | 🔴 阻塞 | 已闭 | 终态与 `t_log` 行同一事务同步落库、`LogId` 预分配（`TaskRunService.CompleteAsync`）；日志行不在库时 `LogAvailable=false`，详情只显示占位。测试：`TaskRunPersistenceTests.Complete_WritesRunAndLogInOneCommit_*`、`UniqueRootRunAttempt_*` |
+| R-02 | 🔴 阻塞 | 已闭 | 列表按「Manager 任务脚本名→同款净化目录名」过滤 + 运行记录 `ManagerSnapshot` 子查询兜任务删除后的历史；详情走 `IsManagerTaskLogAsync` 二次判定。测试：`TaskRunAuthorizationTests` 6 例（含子目录脚本口径、任务删除后快照） |
+| R-03 | 🔴 阻塞 | 已闭 | 无策略/未启用 → 保留旧式一次失败通知 + 一次 AI 分析；策略启用 → `TaskRunCompletion.PolicyOwned=true`，旧路径让位、只由最终失败事件投递。测试：`TaskAlertDedupTests.Alerts_WithoutEnabledPolicy_AreNotManaged`、`TaskRetryPolicyTests.FailedExecution_WithEnabledPolicy_*` |
+| R-04 | 🟡 建议 | 已闭（选定「顺延后放弃」） | 重试领取前查同任务非终态行 → 顺延 30s，累计 20 次后作废并记 `CancelReason`；不排队、不与手动/Cron 重入。测试：`TaskRetryPolicyTests.DueRetry_*` 三例 |
+| R-05 | 🟡 建议 | 范围外 | 二期完整备份/恢复单独设计，本期未动（本手册 §1 只给操作要求，不代表二期能力） |
+| R-06 | 🔴 阻塞 | 已闭 | 提交后的 `MarkDeliveredAsync` 改 try/catch 留痕，事务提交即成功事实源。测试：`ExternalPushTests` 提交后语义 + `IdempotencyRow_SurvivesUntilPruned_ThenReusable` |
+| R-07 | 🔴 阻塞 | 已闭 | 幂等行物理清理前同键恒按原请求去重；后台按 72 小时窗口批量清理。测试：同上（清理前 `PruneIdempotencyRecordsAsync` 返回 0、清理后同键才判新请求） |
+| R-08 | 🟡 建议 | 已闭（写入契约） | §6.2 与 §0 明确：应用层业务错误走 HTTP 200 信封，边缘层（Kestrel/反代）先行拒绝（如 413）不在该保证范围内 |
+| R-09 | 🟡 建议 | 已闭 | 反向隔离测试落地：`ExternalPushIsolationTests` 6 例（PushKey 打旧端点被拒、Bearer 打通用品证端点被拒、合法凭据不产出 ClaimsPrincipal 且 `IsManager` 恒 false、密钥错与 Id 不存在响应不可区分） |
+| R-10 | 🔴 阻塞 | 已闭（选定「一律拒绝」） | 摘掉合法标记后再查明文 URL 与危险协议，普通文本里出现即拒（避免 `{{tag:orange}}` 冒号误判）；命名链接限绝对 https 且无 userinfo。测试：`ExternalPushTests.Content_RejectsBypassAndUnknownForms` 11 类绕过 |
+| R-11 | 🔴 阻塞 | 已闭（选定「实体同名 + 两套风格各自一致」） | 实体属性直接命名 `SessionTitle`，REST 直出 PascalCase；WS 帧沿用本仓库手写小写驼峰 `sessionTitle`；App 两套 DTO 分别显式标注并落到同一本地列。见 §6.4 与 App `WsFrame` 注释 |
+| R-12 | 🟡 建议 | 已闭（统一为「归一化后忽略前后空白」） | 标题按 trim + NFKC 归一后分组与计摘要，带空白视为合法并按归一值处理（不再同时写「trim」与「禁止前后空白」两条冲突口径）。测试：`SessionKey_IsStableNormalized_AndIsolatedAcrossCredentials` |
+
+G0 门禁的「找回缺失文档」一项已确认为**不可完成**：`git log --all -- docs/**` 为空，`docs/` 从未被版本控制跟踪。
+经仓库所有者裁决改为「以本计划与本文档为契约基准推进」，本文档即该裁决的落地记录。
