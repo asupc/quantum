@@ -234,7 +234,9 @@ public class OpenTriggerTaskService
                 EnablePush = task.EnablePush
             }
         };
-        await commandTask.Run();
+        var runResult = await commandTask.Run();
+        // 外触同样记录真实结果：旧实现恒写 Success=true，脚本没跑起来也对调用方「已执行」
+        runResult.ApplyToLog(logModel);
         LogServiceHelper.Logs.Enqueue(logModel);
     }
 }

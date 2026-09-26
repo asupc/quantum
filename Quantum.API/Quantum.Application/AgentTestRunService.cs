@@ -123,29 +123,34 @@ public class AgentTestRunService
             };
 
             var watch = System.Diagnostics.Stopwatch.StartNew();
-            await step.Run(ct);
+            var runResult = await step.Run(ct);
             watch.Stop();
 
             var logDir = TaskExcuteService.LogDirNameFrom(stagingRel);
             var logFile = Path.Combine(Directory.GetCurrentDirectory(), "logs", logDir,
                 $"{dateTime:yyyyMMddHHmmssfff}.log");
-            var (tail, hasException) = ReadTail(logFile, 200);
-            var status = ct.IsCancellationRequested
-                ? AiTestStatus.Timeout
-                : hasException ? AiTestStatus.Failed : AiTestStatus.Passed;
+            var (tail, _) = ReadTail(logFile, 200);
+            // G1：试运行结论改由结构化终态给出，不再靠读日志文本里有没有 "exception" 字样猜——
+            // 那套字符串判定与引擎结论会分叉（门禁拒绝/编译失败根本不含该词，却被当成通过）。
+            var status = runResult.Outcome switch
+            {
+                TaskExecutionOutcome.Succeeded => AiTestStatus.Passed,
+                TaskExecutionOutcome.Canceled => AiTestStatus.Timeout,
+                _ => AiTestStatus.Failed
+            };
             var logId = await RecordLogAsync(shadowTask.Name, fileName, logDir, Path.GetFileName(logFile), status, tail, ct);
             result = new AiTestRunResult
             {
                 Status = status,
                 DurationMs = watch.ElapsedMilliseconds,
                 LogTail = tail,
-                HasException = hasException,
+                HasException = runResult.Outcome is TaskExecutionOutcome.Failed or TaskExecutionOutcome.Rejected,
                 LogId = logId,
                 Message = status switch
                 {
                     AiTestStatus.Passed => $"试运行通过（耗时 {watch.Elapsed.TotalSeconds:F1} 秒，无异常）",
-                    AiTestStatus.Timeout => $"试运行超时中断（{waitMinutes} 分钟上限）",
-                    _ => "试运行出现异常，见日志"
+                    AiTestStatus.Timeout => $"试运行超时中断（{waitMinutes} 分钟上限）：{runResult.SafeSummary}",
+                    _ => $"试运行未通过（{runResult.OutcomeLabel}）：{runResult.SafeSummary}"
                 }
             };
         }

@@ -204,7 +204,7 @@ public static class TaskExcuteService
     /// </summary>
     /// <param name="taskCommand"></param>
     /// <returns></returns>
-    public static async Task Run(this TaskCommandStep taskCommand, CancellationToken ct = default)
+    public static async Task<TaskExecutionResult> Run(this TaskCommandStep taskCommand, CancellationToken ct = default)
     {
         taskCommand.Envs = taskCommand.Envs.Where(n => !string.IsNullOrEmpty(n.Name) && !string.IsNullOrEmpty(n.Value)).ToList();
         // FileName 已限 scripts/quantum 根内，目录名再剔除路径分隔符（纵深防御）
@@ -217,7 +217,7 @@ public static class TaskExcuteService
 
         var startTime = DateTime.Now;
         // §1-9：正文由 ExecTask 内的实时缓冲逐行增量落盘，此处只补收尾 footer
-        await taskCommand.ExecTask(logPath, ct);
+        var result = await taskCommand.ExecTask(logPath, ct);
         if (!File.Exists(logPath))
         {
             File.Create(logPath).Close();
@@ -225,161 +225,221 @@ public static class TaskExcuteService
         var endTime = DateTime.Now;
         await using (StreamWriter logWriter = new(logPath, true))
         {
+            // footer 必须落终态：早期版本只写用时，读日志的人会把「写完了」当成「跑成功了」
             await logWriter.WriteLineAsync($@"任务结束时间：{endTime:yyyy/MM/dd HH:mm:ss.fff}
-执行任务用时：{(endTime - startTime).TotalSeconds:F2}秒。");
+执行任务用时：{(endTime - startTime).TotalSeconds:F2}秒。
+执行结果：{result.OutcomeLabel}（{result.Outcome}/{result.FailureCode}）{(string.IsNullOrEmpty(result.SafeSummary) ? "" : $"：{result.SafeSummary}")}");
             await logWriter.FlushAsync();
         }
+        return result;
     }
 
     /// <summary>
     /// 进程内执行：SafeFile 前置校验 → 门禁/编译（哈希缓存，执行侧对历史脏数据二次校验）
     /// → collectible ALC 加载产物 → 每次执行独立 DI scope 组装 ctx → RunAsync(ctx, ct) 协作取消。
     /// </summary>
-    private static async Task ExecTask(this TaskCommandStep taskCommand, string fileName, CancellationToken ct = default)
+    private static async Task<TaskExecutionResult> ExecTask(this TaskCommandStep taskCommand, string fileName, CancellationToken ct = default)
     {
-        await Task.Run(async () =>
+        return await Task.Run(async () =>
         {
+            var startedAtUtc = DateTime.UtcNow;
+            var logDirName = LogDirNameFrom(taskCommand.Task.FileName);
+            var logFileName = Path.GetFileName(fileName);
+
+            // 终态构造统一收口在此：所有早退分支都必须带明确 FailureCode，不得再出现「写了日志就算成功」
+            TaskExecutionResult Rejected(TaskFailureCode code, string message)
+                => TaskExecutionResult.Rejected(code, message, startedAtUtc, DateTime.UtcNow, logDirName, logFileName);
+            TaskExecutionResult Finished(TaskExecutionOutcome outcome, TaskFailureCode code, string message)
+                => outcome == TaskExecutionOutcome.Succeeded
+                    ? TaskExecutionResult.Succeeded(startedAtUtc, DateTime.UtcNow, logDirName, logFileName)
+                    : outcome == TaskExecutionOutcome.Canceled
+                        ? TaskExecutionResult.Canceled(code, message, startedAtUtc, DateTime.UtcNow, logDirName, logFileName)
+                        : TaskExecutionResult.Failed(code, message, startedAtUtc, DateTime.UtcNow, logDirName, logFileName);
+
             // §1-9：实时缓冲即刻接管——开文件、注册字典、写开始行（逐行增量落盘 + 环形尾览）
-            using var buffer = new LiveLogBuffer(fileName);
-            Logs[fileName] = buffer;
-            buffer.AppendLine($"{taskCommand.Task.Name}任务开始时间：{DateTime.Now:yyyy/MM/dd HH:mm:ss.fff}");
-
-            // 执行路径二次校验（纵深防御）：保存侧 TaskService.ValidateScriptFileName 已挡穿越，
-            // 这里对存量数据/导入数据再兜底一次，确保只执行 scripts/quantum 根内的脚本
-            var scriptFile = SafeFile.Resolve("./scripts/quantum", taskCommand.Task.FileName);
-            if (scriptFile == null)
-            {
-                buffer.AppendLine($"任务脚本路径非法【{taskCommand.Task.FileName}】，已拒绝执行！");
-                return;
-            }
-
-            if (!File.Exists(scriptFile))
-            {
-                buffer.AppendLine($"任务执行脚本【{scriptFile}】不存在！");
-                return;
-            }
-
-            var ext = Path.GetExtension(scriptFile).ToLowerInvariant();
-            if (ext != ScriptBuildService.ScriptFileExtension)
-            {
-                buffer.AppendLine($"不支持的脚本文件：{scriptFile}");
-                buffer.AppendLine($"仅支持 {ScriptBuildService.ScriptFileExtension} 源码任务；.js/.py 旧任务已停止支持，请新建 C# 任务（参考 scripts/quantum 示例）。");
-                return;
-            }
-
-            string source;
+            LiveLogBuffer buffer;
             try
             {
-                source = await File.ReadAllTextAsync(scriptFile);
+                buffer = new LiveLogBuffer(fileName);
             }
             catch (Exception e)
             {
-                buffer.AppendLine($"读取任务脚本失败：{e.Message}");
-                return;
+                // 日志文件都开不出来（磁盘满/权限）：仍然要给调用方一个确定终态，不能无声返回
+                return Rejected(TaskFailureCode.EngineFault, $"日志文件创建失败，任务未执行：{e.Message}");
             }
 
-            // 执行侧二次校验（计划 2.2）：历史脏数据/绕过 API 手改的源码在执行时重新过保存流水线；
-            // 同哈希命中缓存时零编译开销，未命中（如重启后首次执行）现算
-            var build = ScriptBuildService.Build(source, scriptFile);
-            if (build.Blocked.Count > 0)
+            using (buffer)
             {
-                buffer.AppendLine("任务脚本未通过安全门禁，已拒绝执行：");
-                foreach (var issue in build.Blocked)
+                Logs[fileName] = buffer;
+                // G1 修复：早退分支原先直接 return，字典项永久残留（长跑后堆积数百条死键）
+                try
                 {
-                    buffer.AppendLine($"  [第{issue.Line}行] {issue.Message}");
+                    buffer.AppendLine($"{taskCommand.Task.Name}任务开始时间：{DateTime.Now:yyyy/MM/dd HH:mm:ss.fff}");
+
+                    // 执行路径二次校验（纵深防御）：保存侧 TaskService.ValidateScriptFileName 已挡穿越，
+                    // 这里对存量数据/导入数据再兜底一次，确保只执行 scripts/quantum 根内的脚本
+                    var scriptFile = SafeFile.Resolve("./scripts/quantum", taskCommand.Task.FileName);
+                    if (scriptFile == null)
+                    {
+                        var msg = $"任务脚本路径非法【{taskCommand.Task.FileName}】，已拒绝执行！";
+                        buffer.AppendLine(msg);
+                        return Rejected(TaskFailureCode.InvalidScriptPath, msg);
+                    }
+
+                    if (!File.Exists(scriptFile))
+                    {
+                        var msg = $"任务执行脚本【{scriptFile}】不存在！";
+                        buffer.AppendLine(msg);
+                        return Rejected(TaskFailureCode.ScriptMissing, $"任务脚本文件不存在：{Path.GetFileName(scriptFile)}");
+                    }
+
+                    var ext = Path.GetExtension(scriptFile).ToLowerInvariant();
+                    if (ext != ScriptBuildService.ScriptFileExtension)
+                    {
+                        buffer.AppendLine($"不支持的脚本文件：{scriptFile}");
+                        buffer.AppendLine($"仅支持 {ScriptBuildService.ScriptFileExtension} 源码任务；.js/.py 旧任务已停止支持，请新建 C# 任务（参考 scripts/quantum 示例）。");
+                        return Rejected(TaskFailureCode.UnsupportedScriptExtension, $"不支持的脚本扩展名 {ext}，仅支持 {ScriptBuildService.ScriptFileExtension}");
+                    }
+
+                    string source;
+                    try
+                    {
+                        source = await File.ReadAllTextAsync(scriptFile);
+                    }
+                    catch (Exception e)
+                    {
+                        var msg = $"读取任务脚本失败：{e.Message}";
+                        buffer.AppendLine(msg);
+                        return Rejected(TaskFailureCode.ScriptReadFailed, msg);
+                    }
+
+                    // 执行侧二次校验（计划 2.2）：历史脏数据/绕过 API 手改的源码在执行时重新过保存流水线；
+                    // 同哈希命中缓存时零编译开销，未命中（如重启后首次执行）现算
+                    var build = ScriptBuildService.Build(source, scriptFile);
+                    if (build.Blocked.Count > 0)
+                    {
+                        buffer.AppendLine("任务脚本未通过安全门禁，已拒绝执行：");
+                        foreach (var issue in build.Blocked)
+                        {
+                            buffer.AppendLine($"  [第{issue.Line}行] {issue.Message}");
+                        }
+                        return Rejected(TaskFailureCode.GateBlocked,
+                            $"安全门禁拒绝：{string.Join("；", build.Blocked.Select(n => $"第{n.Line}行 {n.Message}"))}");
+                    }
+                    if (build.Errors.Count > 0)
+                    {
+                        buffer.AppendLine("任务脚本编译失败，已拒绝执行：");
+                        foreach (var issue in build.Errors)
+                        {
+                            buffer.AppendLine($"  [第{issue.Line}行] {issue.Message}");
+                        }
+                        return Rejected(TaskFailureCode.CompileFailed,
+                            $"脚本编译失败：{string.Join("；", build.Errors.Select(n => $"第{n.Line}行 {n.Message}"))}");
+                    }
+
+                    // §1-2：占用执行槽位跑脚本（拿到才计数；等票超时则直通放行，避免无声卡死）
+                    using var slot = await AcquireExecutionSlotAsync(msg => buffer.AppendLine(msg));
+                    using var lease = ScriptBuildService.Acquire(source, scriptFile);
+                    IQuantumTask taskInstance;
+                    try
+                    {
+                        taskInstance = lease.CreateInstance();
+                    }
+                    catch (Exception e)
+                    {
+                        var msg = $"任务程序集加载失败：{e.Message}";
+                        buffer.AppendLine(msg);
+                        return Rejected(TaskFailureCode.AssemblyLoadFailed, msg);
+                    }
+
+                    // 每次执行独立 DI scope（门面直调 scoped 服务），结束即释放；HttpClient 改为按代理开关缓存复用（§1-13），不随执行释放
+                    await using var scopeDisposer = ScopeDisposer.Capture(TaskPluginHost.CreateScope());
+                    var provider = scopeDisposer.Scope.ServiceProvider;
+                    // 实时日志回调与取消信号回调可能并发写：统一串行化（缓冲内建锁）
+                    void AppendLog(string line) => buffer.AppendLine(line);
+                    // 文件门面与 ctx.Http 复用同一 HttpClient（代理/超时一致），根目录取自系统配置（缺省 ./downloads）
+                    var taskHttp = CreateTaskHttpClient(taskCommand.Task.EnableProxy);
+                    var ctx = new QuantumTaskContext(
+                        string.IsNullOrEmpty(taskCommand.SubTaskName) ? taskCommand.Task.Name : taskCommand.SubTaskName,
+                        taskCommand.Task.EnableProxy,
+                        taskCommand.Task.EnablePush,
+                        BuildVariables(taskCommand.Envs),
+                        AppendLog,
+                        taskHttp,
+                        new QuantumEnvFacade(provider.GetRequiredService<EnvService>()),
+                        // 门面持有双键（§2.2）：taskId 供选项载荷根部注入（点选精确路由用真实任务 Id，不受会话名改名影响）；
+                        // sessionKey = 任务配置的会话名（Trim）‖ 任务 Id，出站消息全部落入该会话（合并归组的关键）
+                        new QuantumNotifyFacade(provider.GetRequiredService<NotifyService>(), taskCommand.Task.Id,
+                            ResolveSessionKey(taskCommand.Task)),
+                        new QuantumCustomDataFacade(provider.GetRequiredService<CustomDataService>(),
+                            provider.GetRequiredService<CustomDataTitleService>()),
+                        new QuantumFileFacade(SystemConfigHelper.GetSetting().FileDownloadRoot, taskHttp),
+                        // Docker 门面只放开「重启 + 探活」（证书续期后重载 nginx）；服务延迟解析，不碰 docker 的任务零开销
+                        new QuantumDockerFacade(() => provider.GetRequiredService<DockerManagementService>()));
+
+                    // 链接外部取消令牌（§1-2：TaskJob 把 Quartz 停机 ct 传下来）+ ForceEndTime 定时，二者任一触发即协作取消
+                    using var forceEndCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    if (taskCommand.ForceEndTime > DateTime.Now)
+                    {
+                        forceEndCts.CancelAfter(taskCommand.ForceEndTime - DateTime.Now);
+                        // 协作取消语义（计划 2.4）：到期发信号；任务不检查 ct 时线程保留至自行结束/进程重启
+                        forceEndCts.Token.Register(() => AppendLog(
+                            $"任务已达强制结束时间[{taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}]，已发出协作取消信号；若任务未及时响应，其线程将保留直至任务自行结束或进程重启。"));
+                    }
+                    else if (taskCommand.ForceEndTime != default && taskCommand.ForceEndTime <= DateTime.Now)
+                    {
+                        // 已过期（如编译耗时吃掉超时窗口）：立即取消，否则该任务将永远不会被取消
+                        buffer.AppendLine($"任务强制结束时间[{taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}]已过期，立即发出协作取消信号。");
+                        forceEndCts.Cancel();
+                    }
+
+                    try
+                    {
+                        await taskInstance.RunAsync(ctx, forceEndCts.Token);
+                        if (forceEndCts.Token.IsCancellationRequested)
+                        {
+                            // 脚本收到取消却正常返回：终态仍是 Canceled，不能因为「没抛异常」记成成功
+                            buffer.AppendLine(ct.IsCancellationRequested
+                                ? "任务收到停机取消信号，已在取消后自行结束。"
+                                : $"任务已在取消信号后自行结束（ForceEndTime={taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}）。");
+                            return Finished(TaskExecutionOutcome.Canceled,
+                                ct.IsCancellationRequested ? TaskFailureCode.CanceledByShutdown : TaskFailureCode.CanceledByForceEndTime,
+                                ct.IsCancellationRequested ? "停机取消信号已发出，脚本在取消后自行结束" : "达到强制结束时间，脚本在取消后自行结束");
+                        }
+                        return Finished(TaskExecutionOutcome.Succeeded, TaskFailureCode.None, null);
+                    }
+                    catch (OperationCanceledException) when (forceEndCts.Token.IsCancellationRequested)
+                    {
+                        var byShutdown = ct.IsCancellationRequested;
+                        buffer.AppendLine(byShutdown
+                            ? "任务收到停机取消信号，协作取消生效。"
+                            : $"任务已达强制结束时间[{taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}]，协作取消生效。");
+                        return Finished(TaskExecutionOutcome.Canceled,
+                            byShutdown ? TaskFailureCode.CanceledByShutdown : TaskFailureCode.CanceledByForceEndTime,
+                            byShutdown ? "停机取消信号，协作取消生效" : $"达到强制结束时间 {taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}，协作取消生效");
+                    }
+                    catch (Exception e)
+                    {
+                        buffer.AppendLine("task execution warning or exception information：");
+                        buffer.AppendLine("MessageAsync：" + e.Message);
+                        buffer.AppendLine("StackTrace：" + e.StackTrace);
+                        // 堆栈只留在受权限控制的日志文件里；入库/入通知的是这一份安全摘要
+                        return Finished(TaskExecutionOutcome.Failed, TaskFailureCode.ScriptException,
+                            $"{taskCommand.Task.Name} 执行异常：{e.GetType().Name}: {e.Message}");
+                    }
                 }
-                return;
-            }
-            if (build.Errors.Count > 0)
-            {
-                buffer.AppendLine("任务脚本编译失败，已拒绝执行：");
-                foreach (var issue in build.Errors)
+                catch (Exception e)
                 {
-                    buffer.AppendLine($"  [第{issue.Line}行] {issue.Message}");
+                    // 引擎自身的意外故障（缓存/配置读取抛错等）：同样必须给确定终态，绝不默认成功
+                    buffer.AppendLine($"任务执行链路异常：{e.Message}");
+                    buffer.AppendLine("StackTrace：" + e.StackTrace);
+                    return Finished(TaskExecutionOutcome.Failed, TaskFailureCode.EngineFault,
+                        $"执行链路异常：{e.GetType().Name}: {e.Message}");
                 }
-                return;
-            }
-
-            // §1-2：占用执行槽位跑脚本（拿到才计数；等票超时则直通放行，避免无声卡死）
-            using var slot = await AcquireExecutionSlotAsync(msg => buffer.AppendLine(msg));
-            using var lease = ScriptBuildService.Acquire(source, scriptFile);
-            IQuantumTask taskInstance;
-            try
-            {
-                taskInstance = lease.CreateInstance();
-            }
-            catch (Exception e)
-            {
-                buffer.AppendLine($"任务程序集加载失败：{e.Message}");
-                return;
-            }
-
-            // 每次执行独立 DI scope（门面直调 scoped 服务），结束即释放；HttpClient 改为按代理开关缓存复用（§1-13），不随执行释放
-            await using var scopeDisposer = ScopeDisposer.Capture(TaskPluginHost.CreateScope());
-            var provider = scopeDisposer.Scope.ServiceProvider;
-            // 实时日志回调与取消信号回调可能并发写：统一串行化（缓冲内建锁）
-            void AppendLog(string line) => buffer.AppendLine(line);
-            // 文件门面与 ctx.Http 复用同一 HttpClient（代理/超时一致），根目录取自系统配置（缺省 ./downloads）
-            var taskHttp = CreateTaskHttpClient(taskCommand.Task.EnableProxy);
-            var ctx = new QuantumTaskContext(
-                string.IsNullOrEmpty(taskCommand.SubTaskName) ? taskCommand.Task.Name : taskCommand.SubTaskName,
-                taskCommand.Task.EnableProxy,
-                taskCommand.Task.EnablePush,
-                BuildVariables(taskCommand.Envs),
-                AppendLog,
-                taskHttp,
-                new QuantumEnvFacade(provider.GetRequiredService<EnvService>()),
-                // 门面持有双键（§2.2）：taskId 供选项载荷根部注入（点选精确路由用真实任务 Id，不受会话名改名影响）；
-                // sessionKey = 任务配置的会话名（Trim）‖ 任务 Id，出站消息全部落入该会话（合并归组的关键）
-                new QuantumNotifyFacade(provider.GetRequiredService<NotifyService>(), taskCommand.Task.Id,
-                    ResolveSessionKey(taskCommand.Task)),
-                new QuantumCustomDataFacade(provider.GetRequiredService<CustomDataService>(),
-                    provider.GetRequiredService<CustomDataTitleService>()),
-                new QuantumFileFacade(SystemConfigHelper.GetSetting().FileDownloadRoot, taskHttp),
-                // Docker 门面只放开「重启 + 探活」（证书续期后重载 nginx）；服务延迟解析，不碰 docker 的任务零开销
-                new QuantumDockerFacade(() => provider.GetRequiredService<DockerManagementService>()));
-
-            // 链接外部取消令牌（§1-2：TaskJob 把 Quartz 停机 ct 传下来）+ ForceEndTime 定时，二者任一触发即协作取消
-            using var forceEndCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            if (taskCommand.ForceEndTime > DateTime.Now)
-            {
-                forceEndCts.CancelAfter(taskCommand.ForceEndTime - DateTime.Now);
-                // 协作取消语义（计划 2.4）：到期发信号；任务不检查 ct 时线程保留至自行结束/进程重启
-                forceEndCts.Token.Register(() => AppendLog(
-                    $"任务已达强制结束时间[{taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}]，已发出协作取消信号；若任务未及时响应，其线程将保留直至任务自行结束或进程重启。"));
-            }
-            else if (taskCommand.ForceEndTime != default && taskCommand.ForceEndTime <= DateTime.Now)
-            {
-                // 已过期（如编译耗时吃掉超时窗口）：立即取消，否则该任务将永远不会被取消
-                buffer.AppendLine($"任务强制结束时间[{taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}]已过期，立即发出协作取消信号。");
-                forceEndCts.Cancel();
-            }
-
-            try
-            {
-                await taskInstance.RunAsync(ctx, forceEndCts.Token);
-                if (forceEndCts.Token.IsCancellationRequested)
+                finally
                 {
-                    buffer.AppendLine(ct.IsCancellationRequested
-                        ? "任务收到停机取消信号，已在取消后自行结束。"
-                        : $"任务已在取消信号后自行结束（ForceEndTime={taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}）。");
+                    Logs.TryRemove(fileName, out _);
                 }
-            }
-            catch (OperationCanceledException) when (forceEndCts.Token.IsCancellationRequested)
-            {
-                buffer.AppendLine(ct.IsCancellationRequested
-                    ? "任务收到停机取消信号，协作取消生效。"
-                    : $"任务已达强制结束时间[{taskCommand.ForceEndTime:yyyy/MM/dd HH:mm:ss}]，协作取消生效。");
-            }
-            catch (Exception e)
-            {
-                buffer.AppendLine("task execution warning or exception information：");
-                buffer.AppendLine("MessageAsync：" + e.Message);
-                buffer.AppendLine("StackTrace：" + e.StackTrace);
-            }
-            finally
-            {
-                Logs.TryRemove(fileName, out _);
             }
         });
     }

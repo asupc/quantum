@@ -260,27 +260,38 @@ public class MessageProcess
             }
             foreach (var item in taskCommandSteps)
             {
-                LogServiceHelper.Logs.Enqueue(new LogModel
+                var trigLog = new LogModel
                 {
                     CreateTime = DateTime.Now,
                     LogType = LogType.指令触发,
                     Operator = $"{message.user_name}({message.user_id})",
                     Remark = message.message,
-                    Success = true,
+                    // 与任务日志同口径：真实终态由执行结果回填，不再预置成功
+                    Success = false,
                     Title = item.Task.Name + (string.IsNullOrEmpty(item.SubTaskName) ? "" : "-" + item.SubTaskName),
                     DirectoryName = TaskExcuteService.LogDirNameFrom(item.Task.FileName),
                     LogPath = $"{item.CreateTime:yyyyMMddHHmmssfff}.log"
-                });
+                };
                 taskList.Add(Task.Run(async () =>
                 {
                     if (!string.IsNullOrEmpty(item.Task.TaskStartNotify) && (!item.IsChildTask))
                     {
                         message.SendMessage(item.Task.TaskStartNotify, item.Task.TextToPicture);
                     }
-                    await item.Run();
-                    if (!string.IsNullOrEmpty(item.Task.TaskEndNotify) && !item.HasChildTask)
+                    var result = await item.Run();
+                    result.ApplyToLog(trigLog);
+                    // 执行结束后再入队：日志线程每 3 秒排空一次，早入队会把初始 Success 写进库
+                    LogServiceHelper.Logs.Enqueue(trigLog);
+                    if (item.HasChildTask)
                     {
-                        message.SendMessage(item.Task.TaskEndNotify, item.Task.TextToPicture);
+                        return;
+                    }
+                    if (!string.IsNullOrEmpty(item.Task.TaskEndNotify))
+                    {
+                        // 完成文案只在结果成功时发送；失败时回一条同位置的安全摘要，避免「静默失败」
+                        message.SendMessage(result.IsSuccess
+                            ? item.Task.TaskEndNotify
+                            : $"任务「{item.Task.Name}」执行失败（{result.OutcomeLabel}）：{result.SafeSummary}", item.Task.TextToPicture);
                     }
                 }));
             }

@@ -81,7 +81,9 @@ public class TaskService
             LogType = LogType.任务日志,
             Operator = "System",
             Remark = "执行脚本任务",
-            Success = true,
+            // 先置 false：真实终态由执行结果回填（G1）。旧实现这里写 true，
+            // 而 ExecTask 的失败分支被吞在方法内部，日志几乎永远是「成功」。
+            Success = false,
             Title = taskInfo.Name,
             // 与 TaskExcuteService 写入侧同款净化：日志目录名剔除路径分隔符，保证记录与落盘目录一致可读
             DirectoryName = TaskExcuteService.LogDirNameFrom(taskInfo.FileName),
@@ -109,12 +111,30 @@ public class TaskService
                 Envs = envs
             };
 
+            var result = await temp.Run(ct);
+            result.ApplyToLog(log);
+            // 异步入库有 3 秒窗口，必须在执行结束后再入队：入队早于回填会让落库线程捞到初始 Success=true
             LogServiceHelper.Logs.Enqueue(log);
-            await temp.Run(ct);
+
+            // 结果真实后才有意义的动作：只有确定失败才告警/送 AI，取消与被拒绝不算「脚本写错了」
+            if (result.Outcome == TaskExecutionOutcome.Failed || result.Outcome == TaskExecutionOutcome.Rejected)
+            {
+                // 任务失败通知（A5.4 接线，受众=管理员；App 离线走 REST 增量补拉兜底）
+                NotifyManagersAsync(taskInfo.Id, taskInfo.Name,
+                    $"任务「{taskInfo.Name}」执行失败（{result.OutcomeLabel}）：{result.SafeSummary}");
+                // AI 自动分析（2026-09-20 接线）：仅当全局设置打开「失败自动分析」时才会真正发起，否则空转返回
+                AgentAutoAnalyze.OnTaskFailure(taskInfo.Id, taskInfo.Name, taskInfo.FileName, result.SafeSummary);
+            }
         }
         catch (Exception e)
         {
             Console.WriteLine($"[{taskInfo.Name}]自动执行时出现异常：[{e.Message}]");
+            log.Success = false;
+            log.Severity = LogSeverity.Error;
+            log.Module = "Task";
+            log.Exception = e.StackTrace;
+            log.Remark = $"执行链路异常：{e.Message}";
+            LogServiceHelper.Logs.Enqueue(log);
             // 任务失败通知（A5.4 接线，受众=管理员；App 离线走厂商推送/通知中心兜底）
             NotifyManagersAsync(taskInfo.Id, taskInfo.Name, $"任务「{taskInfo.Name}」执行失败：{e.Message}");
             // AI 自动分析（2026-09-20 接线）：仅当全局设置打开「失败自动分析」时才会真正发起，否则空转返回
