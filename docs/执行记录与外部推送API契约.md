@@ -229,11 +229,12 @@ curl -X POST https://<host>/api/ExternalPush/messages \
 | **MySQL 迁移链** | 本地一次性 `mysql:8.4` 容器（localhost:33069，用后即删）实跑：**新库全链 Up** → 校验 6 表 + 5 唯一索引 + 2 标题列齐备；**Down 回 Init** → 新表与新列全部消失、业务表数回到 27；**旧库增量升级**（停在 Init 再 Up）→ 只应用新两条迁移。**未触碰生产 NAS MySQL** |
 | 大数据量压测 §3.6 | 各 50 000 行 `t_task_run`：SQLite 文件库 插入 0.16s／列表计数 0.26ms／分页 20 条 0.21ms／到期重试扫描 0.20ms／深分页 offset 20000 为 21.1ms；MySQL 8.4 插入 2.15s／计数 0.35ms／分页 3.4ms／到期扫描 3.2ms／深分页 offset 20000 为 32.2ms。`EXPLAIN` 实证命中 `IX_t_task_run_TaskId_CreatedAtUtc`（range + Backward index scan + Using index）与 `IX_t_task_run_Status_NextAttemptAtUtc`（range + Using index） |
 | `quantum-web` | `npm run test` 85/85 全绿、`npm run build` 通过 |
-| `quantum-app` | 全模块 `testDebugUnitTest` + `assembleDebug` 通过；Room **v7→v8 非破坏迁移**用真 SQLite 验证：新列可空出现、存量行为 NULL（不伪造标题）、`outbox` 待发正文与 `pickedKeys` 已选态活过迁移 |
+| `quantum-app` | 全模块 `testDebugUnitTest` 通过；Room **v7→v8 非破坏迁移**双重验证——JVM 侧用真 SQLite 造 v7 库跑迁移 SQL，**Android 15（API 35）模拟器真机升级**：先装旧版建出 v7 库并播种 `outbox` 待发正文与带 `pickedKeys` 的消息，覆盖安装新版后实测 `user_version` 7→8、`chat_message.sessionTitle` 与 `chat_session.displayTitle` 均建出、两条前置数据**逐字存活**、启动无崩溃。注：`assembleDebug` 首次构建因本检出残留了另一份检出（`D:\gitee\quantum`）的 Gradle 缓存/中间产物而失败（dexing 报"文件位于根目录之外"），`clean` + 删 `.gradle`/`build` 后重建成功 |
+| **生产 MySQL 升级** | 已执行（备份 → 恢复演练 → 沙箱预演 → 等价性证明 → 生产应用）。6 张新表 + 2 列 + 5 个新唯一索引落地；表数 29→35；业务行数与升级前逐项一致（`t_task=9`、`t_log=1109`、`t_chat_message=121`、`t_app_notification=60`、`t_env=28`）。详见 §10 |
 
 ### 7.2 仍未验证（不得当作已验证）
 
-- 生产 MySQL 实例上的实际升级执行与维护窗口演练（本机验证走的是一次性容器）。
+- 生产 MySQL 的**应用侧验证**：库结构已升级，但线上镜像仍是升级前代码，新界面/新端点在正式镜像下的运行需随下次发布一起做。
 - 浏览器端与安卓真机的端到端点击行为（本轮为编译 + 单元/集成级验证，无真机）。
 - 第三方 SDK 实调与真实反向代理/TLS/限流配置下的行为（含 §6.5 与 R-08 的边缘层 413 边界）。
 - 真实生产数据量下的容量与增长评估（压测用的是合成数据）。
