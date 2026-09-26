@@ -85,7 +85,7 @@ export default {
     },
     methods: {
         titleOf(item) {
-            return sessionTitle(item.SessionKey, this.taskMap)
+            return sessionTitle(item.SessionKey, this.taskMap, item.SessionTitle)
         },
         previewOf(item) {
             // §3-10：预览纯文本已在 store 建行/改行时算好存 previewText，模板直读、不再逐行 parseRich

@@ -28,7 +28,7 @@
                         <div v-for="item in results" :key="item.Id" class="search-item"
                             @click="openResult(item)">
                             <div class="search-item-head">
-                                <span class="search-session">{{ titleOf(item.SessionKey) }}</span>
+                                <span class="search-session">{{ titleOf(item) }}</span>
                                 <span class="search-time">{{ item.CreateTime }}</span>
                             </div>
                             <div class="search-text">{{ preview(item) }}</div>
@@ -129,8 +129,8 @@ export default {
                 this.searchLoading = false
             }
         },
-        titleOf(sessionKey) {
-            return sessionTitle(sessionKey || '', this.taskMap)
+        titleOf(item) {
+            return sessionTitle(item?.SessionKey || '', this.taskMap, item?.SessionTitle)
         },
         preview(item) {
             const text = stripMarkup(item.ContentText || item.Content || '')

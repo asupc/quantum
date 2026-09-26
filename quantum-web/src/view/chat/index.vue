@@ -61,7 +61,7 @@ export default {
             'currentMessages', 'currentSession', 'latestOptionsSeq', 'hasMoreEarlier'
         ]),
         title() {
-            return sessionTitle(this.currentKey, this.taskMap)
+            return sessionTitle(this.currentKey, this.taskMap, this.currentSession?.SessionTitle)
         }
     },
     created() {

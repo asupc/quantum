@@ -1,16 +1,17 @@
 <template>
     <n-drawer :show="show" :width="760" placement="right" @update:show="v => emit('update:show', v)">
         <n-drawer-content closable :title="`执行记录 · ${task && task.Name ? task.Name : ''}`">
-            <template #header-extra>
-                <n-button size="small" tertiary @click="reload">刷新</n-button>
-            </template>
-
             <n-space vertical size="small">
-                <n-space align="center" size="small">
-                    <span class="muted">状态</span>
-                    <n-select v-model:value="StatusFilter" :options="StatusOptions" size="tiny" style="width: 150px"
-                        clearable @update:value="() => loadRuns(1)" />
-                    <span class="muted">共 {{ Total }} 条</span>
+                <!-- NDrawerContent 只有 header/default/footer 三个插槽，没有 header-extra，
+                     故刷新按钮放在正文首行（写在 #header-extra 里会被静默丢弃） -->
+                <n-space align="center" justify="space-between" style="width: 100%">
+                    <n-space align="center" size="small">
+                        <span class="muted">状态</span>
+                        <n-select v-model:value="StatusFilter" :options="StatusOptions" size="tiny"
+                            style="width: 150px" clearable @update:value="() => loadRuns(1)" />
+                        <span class="muted">共 {{ Total }} 条</span>
+                    </n-space>
+                    <n-button size="tiny" tertiary @click="reload">刷新</n-button>
                 </n-space>
 
                 <n-data-table :columns="RunColumns" :data="Runs" size="small" :bordered="true" :row-key="r => r.Id"
@@ -44,6 +45,10 @@
                             <n-button v-if="Detail.LogAvailable" size="tiny" tertiary
                                 @click="openLog(Detail.LogId)">查看实时日志</n-button>
                             <span v-else class="muted">日志已清理或尚未落库</span>
+                        </n-descriptions-item>
+                        <n-descriptions-item label="重新执行" :span="2">
+                            <n-button size="tiny" tertiary @click="rerun">按当前脚本与环境变量再跑一次</n-button>
+                            <span class="muted" style="margin-left: 8px">产生新的执行记录，不并入本条执行链、不占重试次数</span>
                         </n-descriptions-item>
                     </n-descriptions>
 
@@ -104,9 +109,14 @@
 <script>
 import { h } from 'vue'
 import { useMessage } from 'naive-ui'
-import { GetTaskRuns, GetTaskRunDetail, GetTaskRunPolicy, PutTaskRunPolicy } from '@/api/taskRun.js'
+import { GetTaskRuns, GetTaskRunDetail, GetTaskRunPolicy, PutTaskRunPolicy, PostTaskRunRetry } from '@/api/taskRun.js'
 import { LogDetails } from '@/api/logs.js'
-import { runStatusMeta, triggerSourceLabel, formatElapsed, formatUtcToLocal, summaryOr, backoffSecondsFor } from '@/utils/taskRun.js'
+import { runStatusMeta, triggerSourceLabel, formatElapsed, formatUtcToLocal, summaryOr, backoffSecondsFor, hasOpenChain } from '@/utils/taskRun.js'
+
+const AutoIntervalMs = 2000
+const AutoWindowMs = 5 * 60 * 1000
+// 连续判空多少轮才停轮询（覆盖「已判失败但重试尚未排定」的写入间隙）
+const AutoIdleTicksToStop = 4
 
 export default {
     name: 'RunHistoryDrawer',
@@ -124,6 +134,10 @@ export default {
             Total: 0,
             Page: 1,
             PageSize: 20,
+            // 自动刷新：抽屉内有活动/待重试的行时按轮询刷新，超过 AutoUntil 即停（退避可达小时级，不能无限轮询）
+            AutoTimer: null,
+            AutoIdleTicks: 0,
+            AutoUntil: 0,
             StatusFilter: null,
             Detail: null,
             Policy: null,
@@ -158,10 +172,14 @@ export default {
     watch: {
         show(v) {
             if (v) this.reload()
+            else this.stopAutoRefresh()
         },
         task() {
             if (this.show) this.reload()
         }
+    },
+    unmounted() {
+        this.stopAutoRefresh()
     },
     methods: {
         statusMeta: runStatusMeta,
@@ -177,6 +195,7 @@ export default {
             return summaryOr(run.Status, run.SafeSummary)
         },
         reload() {
+            this.AutoUntil = Date.now() + AutoWindowMs
             if (this.focusRunId) {
                 this.openRun(this.focusRunId)
             } else {
@@ -186,6 +205,35 @@ export default {
                 this.loadPolicy()
             }
             return this.loadRuns(1)
+        },
+        syncAutoRefresh() {
+            if (!this.show || Date.now() > this.AutoUntil) {
+                return this.stopAutoRefresh()
+            }
+            if (hasOpenChain(this.Runs)) {
+                this.AutoIdleTicks = 0
+                if (!this.AutoTimer) this.AutoTimer = setInterval(() => this.refreshAuto(), AutoIntervalMs)
+                return
+            }
+            // 「判失败」与「排定下一次重试」是先后两次写入：刚失败的那一瞬可能既非活动行也没有
+            // NextAttemptAtUtc，故连续多轮判空才停轮询，否则重试链会在页面上永远刷不出来
+            if (!this.AutoTimer) return
+            this.AutoIdleTicks += 1
+            if (this.AutoIdleTicks >= AutoIdleTicksToStop) this.stopAutoRefresh()
+        },
+        stopAutoRefresh() {
+            this.AutoIdleTicks = 0
+            if (this.AutoTimer) {
+                clearInterval(this.AutoTimer)
+                this.AutoTimer = null
+            }
+        },
+        refreshAuto() {
+            if (!this.show || Date.now() > this.AutoUntil) {
+                return this.stopAutoRefresh()
+            }
+            const detailId = this.Detail ? this.Detail.Run.Id : ''
+            this.loadRuns(this.Page).then(() => detailId ? this.openRun(detailId) : null)
         },
         loadRuns(page) {
             this.Page = page || 1
@@ -197,6 +245,7 @@ export default {
             }).then(res => {
                 this.Runs = (res && res.Data) || []
                 this.Total = (res && res.TotalCount) || 0
+                this.syncAutoRefresh()
             })
         },
         openRun(runId) {
@@ -217,6 +266,29 @@ export default {
                 return this.loadRuns(this.Page)
             }).catch(() => {
                 that.$message.error('策略保存失败')
+            })
+        },
+        // 手动重新执行：受理式，返回新的根执行 Id；不复用旧执行链、不占旧链重试次数
+        rerun() {
+            const that = this
+            if (!this.Detail) {
+                return
+            }
+            this.$dialog.warning({
+                title: '重新执行确认',
+                content: '按当前脚本与环境变量重新执行一次，产生新的执行记录（不并入本条执行链，不占自动重试次数）。',
+                positiveText: '确认',
+                negativeText: '取消',
+                onPositiveClick: () => {
+                    PostTaskRunRetry(that.Detail.Run.Id).then(res => {
+                        that.$message.success('重新执行已受理')
+                        that.AutoUntil = Date.now() + AutoWindowMs
+                        that.openRun(res && res.RunId ? res.RunId : that.Detail.Run.Id)
+                        that.loadRuns(1)
+                    }).catch(() => {
+                        that.$message.error('重新执行受理失败')
+                    })
+                }
             })
         },
         openLog(logId) {

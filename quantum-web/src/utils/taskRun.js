@@ -56,6 +56,13 @@ export function summaryOr(status, safeSummary) {
     return runStatusMeta(status).label
 }
 
+// 执行链是否仍未收口（决定执行记录抽屉要不要继续自动刷新）：活动行 = Pending/Running；
+// 已排定下一次重试的失败行以 NextAttemptAtUtc 非空为标记。注意服务端「判失败」与「排定重试」
+// 是先后两次写入，刚落库的一瞬可能两头都不满足，故调用方须连续多轮判空才停轮询。
+export function hasOpenChain(runs) {
+    return (runs || []).some(r => r && (r.Status === 'Pending' || r.Status === 'Running' || !!r.NextAttemptAtUtc))
+}
+
 // 策略输入的服务端 clamp 口径在前端同样实现一份（仅用于即时反馈，真值仍以后端返回为准）
 export const PolicyLimits = {
     RetryCount: [0, 3],

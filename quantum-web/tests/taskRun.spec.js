@@ -7,6 +7,7 @@ import {
     summaryOr,
     clampPolicy,
     backoffSecondsFor,
+    hasOpenChain,
     PolicyLimits
 } from '../src/utils/taskRun.js'
 
@@ -79,5 +80,26 @@ describe('taskRun 执行记录展示口径', () => {
         expect(backoffSecondsFor(60, 2)).toBe(120)
         expect(backoffSecondsFor(3600, 4)).toBe(3600)
         expect(backoffSecondsFor(0, 1)).toBe(30)
+    })
+})
+
+// 抽屉自动刷新的判据：执行链是否仍未收口（漏判会让重试链在页面上永远刷不出来）
+describe('taskRun 执行链收口判定', () => {
+    it('活动行与已排定重试的失败行都算未收口', () => {
+        expect(hasOpenChain([{ Status: 'Running' }])).toBe(true)
+        expect(hasOpenChain([{ Status: 'Pending' }])).toBe(true)
+        expect(hasOpenChain([{ Status: 'Failed', NextAttemptAtUtc: '2026-09-27 00:54:45' }])).toBe(true)
+    })
+
+    it('终态且无排定重试才算收口', () => {
+        expect(hasOpenChain([{ Status: 'Failed' }])).toBe(false)
+        expect(hasOpenChain([{ Status: 'Failed', NextAttemptAtUtc: null }])).toBe(false)
+        expect(hasOpenChain([{ Status: 'Succeeded' }, { Status: 'Canceled' }])).toBe(false)
+    })
+
+    it('空列表与脏行不参与判定', () => {
+        expect(hasOpenChain([])).toBe(false)
+        expect(hasOpenChain(null)).toBe(false)
+        expect(hasOpenChain([null, {}])).toBe(false)
     })
 })
