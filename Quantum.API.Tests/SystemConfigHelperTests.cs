@@ -236,4 +236,56 @@ public class SystemConfigHelperTests : IDisposable
             File.GetLastWriteTimeUtc(SystemConfigHelper.configPath).AddSeconds(2));
         Assert.Equal("u2", SystemConfigHelper.GetSetting().UserName);
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("{broken")]
+    [InlineData("42")]
+    public void GetSetting_CorruptConfigFile_FailsFastWithFriendlyError(string content)
+    {
+        // 空文件/残缺 JSON（历史版本写一半崩溃的遗留）必须与「非对象」一样 fail-fast 且给出可操作提示，
+        // 而不是抛裸 JsonException；同时绝不自动覆盖坏文件
+        File.WriteAllText(SystemConfigHelper.configPath, content);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => SystemConfigHelper.GetSetting());
+
+        Assert.Contains("不是 JSON 对象", ex.Message);
+        Assert.Equal(content, File.ReadAllText(SystemConfigHelper.configPath));
+    }
+
+    [Fact]
+    public void SetSetting_AtomicWrite_LeavesNoTempResidue()
+    {
+        // 原子替换：先写 *.tmp 再 rename，正常路径结束后目录里只应剩配置文件本身
+        SystemConfigHelper.SetSetting(new Setting { UserName = "u1", PassWord = "p", Port = 5088 });
+        SystemConfigHelper.SetSetting(new Setting { UserName = "u2", PassWord = "p", Port = 5088 });
+
+        var files = Directory.GetFiles(Path.GetDirectoryName(SystemConfigHelper.configPath)!);
+        Assert.All(files, f => Assert.Equal("appsettings.json", Path.GetFileName(f)));
+    }
+
+    [Fact]
+    public void SetSetting_ConcurrentWriters_FileRemainsConsistent()
+    {
+        // 写侧互斥下的不变量：全程没有写坏文件；最终盘上内容可解析，
+        // 且缓存与磁盘一致（无「A 文本 @ B mtime」错配导致读到旧值）
+        const int writers = 4, rounds = 5;
+        var barrier = new System.Threading.Barrier(writers);
+        var tasks = Enumerable.Range(0, writers).Select(t => Task.Run(() =>
+        {
+            barrier.SignalAndWait();
+            for (var i = 0; i < rounds; i++)
+            {
+                var setting = SystemConfigHelper.GetSetting();
+                setting.Footer = $"f-{t}-{i}";
+                SystemConfigHelper.SetSetting(setting);
+            }
+        })).ToArray();
+        Task.WaitAll(tasks);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(SystemConfigHelper.configPath));
+        var footerOnDisk = doc.RootElement.GetProperty("Quantum").GetProperty("Footer").GetString();
+        Assert.StartsWith("f-", footerOnDisk);
+        Assert.Equal(footerOnDisk, SystemConfigHelper.GetSetting().Footer);
+    }
 }

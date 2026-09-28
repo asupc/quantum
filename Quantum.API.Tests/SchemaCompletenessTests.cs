@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Quantum.Data;
 using Xunit;
 
@@ -59,14 +60,21 @@ public class SchemaCompletenessTests : IDisposable
         foreach (var table in new[]
                  {
                      "t_task_run", "t_task_failure_policy", "t_task_alert_state", "t_task_alert_event",
-                     "t_external_push_credential", "t_external_push_request"
+                     "t_external_push_credential", "t_external_push_request",
+                     "t_channel_account", "t_channel_binding", "t_channel_cursor",
+                     "t_channel_inbox", "t_channel_outbox", "t_channel_reply_route", "t_channel_allowed_command"
                  })
         {
             Execute($"DROP TABLE {table}");
         }
 
         Assert.False(DbInitializer.HasFullCurrentSchema(_db));
-        // 整链都算挂起——此时若按"有代理表即视为完整"的旧判定回填，三条新表永远不会被建出来
-        Assert.Equal(3, _db.Database.GetPendingMigrations().Count());
+        // 整链都算挂起；新增通道迁移后不能把未创建的新表回填为已应用。
+        // 计数按「本上下文迁移类的总数」推导，不写死数字——否则每加一条迁移都要来改一次断言。
+        var total = typeof(QuantumSqliteDbContext).Assembly.GetTypes()
+            .Count(t => t.Namespace == "Quantum.Migrations.SqliteMigrations"
+                        && typeof(Migration).IsAssignableFrom(t) && !t.IsAbstract);
+        Assert.True(total > 0, "未找到 SQLite 侧迁移类，断言失去意义");
+        Assert.Equal(total, _db.Database.GetPendingMigrations().Count());
     }
 }
