@@ -1,5 +1,5 @@
 <template>
-    <div class="rich-text" :class="{ 'is-clamped': clamped }" v-html="html"></div>
+    <div class="rich-text" :class="{ 'is-clamped': clamped }" v-html="html" v-bind="$attrs"></div>
     <button v-if="foldable" class="fold-btn" type="button" @click="toggleFold">
         {{ clamped ? '展开全文' : '收起' }}
     </button>
@@ -22,6 +22,9 @@ function escapeHtml(text) {
 
 export default {
     name: 'RichText',
+    // 根节点是 fragment（正文 + 折叠按钮），Vue 无法自动继承 class 等属性：
+    // 显式关掉自动继承，并把 $attrs 绑到正文根节点上，保证父级样式类（如 .notify-body）生效。
+    inheritAttrs: false,
     props: {
         text: {
             type: String,

@@ -601,7 +601,7 @@
             resetMenus() {
                 this.$dialog.warning({
                     title: '确认重置',
-                    content: '确定要重置菜单到默认状态吗？这将恢复所有菜单项。',
+                    content: '确定要按默认结构重置菜单吗？菜单层级会回到 menu.json 的定义，但你标记为隐藏的菜单项会保持隐藏。',
                     positiveText: '确定',
                     negativeText: '取消',
                     onPositiveClick: () => {

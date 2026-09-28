@@ -42,7 +42,8 @@ const VIEW_COMPONENTS = {
     'docker/networks': () => import('@/view/docker/networks.vue'),
     'docker/volumes': () => import('@/view/docker/volumes.vue'),
     // G-Push：外部推送接入凭据管理（菜单由「菜单管理」页登记 component=external-push/index）
-    'external-push/index': () => import('@/view/external-push/index.vue')
+    'external-push/index': () => import('@/view/external-push/index.vue'),
+    'channel/index': () => import('@/view/channel/index.vue')
 }
 
 // 组件路径 → 组件自身 `name`（Options API 的 name 选项）。keep-alive 的 :include 只匹配**组件 name**、
@@ -71,7 +72,8 @@ const VIEW_COMPONENT_NAMES = {
     'docker/images': 'DockerImages',
     'docker/networks': 'DockerNetworks',
     'docker/volumes': 'DockerVolumes',
-    'external-push/index': 'ExternalPushIndex'
+    'external-push/index': 'ExternalPushIndex',
+    'channel/index': 'ChannelIndex'
 }
 
 // 已移除功能对应的菜单 component：库中旧菜单（menu.json 仅空库时重播）由前端统一过滤，

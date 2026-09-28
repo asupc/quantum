@@ -1,5 +1,5 @@
 <template>
-    <n-drawer :show="show" :width="760" placement="right" @update:show="v => emit('update:show', v)">
+    <n-drawer :show="show" :width="760" placement="right" @update:show="$emit('update:show', $event)">
         <n-drawer-content closable :title="`执行记录 · ${task && task.Name ? task.Name : ''}`">
             <n-space vertical size="small">
                 <!-- NDrawerContent 只有 header/default/footer 三个插槽，没有 header-extra，
@@ -14,8 +14,9 @@
                     <n-button size="tiny" tertiary @click="reload">刷新</n-button>
                 </n-space>
 
+                <!-- 固定布局限制状态、摘要等列的宽度；摘要超长时由 tooltip 展示全文 -->
                 <n-data-table :columns="RunColumns" :data="Runs" size="small" :bordered="true" :row-key="r => r.Id"
-                    :max-height="300" @update:page="loadRuns" :pagination="Pagination" />
+                    :max-height="300" table-layout="fixed" @update:page="loadRuns" :pagination="Pagination" />
 
                 <template v-if="Detail">
                     <n-divider style="margin: 6px 0">执行详情</n-divider>
@@ -146,19 +147,19 @@ export default {
                 .map(k => ({ label: runStatusMeta(k).label, value: k })),
             RunColumns: [
                 {
-                    title: '状态', key: 'Status', width: 100, render: (row) => h('span',
+                    title: '状态', key: 'Status', width: 64, render: (row) => h('span',
                         { style: { color: runStatusMeta(row.Status).color } }, runStatusMeta(row.Status).label)
                 },
-                { title: '尝试', key: 'Attempt', width: 60, align: 'center' },
-                { title: '触发源', key: 'TriggerSource', width: 90, render: (row) => triggerSourceLabel(row.TriggerSource) },
-                { title: '开始(本地)', key: 'StartedAtUtc', width: 160, render: (row) => formatUtcToLocal(row.StartedAtUtc || row.CreatedAtUtc) },
-                { title: '耗时', key: 'ElapsedMs', width: 100, render: (row) => formatElapsed(row.ElapsedMs) },
+                { title: '尝试', key: 'Attempt', width: 56, align: 'center' },
+                { title: '触发源', key: 'TriggerSource', width: 82, render: (row) => triggerSourceLabel(row.TriggerSource) },
+                { title: '开始(本地)', key: 'StartedAtUtc', width: 190, render: (row) => formatUtcToLocal(row.StartedAtUtc || row.CreatedAtUtc) },
+                { title: '耗时', key: 'ElapsedMs', width: 120, render: (row) => formatElapsed(row.ElapsedMs) },
                 {
-                    title: '摘要', key: 'SafeSummary', ellipsis: { tooltip: true }, minWidth: 160,
+                    title: '摘要', key: 'SafeSummary', ellipsis: { tooltip: true }, width: 100,
                     render: (row) => summaryOr(row.Status, row.SafeSummary)
                 },
                 {
-                    title: '', key: 'op', width: 60, align: 'center', render: (row) => h('a',
+                    title: '', key: 'op', width: 68, align: 'center', render: (row) => h('a',
                         { style: { cursor: 'pointer', color: 'var(--accent)' }, onClick: () => this.openRun(row.Id) }, '详情')
                 }
             ]

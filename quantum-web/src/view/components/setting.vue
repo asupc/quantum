@@ -102,7 +102,10 @@
                                     通知消息发送节流：发送队列每 N×0.1 秒投递一条，防止通知过频刷屏。
                                 </n-tooltip>
                             </n-input-group-label>
-                            <n-input v-model:value="SystemConfig.MessageInterval" placeholder="如 5 = 每 0.5 秒一条" />
+                            <!-- 后端这两个字段是数字，n-input 的 value 只接受字符串：显式双向转换，避免类型告警与保存时漂移 -->
+                            <n-input :value="String(SystemConfig.MessageInterval ?? '')"
+                                @update:value="v => SystemConfig.MessageInterval = Number(v) || 0"
+                                placeholder="如 5 = 每 0.5 秒一条" />
                         </n-input-group>
                     </n-form-item>
                 </n-gi>
@@ -117,22 +120,9 @@
                                     消息处理使用队列模式，间隔 N 毫秒处理一条。
                                 </n-tooltip>
                             </n-input-group-label>
-                            <n-input v-model:value="SystemConfig.MessageQueueInterval" placeholder="毫秒，默认 100" />
-                        </n-input-group>
-                    </n-form-item>
-                </n-gi>
-                <n-gi :span="12">
-                    <n-form-item label="黑名单用户">
-                        <n-input-group>
-                            <n-input-group-label>
-                                <n-tooltip trigger="hover" placement="top" style="max-width: 400px">
-                                    <template #trigger>
-                                        <i class="fa-solid fa-circle-exclamation" style="color: crimson"></i>
-                                    </template>
-                                    黑名单用户 ID，多个用逗号隔开；名单内用户发来的指令消息将被忽略。
-                                </n-tooltip>
-                            </n-input-group-label>
-                            <n-input placeholder="用户 ID，多个用逗号隔开" v-model:value="SystemConfig.BlackQQ" />
+                            <n-input :value="String(SystemConfig.MessageQueueInterval ?? '')"
+                                @update:value="v => SystemConfig.MessageQueueInterval = Number(v) || 0"
+                                placeholder="毫秒，默认 100" />
                         </n-input-group>
                     </n-form-item>
                 </n-gi>

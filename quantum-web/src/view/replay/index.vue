@@ -77,11 +77,6 @@
                     <n-select clearable v-model:value="EditCommandModal.Data.MessageType"
                         :options="enumOptions('MessageType')" />
                 </n-form-item>
-                <n-form-item label="通信类型" path="CommunicationType">
-                    <n-select clearable placeholder="指定通讯类型，如选择QQ，则只有QQ用户发送指令才回复"
-                        v-model:value="EditCommandModal.Data.CommunicationType"
-                        :options="enumOptions('CommunicationType')" />
-                </n-form-item>
                 <n-form-item label="是否启用">
                     <n-checkbox v-model:checked="EditCommandModal.Data.Enable">启用</n-checkbox>
                 </n-form-item>
@@ -144,24 +139,6 @@
                     'MessageType',
                     row.MessageType
                   ) || '文本'
-                )
-              ])
-            }
-          },
-          {
-            title: '通讯类型',
-            key: 'CommunicationType',
-            width: 90,
-            align: 'center',
-            render: (row) => {
-              return h('div', [
-                h(
-                  'span',
-                  getEnumKey(
-                    this.AllEnums,
-                    'CommunicationType',
-                    row.CommunicationType
-                  ) || '全部'
                 )
               ])
             }
@@ -293,7 +270,6 @@
           this.EditCommandModal.Data = {
             Key: '',
             Message: '',
-            CommunicationType: null,
             MessageType: 1,
             Enable: true
           }

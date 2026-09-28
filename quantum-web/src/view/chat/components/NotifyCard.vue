@@ -121,7 +121,9 @@ export default {
     font-weight: 700;
 }
 
-.notify-body {
+/* .notify-body 是传给子组件 RichText 根节点的类（多根 fragment 组件不携带父级 scopeId），
+   故必须用 :deep() 让本组件的 scoped 规则命中，否则正文 3 行截断与字号全部失效。 */
+:deep(.notify-body) {
     margin-top: 4px;
     font-size: 13.5px;
     color: var(--text);
