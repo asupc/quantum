@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Quantum.Entities.Model;
@@ -39,6 +39,13 @@ public interface IQuantumDbContext
     DbSet<TaskAlertEventModel> TaskAlertEvents { get; set; }
     DbSet<ExternalPushCredentialModel> ExternalPushCredentials { get; set; }
     DbSet<ExternalPushRequestModel> ExternalPushRequests { get; set; }
+    DbSet<ChannelAccountModel> ChannelAccounts { get; set; }
+    DbSet<ChannelBindingModel> ChannelBindings { get; set; }
+    DbSet<ChannelInboxModel> ChannelInboxes { get; set; }
+    DbSet<ChannelCursorModel> ChannelCursors { get; set; }
+    DbSet<ChannelReplyRouteModel> ChannelReplyRoutes { get; set; }
+    DbSet<ChannelOutboxModel> ChannelOutboxes { get; set; }
+    DbSet<ChannelAllowedCommandModel> ChannelAllowedCommands { get; set; }
 
     DatabaseFacade Database { get; }
     EntityEntry Entry(object entity);

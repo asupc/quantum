@@ -560,6 +560,320 @@ namespace Quantum.Migrations.SqliteMigrations
                     b.ToTable("t_bookmark");
                 });
 
+            modelBuilder.Entity("Quantum.Entities.Model.ChannelAccountModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("BindingVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BotId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("CandidateAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CandidatePeerId")
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("ChallengeAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ChallengeExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChallengeHash")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CredentialCiphertext")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Platform")
+                        .IsUnique();
+
+                    b.ToTable("t_channel_account");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.ChannelAllowedCommandModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("CommandId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "CommandId")
+                        .IsUnique();
+
+                    b.ToTable("t_channel_allowed_command");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.ChannelBindingModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PeerId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("VerifiedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique();
+
+                    b.HasIndex("Platform")
+                        .IsUnique();
+
+                    b.ToTable("t_channel_binding");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.ChannelCursorModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long?>("QqSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("QqSessionId")
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WeixinCursorCiphertext")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique();
+
+                    b.ToTable("t_channel_cursor");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.ChannelInboxModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ClaimedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTime?>("FinishedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MessageId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(191)");
+
+                    b.Property<string>("MessageIndex")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("PeerId")
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RejectReason")
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("ReplyRouteId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(24)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "Status", "ReceivedAtUtc");
+
+                    b.HasIndex("AccountId", "EventType", "MessageId", "MessageIndex")
+                        .IsUnique();
+
+                    b.ToTable("t_channel_inbox");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.ChannelOutboxModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("AcceptedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BindingVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ClaimedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("MessageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PeerId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("PlatformMessageId")
+                        .HasColumnType("nvarchar(191)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ReplyRouteId")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(24)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReplyRouteId", "MessageSequence")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextAttemptAtUtc");
+
+                    b.ToTable("t_channel_outbox");
+                });
+
+            modelBuilder.Entity("Quantum.Entities.Model.ChannelReplyRouteModel", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("BindingVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContextTokenCiphertext")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("NextMessageSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PeerId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ReplyMessageId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(191)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "ExpiresAtUtc");
+
+                    b.ToTable("t_channel_reply_route");
+                });
+
             modelBuilder.Entity("Quantum.Entities.Model.ChatMessageModel", b =>
                 {
                     b.Property<string>("Id")
@@ -634,9 +948,6 @@ namespace Quantum.Migrations.SqliteMigrations
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(64)");
-
-                    b.Property<int?>("CommunicationType")
-                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("Enable")
                         .HasColumnType("INTEGER");

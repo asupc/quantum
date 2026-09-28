@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Quantum.Entities.Model;
 
 namespace Quantum.Data;
@@ -84,5 +84,21 @@ public static class QuantumModelConfiguration
 
         // 外部推送凭据按启用态检索（列表/校验路径）
         modelBuilder.Entity<ExternalPushCredentialModel>().HasIndex(n => n.Enabled);
+        // 每平台最多一个机器人、一个已验证私聊绑定；数据库约束防应用层绕过。
+        modelBuilder.Entity<ChannelAccountModel>().HasIndex(n => n.Platform).IsUnique();
+        modelBuilder.Entity<ChannelBindingModel>().HasIndex(n => n.Platform).IsUnique();
+        modelBuilder.Entity<ChannelBindingModel>().HasIndex(n => n.AccountId).IsUnique();
+        modelBuilder.Entity<ChannelCursorModel>().HasIndex(n => n.AccountId).IsUnique();
+        // 四段均控制 MySQL utf8mb4 索引长度；缺 ID/索引的事件不得进入执行链。
+        modelBuilder.Entity<ChannelInboxModel>()
+            .HasIndex(n => new { n.AccountId, n.EventType, n.MessageId, n.MessageIndex }).IsUnique();
+        modelBuilder.Entity<ChannelInboxModel>().HasIndex(n => new { n.AccountId, n.Status, n.ReceivedAtUtc });
+        modelBuilder.Entity<ChannelReplyRouteModel>().HasIndex(n => new { n.AccountId, n.ExpiresAtUtc });
+        modelBuilder.Entity<ChannelOutboxModel>()
+            .HasIndex(n => new { n.ReplyRouteId, n.MessageSequence }).IsUnique();
+        modelBuilder.Entity<ChannelOutboxModel>().HasIndex(n => new { n.Status, n.NextAttemptAtUtc });
+        modelBuilder.Entity<ChannelAllowedCommandModel>()
+            .HasIndex(n => new { n.AccountId, n.CommandId }).IsUnique();
+
     }
 }

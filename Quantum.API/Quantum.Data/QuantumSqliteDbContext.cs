@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Quantum.Entities.Model;
 using Quantum.Utils;
 
@@ -94,4 +94,11 @@ public class QuantumSqliteDbContext : DbContext, IQuantumDbContext
     public DbSet<ExternalPushCredentialModel> ExternalPushCredentials { get; set; }
 
     public DbSet<ExternalPushRequestModel> ExternalPushRequests { get; set; }
+    public DbSet<ChannelAccountModel> ChannelAccounts { get; set; }
+    public DbSet<ChannelBindingModel> ChannelBindings { get; set; }
+    public DbSet<ChannelInboxModel> ChannelInboxes { get; set; }
+    public DbSet<ChannelCursorModel> ChannelCursors { get; set; }
+    public DbSet<ChannelReplyRouteModel> ChannelReplyRoutes { get; set; }
+    public DbSet<ChannelOutboxModel> ChannelOutboxes { get; set; }
+    public DbSet<ChannelAllowedCommandModel> ChannelAllowedCommands { get; set; }
 }

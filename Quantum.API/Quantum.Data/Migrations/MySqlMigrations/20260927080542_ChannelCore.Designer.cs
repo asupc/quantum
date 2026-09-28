@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Quantum.Data;
 
@@ -10,9 +11,11 @@ using Quantum.Data;
 namespace Quantum.Migrations.MySqlMigrations
 {
     [DbContext(typeof(QuantumMySqlDbContext))]
-    partial class QuantumMySqlDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260927080542_ChannelCore")]
+    partial class ChannelCore
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -571,7 +574,6 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("int");
 
                     b.Property<string>("BotId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(128)");
 
                     b.Property<DateTime?>("CandidateAtUtc")
@@ -602,7 +604,6 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("Platform")
-                        .IsRequired()
                         .HasColumnType("nvarchar(16)");
 
                     b.Property<DateTime>("UpdatedAtUtc")
@@ -616,48 +617,21 @@ namespace Quantum.Migrations.MySqlMigrations
                     b.ToTable("t_channel_account");
                 });
 
-            modelBuilder.Entity("Quantum.Entities.Model.ChannelAllowedCommandModel", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("AccountId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<string>("CommandId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime(6)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AccountId", "CommandId")
-                        .IsUnique();
-
-                    b.ToTable("t_channel_allowed_command");
-                });
-
             modelBuilder.Entity("Quantum.Entities.Model.ChannelBindingModel", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("AccountId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("Active")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<string>("PeerId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("Platform")
-                        .IsRequired()
                         .HasColumnType("nvarchar(16)");
 
                     b.Property<DateTime?>("RevokedAtUtc")
@@ -686,7 +660,6 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("AccountId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<long?>("QqSequence")
@@ -715,7 +688,6 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("AccountId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Attempt")
@@ -728,18 +700,15 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("longtext");
 
                     b.Property<string>("EventType")
-                        .IsRequired()
                         .HasColumnType("nvarchar(32)");
 
                     b.Property<DateTime?>("FinishedAtUtc")
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("MessageId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(191)");
 
                     b.Property<string>("MessageIndex")
-                        .IsRequired()
                         .HasColumnType("nvarchar(160)");
 
                     b.Property<string>("PeerId")
@@ -755,7 +724,6 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Status")
-                        .IsRequired()
                         .HasColumnType("nvarchar(24)");
 
                     b.HasKey("Id");
@@ -777,7 +745,6 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("AccountId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("Attempts")
@@ -790,11 +757,9 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("ClientId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Content")
-                        .IsRequired()
                         .HasColumnType("longtext");
 
                     b.Property<DateTime>("CreatedAtUtc")
@@ -810,21 +775,18 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("PeerId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("PlatformMessageId")
                         .HasColumnType("nvarchar(191)");
 
                     b.Property<string>("Purpose")
-                        .IsRequired()
                         .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ReplyRouteId")
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Status")
-                        .IsRequired()
                         .HasColumnType("nvarchar(24)");
 
                     b.HasKey("Id");
@@ -843,7 +805,6 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("AccountId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("BindingVersion")
@@ -862,11 +823,9 @@ namespace Quantum.Migrations.MySqlMigrations
                         .HasColumnType("int");
 
                     b.Property<string>("PeerId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("ReplyMessageId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(191)");
 
                     b.HasKey("Id");
@@ -950,6 +909,9 @@ namespace Quantum.Migrations.MySqlMigrations
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("CommunicationType")
+                        .HasColumnType("int");
 
                     b.Property<bool>("Enable")
                         .HasColumnType("tinyint(1)");
