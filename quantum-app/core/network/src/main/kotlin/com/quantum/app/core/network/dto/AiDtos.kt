@@ -178,15 +178,15 @@ data class AiProposalDiagnostics(
 )
 
 /**
- * Task/script-list 树形节点（与后端 ScriptsFile 对齐：Title/Contextmenu/Children/Path 递归，
+ * Task/script-list 树形节点（与后端 ScriptsFile 的小写字段对齐：title/contextmenu/children/path 递归，
  * 目录节点 path=null、文件叶节点 path=相对路径）。「目标脚本」选择递归筛 .cs 叶节点。
  */
 @Serializable
 data class ScriptTreeDto(
-    @SerialName("Title") val title: String? = null,
-    @SerialName("Contextmenu") val contextmenu: Boolean = false,
-    @SerialName("Path") val path: String? = null,
-    @SerialName("Children") val children: List<ScriptTreeDto> = emptyList()
+    @SerialName("title") val title: String? = null,
+    @SerialName("contextmenu") val contextmenu: Boolean = false,
+    @SerialName("path") val path: String? = null,
+    @SerialName("children") val children: List<ScriptTreeDto> = emptyList()
 )
 
 /** 递归收集脚本树全部 .cs 叶节点相对路径（对齐 Web flattenScripts 语义：有 children 下钻、叶节点筛后缀）。 */

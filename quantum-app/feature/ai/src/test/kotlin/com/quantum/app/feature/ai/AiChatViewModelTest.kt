@@ -131,7 +131,12 @@ class AiChatViewModelTest {
                 path == "/api/AiAgent/default-model" ->
                     ok(mapOf("ProviderName" to "中转", "ModelId" to "glm-5.3", "ContextWindow" to 128000, "SupportsTools" to 1))
 
-                path == "/api/Task/script-list" -> ok(emptyList<Any>())
+                path == "/api/Task/script-list" -> ok(listOf(mapOf(
+                    "title" to "demo", "children" to listOf(mapOf(
+                        "title" to "fix.cs", "contextmenu" to true,
+                        "path" to "demo/fix.cs", "children" to null
+                    )), "path" to null
+                )))
 
                 path == "/api/AiAgent/proposals/p1/apply" -> {
                     // 模拟后端改动②：apply 回写 proposal 消息 Payload（状态→Applied）+ 追加结论文案
@@ -212,6 +217,12 @@ class AiChatViewModelTest {
     private fun startLoaded() {
         viewModel.start("c1")
         pumpUntil { !viewModel.state.value.loading }
+    }
+
+    @Test
+    fun startLoadsScriptOptionsFromLowercaseScriptTree() {
+        startLoaded()
+        assertEquals(listOf("demo/fix.cs"), viewModel.state.value.scriptOptions)
     }
 
     @Test

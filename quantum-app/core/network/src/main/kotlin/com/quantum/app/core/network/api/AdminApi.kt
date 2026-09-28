@@ -292,8 +292,8 @@ interface AdminApi {
     @GET("api/AiAgent/proposals/{id}/content")
     suspend fun aiProposalContent(@Path("id") id: String): EnvelopeDto<AiProposalContentDto>
 
-    /** 树形脚本清单（同一 Task/script-list 端点）：旧 [scriptList] 扁平 DTO 收不到 Children
-     *  （ignoreUnknownKeys 静默丢弃只剩顶层），AI「目标脚本」选择改用本方法 + flattenCsFiles。 */
+    /** 树形脚本清单（同一 Task/script-list 端点）：旧 [scriptList] 扁平 DTO 收不到 children，
+     *  AI「目标脚本」选择改用本方法 + flattenCsFiles。 */
     @GET("api/Task/script-list")
     suspend fun scriptTree(): EnvelopeDto<List<ScriptTreeDto>>
 

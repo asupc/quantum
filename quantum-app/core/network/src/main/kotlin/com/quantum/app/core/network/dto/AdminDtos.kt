@@ -228,7 +228,6 @@ data class DockerMemoryStatsDto(
 @Serializable
 data class SystemSettingDto(
     @SerialName("UserName") val userName: String? = null,
-    @SerialName("BlackQQ") val blackQQ: String? = null,
     @SerialName("AppKey") val appKey: String? = null,
     @SerialName("CommandTimeInterval") val commandTimeInterval: Int = 0,
     @SerialName("MessageQueueInterval") val messageQueueInterval: Int = 100,

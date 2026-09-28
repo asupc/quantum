@@ -388,13 +388,6 @@ fun SystemSettingScreen(onBack: () -> Unit, viewModel: AdminViewModel = hiltView
                 keyboardType = KeyboardType.Number,
                 error = numberError
             )
-            QuantumTextField(
-                value = current.blackQQ.orEmpty(),
-                onValueChange = { draft = current.copy(blackQQ = it) },
-                label = "黑名单用户",
-                placeholder = "用户 ID，多个用逗号隔开",
-                helper = "名单内用户发来的指令消息将被忽略"
-            )
             SettingSwitchRow("管理员登录时推送提醒", current.loginNotify) {
                 draft = current.copy(loginNotify = it)
             }
