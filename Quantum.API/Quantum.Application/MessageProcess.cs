@@ -32,11 +32,8 @@ public class MessageProcess
             return;
         }
         _setting = SystemConfigHelper.GetSetting();
-        if (!string.IsNullOrEmpty(_setting.BlackQQ) && _setting.BlackQQ.ToLower().Split(",").Any(n => n == message.user_id.ToLower()))
-        {
-            Console.WriteLine($"[{message.user_id}]黑名单用户");
-            return;
-        }
+        // 原「BlackQQ 黑名单」已删除：单管理员体系下 Web/App/通道三条链路的 user_id 恒为管理员本人，
+        // 该黑名单只能把唯一操作者静默丢弃（且只打 Console、不落日志、不回复），是个纯粹的自伤开关。
 
         SystemCommands = SystemCommandHelper.Get();
         // 单管理员体系：触发方恒为管理员（App 提交/通知接口均需 Manager 令牌），管理员系统指令直接放行
@@ -50,7 +47,8 @@ public class MessageProcess
             {
                 return;
             }
-            var commands = CacheManager.Get<CommandModel>().Where(n => n.Enable && (n.CommunicationType == null || n.CommunicationType == message.CommunicationType));
+            // 快捷回复不再按通讯类型隔离（CommandModel.CommunicationType 已删除）：单管理员模式下所有来源等价
+            var commands = CacheManager.Get<CommandModel>().Where(n => n.Enable);
             foreach (var item in commands)
             {
                 if (commandReg(item.Key, message.message, item.EnableRegex))

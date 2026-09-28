@@ -119,8 +119,48 @@ public static class SendMessageHelper
         };
         await AppPushDispatcher.SendChatMessageAsync(messageProccess.message, appContentType,
             messageProccess.message_text, messageProccess.SessionKey, messageProccess.Payload);
+        // 「从哪儿触发就回哪儿」：原路投递不再只放行纯文本——音频/图片/视频输出（如音乐搜索的 8 条链接）
+        // 此前被整批跳过，表现为任务在 App 里跑完、平台侧却毫无回音。非文本降级为文本替身，逐条发送。
+        if (messageProccess.ChannelReplyRouteId is { Length: > 0 })
+        {
+            var channelText = appContentType == "text"
+                ? messageProccess.message
+                : BuildChannelFallback(messageProccess, appContentType);
+            if (!string.IsNullOrWhiteSpace(channelText))
+                await AppPushDispatcher.QueueChannelReplyAsync(messageProccess.ChannelReplyRouteId, channelText);
+        }
         log.Remark += "\r\n通知结果：App推送。";
         LogServiceHelper.Logs.Enqueue(log);
+    }
+
+    /// <summary>
+    /// 媒体输出在原路通道上的文本替身：<c>[类型] 说明 公网链接</c>。
+    /// 只允许把公网可点开的 http(s) 地址发给平台；脚本给出的本地路径与内网/回环地址一律省略
+    /// （安全红线：凭据与内部地址不得离开本机），此时仅提示结果已在 App 生成。
+    /// </summary>
+    internal static string BuildChannelFallback(MessageProccessDTO message, string contentType)
+    {
+        var label = contentType switch
+        {
+            "image" => "图片", "video" => "视频", "audio" => "音频", _ => "附件"
+        };
+        var note = string.IsNullOrWhiteSpace(message.message_text) ? null : message.message_text.Trim();
+        var link = IsPublicHttpUrl(message.message) ? message.message.Trim() : null;
+        if (link is null && note is null) return $"[{label}] 结果已在 App 生成";
+        return link is null ? $"[{label}] {note}" : (note is null ? $"[{label}] {link}" : $"[{label}] {note} {link}");
+    }
+
+    /// <summary>公网 http(s) 判定：拒掉本机名/无点主机、<c>.local</c>，以及字面量 IP 里的私网与回环段。</summary>
+    internal static bool IsPublicHttpUrl(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)) return false;
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) return false;
+        if (uri.Host.Length == 0 || !uri.Host.Contains('.') ||
+            uri.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return false;
+        if (System.Net.IPAddress.TryParse(uri.Host, out var ip) &&
+            !Quantum.Application.Channels.ChannelNetwork.IsPublicIp(ip)) return false;
+        return true;
     }
 
 

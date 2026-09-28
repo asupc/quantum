@@ -35,6 +35,8 @@ public class SystemConfigService
         ddd.SecurityIssuer = "";
         ddd.SecurityAudience = "";
         ddd.SymmetricSecurityKey = "";
+        // 通道主密钥与 JWT 密钥同级别敏感：永不外发（设置页 Update 是白名单拷贝，本字段不可经页面回写）
+        ddd.ChannelMasterKey = "";
         // Open AppKey 属高敏凭据：已配置时以掩码返回（未配置保持空串）。
         // 此前 AppKey 直接置空返回，设置页一次保存就会被 PUT 清空——改为掩码约定。
         if (!string.IsNullOrEmpty(ddd.AppKey))
@@ -106,7 +108,6 @@ public class SystemConfigService
             || currentConfig.AllowedOrigins != setting.AllowedOrigins
             || currentConfig.EnableSwagger != setting.EnableSwagger;
 
-        currentConfig.BlackQQ = setting.BlackQQ;
         currentConfig.CommandTimeInterval = setting.CommandTimeInterval;
         currentConfig.MessageQueueInterval = Math.Max(1, setting.MessageQueueInterval);
         currentConfig.ServerPath = setting.ServerPath;

@@ -68,18 +68,19 @@ public static class TaskRunRecorder
 
         var taskId = string.IsNullOrEmpty(step.Task.Id) ? null : step.Task.Id;
         TaskRunModel run;
-        TaskRunService runs;
+        // 受理与领取共用同一存活作用域；不能把 scoped 服务带出 using 后再调用，
+        // 否则每条指令都会在执行脚本前因 DbContext 已释放而中断。
         using (var scope = _scopeFactory.CreateScope())
         {
-            runs = scope.ServiceProvider.GetRequiredService<TaskRunService>();
+            var runs = scope.ServiceProvider.GetRequiredService<TaskRunService>();
             run = await runs.AcceptAsync(taskId, step.Task.Name, step.Task.FileName, source, triggerRef,
                 step.Task.Manager);
-        }
 
-        if (!await runs.ClaimAsync(run.Id))
-        {
-            // 领取失败说明该记录已被别处收口；本次仍照常执行，但不再写第二份终态
-            return await step.Run(ct);
+            if (!await runs.ClaimAsync(run.Id))
+            {
+                // 领取失败说明该记录已被别处收口；本次仍照常执行，但不再写第二份终态
+                return await step.Run(ct);
+            }
         }
 
         var result = await step.Run(ct);

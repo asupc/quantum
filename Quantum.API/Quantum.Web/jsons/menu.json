@@ -4,7 +4,7 @@
     "name": "chat",
     "component": "Main",
     "meta": {
-      "title": "会话",
+      "title": "消息中心",
       "icon": "fa-solid fa-comments"
     },
     "children": [
@@ -29,6 +29,28 @@
         },
         "children": [],
         "sort": 2
+      },
+      {
+        "path": "/settings/channel",
+        "name": "channel-index",
+        "component": "channel/index",
+        "meta": {
+          "title": "消息通道",
+          "icon": "fa-solid fa-tower-cell"
+        },
+        "children": [],
+        "sort": 3
+      },
+      {
+        "path": "/external-push/index",
+        "name": "external-push-index",
+        "component": "external-push/index",
+        "meta": {
+          "title": "外部推送",
+          "icon": "fa-solid fa-paper-plane"
+        },
+        "children": [],
+        "sort": 4
       }
     ],
     "sort": 2
@@ -61,8 +83,8 @@
     "name": "task",
     "component": "Main",
     "meta": {
-      "title": "指令中心",
-      "icon": "fa-solid fa-terminal"
+      "title": "任务与脚本",
+      "icon": "fa-solid fa-list-check"
     },
     "children": [
       {
@@ -70,19 +92,19 @@
         "name": "scripts-index",
         "component": "task/index",
         "meta": {
-          "title": "脚本指令",
-          "icon": "fa-solid fa-terminal"
+          "title": "任务管理",
+          "icon": "fa-solid fa-list-check"
         },
         "children": [],
         "sort": 1
       },
       {
-        "path": "open-trigger-task",
-        "name": "open-trigger-task",
-        "component": "open-trigger-task/index",
+        "path": "task-scripts",
+        "name": "task-scripts",
+        "component": "taskScripts/index",
         "meta": {
-          "title": "外触内执",
-          "icon": "fa-solid fa-terminal"
+          "title": "脚本编辑",
+          "icon": "fa-solid fa-pencil"
         },
         "children": [],
         "sort": 2
@@ -99,15 +121,37 @@
         "sort": 3
       },
       {
-        "path": "task-scripts",
-        "name": "task-scripts",
-        "component": "taskScripts/index",
+        "path": "open-trigger-task",
+        "name": "open-trigger-task",
+        "component": "open-trigger-task/index",
         "meta": {
-          "title": "脚本编辑",
-          "icon": "fa-solid fa-pencil"
+          "title": "外触内执",
+          "icon": "fa-solid fa-bolt"
         },
         "children": [],
         "sort": 4
+      },
+      {
+        "path": "/replay/index",
+        "name": "replay-index",
+        "component": "replay/index",
+        "meta": {
+          "title": "快捷回复",
+          "icon": "fa-solid fa-reply"
+        },
+        "children": [],
+        "sort": 5
+      },
+      {
+        "path": "/env/index",
+        "name": "env-index",
+        "component": "env/index",
+        "meta": {
+          "title": "环境变量",
+          "icon": "fa-solid fa-seedling"
+        },
+        "children": [],
+        "sort": 6
       }
     ],
     "sort": 4
@@ -149,7 +193,7 @@
         "component": "docker/images",
         "meta": {
           "title": "镜像管理",
-          "icon": "fa-solid fa-house"
+          "icon": "fa-solid fa-box-archive"
         },
         "children": [],
         "sort": 3
@@ -205,7 +249,7 @@
         "component": "setting/menu",
         "meta": {
           "title": "菜单管理",
-          "icon": "fa-solid fa-gear"
+          "icon": "fa-solid fa-sitemap"
         },
         "children": [],
         "sort": 2
@@ -231,77 +275,19 @@
         },
         "children": [],
         "sort": 4
-      }
-    ],
-    "sort": 6
-  },
-  {
-    "path": "/env",
-    "name": "env",
-    "component": "Main",
-    "meta": {
-      "title": "环境变量",
-      "icon": "fa-solid fa-seedling"
-    },
-    "children": [
+      },
       {
-        "path": "index",
-        "name": "env-Index",
-        "component": "env/index",
-        "meta": {
-          "title": "环境变量",
-          "icon": "fa-solid fa-gears"
-        },
-        "children": [],
-        "sort": 1
-      }
-    ],
-    "sort": 9
-  },
-  {
-    "path": "/replay",
-    "name": "replay",
-    "component": "Main",
-    "meta": {
-      "title": "快捷回复",
-      "icon": "fa-solid fa-reply"
-    },
-    "children": [
-      {
-        "path": "index",
-        "name": "replay-index",
-        "component": "replay/index",
-        "meta": {
-          "title": "快捷回复",
-          "icon": "fa-solid fa-reply"
-        },
-        "children": [],
-        "sort": 1
-      }
-    ],
-    "sort": 10
-  },
-  {
-    "path": "/logs",
-    "name": "logs",
-    "component": "Main",
-    "meta": {
-      "title": "日志中心",
-      "icon": "fa-brands fa-file-text"
-    },
-    "children": [
-      {
-        "path": "index",
+        "path": "/logs/index",
         "name": "logs-index",
         "component": "logs/index",
         "meta": {
-          "title": "日志中心",
+          "title": "系统日志",
           "icon": "fa-solid fa-file-lines"
         },
         "children": [],
-        "sort": 1
+        "sort": 5
       }
     ],
-    "sort": 12
+    "sort": 6
   }
 ]

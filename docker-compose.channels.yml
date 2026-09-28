@@ -1,0 +1,9 @@
+# 可选的内置通道密钥卷；只在本机 private/quantum-channel.key 已创建并限制权限后使用。
+# docker compose -f docker-compose.yml -f docker-compose.channels.yml up -d
+# 首期只允许一个启用通道连接的 Quantum 副本；多副本须先实现 DB 租约/fencing。
+services:
+  quantum:
+    environment:
+      QUANTUM_CHANNEL_KEY_FILE: /run/secrets/quantum_channel
+    volumes:
+      - ./private/quantum-channel.key:/run/secrets/quantum_channel:ro

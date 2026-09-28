@@ -29,29 +29,45 @@ public static class SystemConfigHelper
 
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
+    /// <summary>
+    /// 原子替换写入：先写同目录临时文件（WriteThrough 直写磁盘）再 rename 覆盖，任意崩溃/断电时点上
+    /// 磁盘的 appsettings.json 都是完整可解析的旧版或新版——杜绝「写一半 → 配置损坏且
+    /// JWT 密钥/通道主密钥等不可再生密钥丢失」。写侧全程持 ConfigWriteLock：串行化多个写者，
+    /// 消除整文件读改写的丢更新与「A 文本 @ B mtime」缓存错配。
+    /// </summary>
     public static void SetSetting(Setting config)
     {
-        var root = LoadRoot() ?? NewSkeleton(config);
-        root[SectionName] = JsonSerializer.SerializeToNode(config);
-        for (var attempt = 0; ; attempt++)
+        lock (ConfigWriteLock)
         {
-            try
+            var root = LoadRoot() ?? NewSkeleton(config);
+            root[SectionName] = JsonSerializer.SerializeToNode(config);
+            var text = root.ToJsonString(WriteOptions);
+            for (var attempt = 0; ; attempt++)
             {
-                var text = root.ToJsonString(WriteOptions);
-                File.WriteAllText(configPath, text);
-                // 写后同步文本缓存：消除「缓存仍持旧文本，而磁盘 mtime 恰与写前相同（同 tick 写入）」的读旧窗口
-                lock (ConfigTextLock)
+                var tempPath = $"{configPath}.{Guid.NewGuid():N}.tmp";
+                try
                 {
-                    _cachedText = text;
-                    _cachedPath = configPath;
-                    _cachedWriteUtc = File.GetLastWriteTimeUtc(configPath);
+                    using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                    using (var writer = new StreamWriter(stream))
+                    {
+                        writer.Write(text);
+                    }
+                    File.Move(tempPath, configPath, true);
+                    // 写后同步文本缓存：消除「缓存仍持旧文本，而磁盘 mtime 恰与写前相同（同 tick 写入）」的读旧窗口
+                    lock (ConfigTextLock)
+                    {
+                        _cachedText = text;
+                        _cachedPath = configPath;
+                        _cachedWriteUtc = File.GetLastWriteTimeUtc(configPath);
+                    }
+                    break;
                 }
-                break;
-            }
-            catch (IOException) when (attempt < 2)
-            {
-                // 并发读/杀软扫描的瞬时占用：短暂重试（消息泵每百毫秒读一次配置，写侧偶发撞车）
-                Thread.Sleep(50);
+                catch (IOException) when (attempt < 2)
+                {
+                    // 并发读/杀软扫描的瞬时占用：短暂重试（消息泵每百毫秒读一次配置，写侧偶发撞车）
+                    try { File.Delete(tempPath); } catch { /* 清理失败不影响重试 */ }
+                    Thread.Sleep(50);
+                }
             }
         }
     }
@@ -154,6 +170,13 @@ public static class SystemConfigHelper
             config.SecurityIssuer = "Issuer." + RandomStringBuilder.Create();
             SetSetting(config);
         }
+        if (string.IsNullOrEmpty(config.ChannelMasterKey))
+        {
+            // 消息通道主密钥：32 字节随机数 Base64 落盘，一次生成终身使用（丢钥=已存凭据全部作废），
+            // 生成路径与 SymmetricSecurityKey 同款；环境变量 QUANTUM_CHANNEL_KEY_FILE/MASTER_KEY 存在时运行期不读本值。
+            config.ChannelMasterKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            SetSetting(config);
+        }
         if (ConstsAutoRefresh)
         {
             // §1-8：单次换入四字段快照，避免读者在四次赋值之间看到跨字段撕裂的密钥组合
@@ -189,6 +212,8 @@ public static class SystemConfigHelper
     /// 旧实现每次全量读盘 + JsonNode 解析（终身的文件 IO 与分配 churn）。
     /// 只缓存文本不缓存解析树——JsonNode 非线程安全，并发调用各建新树避免共享可变状态。
     /// </summary>
+    /// <summary>写侧互斥：串行化 SetSetting 的整文件读改写（读侧 ConfigTextLock 只保护读者，不保护写者之间的竞态）。</summary>
+    private static readonly object ConfigWriteLock = new();
     private static readonly object ConfigTextLock = new();
     private static string _cachedText;
     private static string _cachedPath;
@@ -265,8 +290,18 @@ public static class SystemConfigHelper
         {
             return null;
         }
-        return JsonNode.Parse(text) as JsonObject
-            ?? throw new InvalidOperationException($"配置文件 {configPath} 不是 JSON 对象，请修复或删除后重启自动生成。");
+        JsonObject root;
+        try
+        {
+            root = JsonNode.Parse(text) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            // 空文件/残缺 JSON（历史版本写一半崩溃的遗留）与「合法 JSON 但非对象」走同一条 fail-fast，
+            // 给出同样的可操作提示，而不是抛裸 JsonException
+            root = null;
+        }
+        return root ?? throw new InvalidOperationException($"配置文件 {configPath} 不是 JSON 对象，请修复或删除后重启自动生成。");
     }
 }
 

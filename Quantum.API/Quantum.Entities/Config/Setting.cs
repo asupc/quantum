@@ -37,11 +37,6 @@ public class Setting
     /// </summary>
     public string Host { get; set; }
 
-    /// <summary>
-    /// 黑名单QQ
-    /// </summary>
-    public string BlackQQ { get; set; }
-
     public string AppKey { get; set; }
 
 
@@ -88,6 +83,13 @@ public class Setting
     public string SecurityAudience { get; set; }
 
     public string SecurityIssuer { get; set; }
+
+    /// <summary>
+    /// 消息通道凭据的独立主密钥（32 字节随机数的 Base64，44 字符）：加密 QQ/微信/飞书登录态等落库凭据。
+    /// 为空时启动自动生成并写回本文件；QUANTUM_CHANNEL_KEY_FILE / QUANTUM_CHANNEL_MASTER_KEY 环境变量存在时优先生效。
+    /// 丢失后已保存通道凭据无法解密，须重新扫码绑定——备份 appsettings.json 时即含此密钥。
+    /// </summary>
+    public string ChannelMasterKey { get; set; }
 
     /// <summary>
     /// 可信反向代理列表（逗号分隔，支持 IP 或 CIDR，如 "172.17.0.1,172.16.0.0/12"）：

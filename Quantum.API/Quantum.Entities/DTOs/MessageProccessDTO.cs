@@ -51,6 +51,9 @@ public class MessageProccessDTO
     /// </summary>
     public string TargetTaskId { get; set; }
 
+    /// <summary>平台私聊本次原路回复 ID，只能由入站工作器赋值，不接受 HTTP 客户端输入。</summary>
+    public string ChannelReplyRouteId { get; set; }
+
     /// <summary>
     /// 结构化富交互载荷（JSON，可空）：随队列透传到 t_chat_message.Payload（可点选项/视频封面）
     /// </summary>
@@ -75,6 +78,7 @@ public class MessageProccessDTO
             MessageType = MessageType,
             SessionKey = SessionKey,
             TargetTaskId = TargetTaskId,
+            ChannelReplyRouteId = ChannelReplyRouteId,
             Payload = Payload
         };
     }

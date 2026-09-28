@@ -16,11 +16,6 @@ public class CommandModel : BaseModel
     public string Message { get; set; }
 
     /// <summary>
-    /// 指定消息的通讯类型，不指定则表示全部
-    /// </summary>
-    public CommunicationType? CommunicationType { get; set; }
-
-    /// <summary>
     /// 是否启用
     /// </summary>
 

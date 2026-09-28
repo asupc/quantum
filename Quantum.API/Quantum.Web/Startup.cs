@@ -1,4 +1,4 @@
-﻿using log4net;
+using log4net;
 using log4net.Config;
 using log4net.Repository;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -13,6 +13,7 @@ using Microsoft.OpenApi;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json.Serialization;
 using Quantum.Application;
+using Quantum.Application.Channels;
 using Quantum.Data;
 using Quantum.Entities.Config;
 using Quantum.Entities.Model;
@@ -84,6 +85,13 @@ public class Startup
         services.AddHostedService<AppWebSocketHeartbeatService>();
         // 一期 G2~G4：运行记录启动恢复 + 到期重试领取 + 告警事件投递 + 保留期清理（单实例调度约束）
         services.AddHostedService<TaskExecutionMaintenanceService>();
+        // P1-P3 内置 QQ/微信独立协议 Worker：默认无账号、未确认绑定均不连平台。
+        // 首期 deployment 必须仅启用一个后端副本（跨实例尚需数据库租约/fencing）。
+        services.AddHostedService<QqChannelWorker>();
+        services.AddHostedService<WeixinChannelWorker>();
+        services.AddHostedService<FeishuWssWorker>();
+        services.AddHostedService<ChannelDeliveryWorker>();
+        services.AddHostedService<ChannelCommandWorker>();
 
         // 标准鉴权中间件（W6 二期遗留项落地）：仅负责验签并填充 HttpContext.User，
         // 接口放行/拦截仍由 CustomAuthorizationFilter 决定，行为保持向后兼容；
@@ -150,6 +158,16 @@ public class Startup
         services.AddScoped(typeof(TaskAlertService));
         services.AddScoped(typeof(ExternalPushService));
         services.AddScoped(typeof(ExternalPushCredentialService));
+        services.AddSingleton<ChannelSecretProtector>();
+        services.AddSingleton<ChannelAccountGate>();
+        services.AddScoped<ChannelManagementService>();
+        services.AddScoped<ChannelInboxService>();
+        services.AddScoped<ChannelReplyService>();
+        services.AddSingleton<ChannelNetwork>();
+        services.AddSingleton<QqChannelClient>();
+        services.AddSingleton<FeishuChannelClient>();
+        services.AddSingleton<WeixinQrLoginService>();
+        services.AddSingleton<FeishuQrLoginService>();
         services.AddScoped(typeof(CommandService));
         services.AddScoped(typeof(EnvService));
         services.AddScoped(typeof(NotifyService));

@@ -524,6 +524,12 @@
             <param name="sortData">排序数据</param>
             <returns>无内容</returns>
         </member>
+        <member name="T:Quantum.Web.Controllers.ChannelController">
+            <summary>平台消息通道管理：系统 Manager 专用；聊天用户永远不获得 Manager 身份。</summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.ChannelController.TestSend(System.String)">
+            <summary>手动发送自检消息：目标固定取该平台最近一条有效原路回复路由，接口不接收任何收件人参数。</summary>
+        </member>
         <member name="T:Quantum.Web.Controllers.CommandController">
             <summary>
             快捷回复

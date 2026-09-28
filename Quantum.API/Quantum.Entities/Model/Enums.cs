@@ -1,4 +1,4 @@
-﻿namespace Quantum.Entities.Model;
+namespace Quantum.Entities.Model;
 
 
 public enum AuthType
@@ -29,7 +29,14 @@ public enum CommunicationType
     /// <summary>
     /// 安卓 App 通道（WS 在线直推 + 离线厂商推送）：唯一在用通道
     /// </summary>
-    App = 6
+    App = 6,
+
+    /// <summary>QQ 官方机器人私聊，绝不复用旧 QQ=1。</summary>
+    QQBot = 7,
+    /// <summary>微信扫码机器人私聊，绝不复用旧 微信=4。</summary>
+    WeixinBot = 8,
+    /// <summary>飞书自建应用长连接私聊，绝不复用任何已废弃值。</summary>
+    FeishuBot = 9
 }
 
 /// <summary>

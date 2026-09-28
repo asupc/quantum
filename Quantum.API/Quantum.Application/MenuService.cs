@@ -13,6 +13,7 @@ namespace Quantum.Application;
 /// </summary>
 public class MenuService
 {
+    private static readonly SemaphoreSlim ChannelMenuLock = new(1, 1);
     private readonly IQuantumDbContext _dbContext;
 
     public MenuService(IQuantumDbContext dbContext)
@@ -31,16 +32,44 @@ public class MenuService
             await ReseedAsync();
             menus = await _dbContext.Menus.AsNoTracking().ToListAsync();
         }
+        // 存量实例已落菜单表，不会重播 menu.json：只补一次新增的消息通道入口，不重置其它自定义菜单。
+        // 挂到「消息中心」组（菜单按功能重排后的归属）；实例若无该组则退回「系统管理」，避免产出游离的顶级菜单。
+        var channelParent = menus.FirstOrDefault(x => x.Name == "chat" && x.ParentName == null)?.Name
+            ?? menus.FirstOrDefault(x => x.Name == "settings" && x.ParentName == null)?.Name;
+        if (channelParent != null && !menus.Any(x => x.Component == "channel/index"))
+        {
+            await ChannelMenuLock.WaitAsync();
+            try
+            {
+                if (!await _dbContext.Menus.AnyAsync(x => x.Component == "channel/index"))
+                {
+                    _dbContext.Menus.Add(new MenuModel
+                    {
+                        Name = "channel-index", Path = "/settings/channel", Component = "channel/index",
+                        ParentName = channelParent, Sort = 3, Title = "消息通道", Icon = "fa-solid fa-tower-cell"
+                    });
+                    await _dbContext.SaveChangesAsync();
+                }
+                menus = await _dbContext.Menus.AsNoTracking().ToListAsync();
+            }
+            finally { ChannelMenuLock.Release(); }
+        }
         return BuildMenuTree(menus);
     }
 
     /// <summary>
     /// 从 jsons/menu.json 重建菜单表，并为每个自定义数据类型生成"数据管理"子菜单。
     /// 初始化与重置共用；CustomDataTitle 增删后也调用以保持子菜单同步。
+    /// <para>
+    /// 重置只重建**结构**，不回收运营态：按 Name 保留当前已隐藏的项（用户要求「重置菜单不恢复隐藏显示状态」），
+    /// 否则管理员每次重置都要重新点一遍隐藏。已不在新结构里的项自然丢弃其标记。
+    /// </para>
     /// </summary>
     public async Task ReseedAsync()
     {
-        _dbContext.Menus.RemoveRange(await _dbContext.Menus.ToListAsync());
+        var allMenus = await _dbContext.Menus.ToListAsync();
+        var hiddenNames = allMenus.Where(m => m.HideInMenu).Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+        _dbContext.Menus.RemoveRange(allMenus);
         await _dbContext.SaveChangesAsync();
 
         using StreamReader reader = new("jsons/menu.json");
@@ -71,7 +100,12 @@ public class MenuService
             }
         }
 
-        await _dbContext.Menus.AddRangeAsync(ConvertToMenuModels(menuItems, null));
+        var models = ConvertToMenuModels(menuItems, null);
+        foreach (var model in models)
+        {
+            if (hiddenNames.Contains(model.Name)) model.HideInMenu = true;
+        }
+        await _dbContext.Menus.AddRangeAsync(models);
         await _dbContext.SaveChangesAsync();
     }
 

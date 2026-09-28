@@ -40,6 +40,7 @@ public class NotifyService
             group_id = sendNotify.group_id,
             SessionKey = sendNotify.SessionKey,
             Payload = sendNotify.Payload,
+            ChannelReplyRouteId = Channels.ChannelReplyContext.Current,
             user_id = SystemConfigHelper.GetSetting()?.UserName ?? "admin",
             message_text = sendNotify.message_text,
             MessageType = sendNotify.MessageType ?? MessageType.文本,

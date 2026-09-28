@@ -372,6 +372,14 @@ public static class AppPushDispatcher
         await scope.ServiceProvider.GetRequiredService<AppPushService>().SendChatMessageAsync(content, contentType, contentText, sessionKey, payload);
     }
 
+    /// <summary>将当前平台指令的纯文本回复写入原发件人的 Outbox。</summary>
+    public static async Task QueueChannelReplyAsync(string routeId, string text)
+    {
+        if (!EnsureInitialized() || string.IsNullOrWhiteSpace(routeId)) return;
+        using var scope = _scopeFactory.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<Channels.ChannelReplyService>().QueueAsync(routeId, text);
+    }
+
     /// <summary>
     /// 站内通知（任务/系统/安全提醒入口）。
     /// </summary>
