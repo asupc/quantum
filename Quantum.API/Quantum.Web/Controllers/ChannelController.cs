@@ -5,9 +5,9 @@ using Quantum.Web.Filters;
 
 namespace Quantum.Web.Controllers;
 
-/// <summary>平台消息通道管理：系统 Manager 专用；聊天用户永远不获得 Manager 身份。</summary>
+/// <summary>平台消息通道管理：登录账号可配置，外部聊天身份不获得登录能力。</summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public sealed class ChannelController : BaseController
 {
     private readonly ChannelManagementService _management;

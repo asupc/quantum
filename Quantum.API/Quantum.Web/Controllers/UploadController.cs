@@ -9,7 +9,7 @@ namespace Quantum.Web.Controllers;
 /// 不对普通 App 用户开放（App 用户附件走 api/AppUpload，隔离存储+归属校验）。
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class UploadController : BaseController
 {
     /// <summary>

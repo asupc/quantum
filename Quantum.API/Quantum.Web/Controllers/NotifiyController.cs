@@ -9,7 +9,7 @@ namespace Quantum.Web.Controllers;
 /// 消息通知（管理员专用：单用户 App 会话消息入口，普通用户不开放群发能力）
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class NotifiyController : BaseController
 {
     readonly NotifyService _notifyService;

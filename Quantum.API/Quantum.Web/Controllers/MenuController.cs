@@ -9,7 +9,7 @@ namespace Quantum.Web.Controllers;
 /// 菜单管理（管理员专用）
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class MenuController : BaseController
 {
     private readonly MenuService _menuService;

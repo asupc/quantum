@@ -75,8 +75,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 示例任务（scripts/demo/*.cs）随发布产物分发：新部署开箱即有抄写模板；
-         其余 scripts 内容为开发期遗留（运行时经上传/挂载投放），不主动分发 -->
+    <!-- 正式任务用于新库种子；demo 仍作为可抄写模板分发。运行目录 scripts/quantum 不分发。 -->
+    <Content Include="scripts\*.cs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="scripts\demo\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 

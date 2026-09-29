@@ -11,7 +11,7 @@ namespace Quantum.Web.Controllers;
 /// 环境变量（扁平化单类型；单管理员体系下整体管理员专属，Open/任务临时令牌不可访问）
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class EnvController : BaseController
 {
     private readonly EnvService _envService;

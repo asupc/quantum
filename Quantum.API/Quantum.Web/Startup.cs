@@ -119,9 +119,9 @@ public class Startup
             {
                 OnTokenValidated = ctx =>
                 {
-                    if (!JwtTokenValidator.ValidateManagerNotBefore(ctx.Principal))
+                    if (!JwtTokenValidator.ValidateUserNotBefore(ctx.Principal))
                     {
-                        ctx.Fail("管理令牌已因改密作废");
+                        ctx.Fail("登录令牌已因改密作废");
                     }
                     return Task.CompletedTask;
                 }
@@ -279,7 +279,9 @@ public class Startup
         app.UseForwardedHeaders(forwardedOptions);
 
         // 单次执行建库/迁移/种子数据
-        DbInitializer.Initialize(app.ApplicationServices);
+        DbInitializer.Initialize(app.ApplicationServices, db => ScriptTaskSeeder.Seed(db,
+            Path.Combine(AppContext.BaseDirectory, "scripts"),
+            Path.Combine(Directory.GetCurrentDirectory(), "scripts", "quantum")));
         LogServiceHelper.AddLogs();
         CacheManager.InitCacheDatas();
         app.ApplicationServices.InitMessageQueue();

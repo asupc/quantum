@@ -9,8 +9,7 @@ namespace Quantum.Web.Controllers;
 
 /// <summary>
 /// 任务执行历史与失败策略（一期 G2/G3）。
-/// 权限口径：列表与详情按任务正向 Manager claim 过滤（非 Manager 拿不到 Manager 任务的执行记录）；
-/// 策略写入与手动重新执行是管理动作，一律 [ManagerOnly]。Open/匿名令牌不开放运行历史。
+/// 登录账号可读取全部运行历史；Open/匿名令牌不可访问。写操作同样校验登录身份。
 /// </summary>
 [CustomAuthorizationFilter]
 [RealPrincipal]
@@ -30,7 +29,7 @@ public class TaskRunController : BaseController
     public async Task<PageResult<TaskRunRow>> Index([FromQuery] TaskRunQuery query)
     {
         var (rows, total) = await _runService.GetPageAsync(query.TaskId, query.Status, query.Page,
-            query.PageSize, IsManager, query.Days);
+            query.PageSize, query.Days);
         return new PageResult<TaskRunRow>
         {
             Data = rows.Select(TaskRunRow.From).ToList(),
@@ -47,13 +46,13 @@ public class TaskRunController : BaseController
     [HttpGet("{runId}")]
     public async Task<TaskRunDetail> Detail([FromRoute] string runId)
     {
-        var run = await _runService.GetAsync(runId, IsManager);
+        var run = await _runService.GetAsync(runId);
         if (run == null)
         {
             throw new BusinessException("执行记录不存在");
         }
 
-        var chain = await _runService.GetChainAsync(run.RootRunId, IsManager);
+        var chain = await _runService.GetChainAsync(run.RootRunId);
         return new TaskRunDetail
         {
             Run = TaskRunRow.From(run),
@@ -64,15 +63,15 @@ public class TaskRunController : BaseController
     }
 
     /// <summary>
-    /// 手动重新执行（管理员）：产生**新的**根执行 Id，不复用旧执行链、也不计入旧链的重试次数；
+    /// 手动重新执行：产生**新的**根执行 Id，不复用旧执行链、也不计入旧链的重试次数；
     /// 留操作日志。被拒绝的脚本仍可手动重跑（例如已修好脚本后补跑一次）。
     /// </summary>
     [HttpPost("{runId}/retry")]
-    [ManagerOnly]
+    [LoggedInUser]
     [ActionLogFilter("手动重新执行任务")]
     public async Task<TaskExecuteReceipt> RetryAsync([FromRoute] string runId)
     {
-        var run = await _runService.GetAsync(runId, true);
+        var run = await _runService.GetAsync(runId);
         if (run == null)
         {
             throw new BusinessException("执行记录不存在");
@@ -118,11 +117,10 @@ public class TaskRunController : BaseController
     }
 
     /// <summary>
-    /// 写失败策略（管理员）。所有限值在此处服务端二次 clamp，不信任 UI。
-    /// 注意：策略里的告警/路由细节不对非 Manager 开放；非 Manager 只能读自己可见任务的执行记录。
+    /// 写失败策略。所有限值在此处服务端二次 clamp，不信任 UI。
     /// </summary>
     [HttpPut("policy/{taskId}")]
-    [ManagerOnly]
+    [LoggedInUser]
     [ActionLogFilter("更新任务失败策略")]
     public async Task<TaskFailurePolicyDto> SavePolicy([FromRoute] string taskId,
         [FromBody] TaskFailurePolicyDto dto)

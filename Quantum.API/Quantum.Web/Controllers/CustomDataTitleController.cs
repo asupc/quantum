@@ -35,7 +35,7 @@ public class CustomDataTitleController : BaseController
     /// </summary>
     /// <returns></returns>
     [HttpDelete("{type}/{deleteData}")]
-    [ManagerOnly]
+    [LoggedInUser]
     public Task DeleteAsync([FromRoute] string type, bool deleteData)
     {
         return _customDataTitleService.DeleteAsync(type, deleteData);
@@ -66,7 +66,7 @@ public class CustomDataTitleController : BaseController
     /// 添加自定义数据字段信息（管理员专用）
     /// </summary>
     [HttpPost]
-    [ManagerOnly]
+    [LoggedInUser]
     public Task<CustomDataTitleModel> AddOrUpdate([FromBody] CustomDataTitleModel data)
     {
         return _customDataTitleService.AddOrUpdate(data);

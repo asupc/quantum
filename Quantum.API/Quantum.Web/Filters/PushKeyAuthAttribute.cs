@@ -13,7 +13,7 @@ namespace Quantum.Web.Filters;
 ///
 /// 与其他鉴权面的隔离：
 /// - 本过滤器**不读 JWT、不产出 ClaimsPrincipal**，因此 PushKey 拿不到任何身份/角色（更不可能 Manager=true），
-///   也无法访问挂 [CustomAuthorizationFilter]/[ManagerOnly] 的旧端点；
+///   也无法访问挂 [CustomAuthorizationFilter]/[LoggedInUser] 的旧端点；
 /// - 反向同理：旧 Open AppKey、普通用户令牌、Manager JWT 都过不了本过滤器（它们没有 PushKey 头）；
 /// - 挂本过滤器的控制器不得再挂 [AllowAnonymous]，也不参与默认认证方案。
 /// 失败统一 HTTP 200 + 信封 Code=401，且不区分「Id 不存在/密钥错/已吊销/已过期」，避免被用来探测凭据。

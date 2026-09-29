@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Quantum.Application;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
@@ -11,7 +11,7 @@ namespace Quantum.Web.Controllers;
 /// 会话与任务会话完全分离；运行进度由前端轮询 runs/steps 呈现（不占长连接，nginx 无需改动）。
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class AiAgentController : BaseController
 {
     private readonly AgentService _agentService;

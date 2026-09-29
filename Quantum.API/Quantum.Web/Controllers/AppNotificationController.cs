@@ -12,7 +12,7 @@ namespace Quantum.Web.Controllers;
 /// 单管理员体系：管理员专属。
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class AppNotificationController : BaseController
 {
     private readonly AppNotificationService _notificationService;

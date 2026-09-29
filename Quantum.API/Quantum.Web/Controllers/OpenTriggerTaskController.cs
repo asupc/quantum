@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Quantum.Application;
 using Quantum.Entities.DTOs;
@@ -15,7 +15,7 @@ namespace Quantum.Web.Controllers;
 // 配置的增删改查/启停全部管理员专用：配置即执行权（SrciptFile 指向 scripts/quantum 内任意脚本，
 // 配合匿名 Trigger 端点可反复触发执行），与 Task 脚本链路同级敏感，普通 App 用户/Open 匿名令牌不得可达。
 // 匿名触发端点（GET/POST {secret}）标有 [AllowAnonymous]，不受本过滤器影响。
-[ManagerOnly]
+[LoggedInUser]
 public class OpenTriggerTaskController : BaseController
 {
     OpenTriggerTaskService openTriggerTaskService;

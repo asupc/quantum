@@ -7,13 +7,13 @@ namespace Quantum.Web.Controllers;
 
 /// <summary>
 /// App 媒体通道（M2）：下载根目录（ctx.File 门面产物）的列表/流式下发/内嵌封面。
-/// 鉴权比 AppUpload 下载更严：[ManagerOnly] 正向 claim，Open 匿名令牌/任务临时令牌天然被拒。
+/// 鉴权比 AppUpload 下载更严：[LoggedInUser] 正向 claim，Open 匿名令牌/任务临时令牌天然被拒。
 /// list 走 ResultFilter 信封；file/cover 为二进制直出（Range/ETag/inline/nosniff），
 /// 校验失败直出 404（不套 200 信封——ExoPlayer 对 200+JSON 只会报底层解析错误）。
 /// </summary>
 [Route("api/AppMedia")]
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class AppMediaController : BaseController
 {
     private readonly AppMediaService _mediaService;

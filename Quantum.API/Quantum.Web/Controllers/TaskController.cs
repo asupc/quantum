@@ -26,18 +26,18 @@ public class TaskController : BaseController
     }
 
     /// <summary>
-    /// 获取所有的脚本指令（服务端按调用者权限过滤：非管理员不返回 Manager 任务）
+    /// 获取所有任务
     /// </summary>
     /// <param name="query"></param>
     /// <returns></returns>
     [HttpGet]
     public Task<PageResult<TaskModel>> Index([FromQuery] TaskQuery query)
     {
-        return _taskService.GetPageAsync(query, !IsManager);
+        return _taskService.GetPageAsync(query);
     }
 
     /// <summary>
-    /// 获取任务详情（Manager 任务对非管理员隐藏）
+    /// 获取任务详情
     /// </summary>
     /// <param name="id"></param>
     /// <returns></returns>
@@ -49,15 +49,11 @@ public class TaskController : BaseController
         {
             throw new BusinessException("任务不存在");
         }
-        if (task.Manager && !IsManager)
-        {
-            return Denied();
-        }
         return task;
     }
 
     /// <summary>
-    /// 执行脚本任务（Manager 任务仅管理员可执行）。
+    /// 执行脚本任务。
     /// 任务→通知接线：手动执行成功受理后广播任务通知（category=task，点按直达任务日志）。
     /// </summary>
     /// <param name="ids"></param>
@@ -66,7 +62,6 @@ public class TaskController : BaseController
     [ActionLogFilter("执行量子脚本任务")]
     public bool ExecTask([FromBody] List<string> ids)
     {
-        _taskService.EnsureAccessible(ids, IsManager);
         _taskService.ExecTask(ids);
         _ = Task.Run(async () =>
         {
@@ -104,19 +99,18 @@ public class TaskController : BaseController
     [ActionLogFilter("执行量子脚本任务")]
     public async Task<List<TaskExecuteReceipt>> ExecuteRunsAsync([FromBody] List<string> ids)
     {
-        _taskService.EnsureAccessible(ids, IsManager);
         var receipts = await _taskService.AcceptAndRunAsync(ids, TaskTriggerSource.Manual,
             triggerRef: GetUserId());
         return receipts.Select(n => new TaskExecuteReceipt { TaskId = n.TaskId, RunId = n.RunId }).ToList();
     }
 
     /// <summary>
-    /// 获取脚本字符串（管理员专用：脚本内容属服务端代码，不对普通 App 用户开放）
+    /// 获取脚本字符串（仅登录账号）。
     /// </summary>
     /// <param name="fileName">文件名</param>
     /// <returns></returns>
     [HttpGet("scripts")]
-    [ManagerOnly]
+    [LoggedInUser]
     public Task<string> ScriptsAsync([FromQuery] string fileName)
     {
         return _taskService.GetScriptAsync(fileName);
@@ -126,7 +120,7 @@ public class TaskController : BaseController
     /// 更新脚本（保存流水线：门禁+编译；失败时内容不落盘，返回 blocked/warnings/errors 三类诊断）
     /// </summary>
     [HttpPut("scripts")]
-    [ManagerOnly]
+    [LoggedInUser]
     [ActionLogFilter("更新量子脚本")]
     public Task<ScriptBuildService.ScriptSaveResult> UpdateScriptsAsync([FromBody] SaveQLFile file)
     {
@@ -139,7 +133,7 @@ public class TaskController : BaseController
     /// <param name="fileName"></param>
     /// <returns></returns>
     [HttpDelete("delete-scripts")]
-    [ManagerOnly]
+    [LoggedInUser]
     [ActionLogFilter("删除脚本")]
     public bool DeleteScripts([FromQuery] string fileName)
     {
@@ -147,10 +141,10 @@ public class TaskController : BaseController
     }
 
     /// <summary>
-    /// 添加任务（管理员专用：任务会在服务端执行脚本，创建权不开放给普通 App 用户）
+    /// 添加任务（仅登录账号）。
     /// </summary>
     [HttpPost]
-    [ManagerOnly]
+    [LoggedInUser]
     [ActionLogFilter("添加任务")]
     public Task<bool> AddAsync([FromBody] TaskSaveModel saveModel)
     {
@@ -158,14 +152,13 @@ public class TaskController : BaseController
     }
 
     /// <summary>
-    /// 更新任务（非管理员可改非 Manager 任务，但不可变更 Manager 标记，防止借编辑提权）
+    /// 更新任务
     /// </summary>
     [HttpPut]
     [ActionLogFilter("更新任务")]
     public Task<bool> UpdateAsync([FromBody] TaskSaveModel saveModel)
     {
-        _taskService.EnsureAccessible([saveModel?.Id], IsManager);
-        return _taskService.UpdateAsync(saveModel, IsManager);
+        return _taskService.UpdateAsync(saveModel);
     }
 
     /// <summary>
@@ -177,7 +170,6 @@ public class TaskController : BaseController
     [HttpDelete]
     public Task<bool> DeleteAsync([FromQuery] string ids)
     {
-        _taskService.EnsureAccessible(SplitIds(ids), IsManager);
         return _taskService.DeleteAsync(ids);
     }
 
@@ -190,7 +182,6 @@ public class TaskController : BaseController
     [HttpPut("disable")]
     public Task<bool> DisableAsync([FromBody] List<string> ids)
     {
-        _taskService.EnsureAccessible(ids, IsManager);
         return _taskService.DisableAsync(ids);
     }
 
@@ -201,27 +192,26 @@ public class TaskController : BaseController
     [HttpPut("enable")]
     public Task<bool> EnableAsync([FromBody] List<string> ids)
     {
-        _taskService.EnsureAccessible(ids, IsManager);
         return _taskService.EnableAsync(ids);
     }
 
 
     /// <summary>
-    /// 导出脚本指令（非管理员导出内容同样剔除 Manager 任务）
+    /// 导出任务
     /// </summary>
     [HttpGet("export")]
     [ActionLogFilter("导出脚本指令")]
     public async Task<IActionResult> ExportAsync([FromQuery] TaskQuery query)
     {
-        return File(await _taskService.ExportAsync(query, !IsManager), "text/xml", "tasks.json");
+        return File(await _taskService.ExportAsync(query), "text/xml", "tasks.json");
     }
 
     /// <summary>
-    /// 导入脚本指令（管理员专用：导入即创建服务端执行的任务）
+    /// 导入任务（仅登录账号）。
     /// </summary>
     /// <returns></returns>
     [HttpPost("Import")]
-    [ManagerOnly]
+    [LoggedInUser]
     public async Task<int> ImportAsync()
     {
         var form = await Request.ReadFormAsync();
@@ -241,8 +231,7 @@ public class TaskController : BaseController
     [HttpPost("finish/{threadId}")]
     public bool Finish(string threadId)
     {
-        // §9.2：入参为 threadId，鉴权下沉到服务层命中 step 后按所属任务 Manager 标志判定
-        return _taskService.Finish(threadId, IsManager);
+        return _taskService.Finish(threadId);
     }
 
     /// <summary>
@@ -253,7 +242,7 @@ public class TaskController : BaseController
     [HttpPost("redo/{threadId}")]
     public string Redo(string threadId)
     {
-        return _taskService.Redo(threadId, IsManager);
+        return _taskService.Redo(threadId);
     }
 
     /// <summary>
@@ -262,7 +251,7 @@ public class TaskController : BaseController
     [HttpPost("add-env/{threadId}")]
     public string AddEnv([FromRoute] string threadId, [FromBody] EnvModel env)
     {
-        return _taskService.AddEnv(threadId, env, IsManager);
+        return _taskService.AddEnv(threadId, env);
     }
 
 

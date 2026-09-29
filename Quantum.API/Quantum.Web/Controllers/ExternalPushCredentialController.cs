@@ -8,11 +8,11 @@ namespace Quantum.Web.Controllers;
 
 /// <summary>
 /// 外部推送接入凭据管理（管理员专用）：创建/列表元数据/轮换/启停/删除。
-/// 与发送端点分离，且本控制器走普通 JWT + [ManagerOnly]——PushKey 凭据到不了这里。
+/// 与发送端点分离，且本控制器走普通 JWT + [LoggedInUser]——PushKey 凭据到不了这里。
 /// 明文密钥只在创建/轮换那一次回显；列表与操作日志都不含密钥或摘要。
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class ExternalPushCredentialController : BaseController
 {
     readonly ExternalPushCredentialService _credentialService;

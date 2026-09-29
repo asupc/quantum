@@ -31,23 +31,6 @@ public class BaseController : ControllerBase
             ".git"
         };
     }
-    /// <summary>
-    /// 当前令牌是否管理员（正向 "Manager" claim；任务列表过滤/Env 限权/日志分型按此收敛）。
-    /// </summary>
-    protected bool IsManager => HttpContext.IsManager();
-
-    /// <summary>
-    /// 非 ManagerOnly 语义的拒绝响应：本项目 HTTP 恒 200，与过滤器同款 body Code=401 表达。
-    /// </summary>
-    protected static ObjectResult Denied()
-    {
-        return new ObjectResult(new ResultModel
-        {
-            Code = 401,
-            Message = "需要管理员权限"
-        });
-    }
-
     protected string GetUserId()
     {
         return HttpContext.GetUserId();

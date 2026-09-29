@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Quantum.Application;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
@@ -11,7 +11,7 @@ namespace Quantum.Web.Controllers;
 /// 当前版本始终以磁盘文件为准（读取走既有 GET /api/Task/scripts），本控制器只管历史。
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class ScriptVersionController : BaseController
 {
     private readonly ScriptVersionService _scriptVersionService;

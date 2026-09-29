@@ -12,7 +12,7 @@ namespace Quantum.Web.Middleware;
 /// /ws/app?token=&lt;jwt&gt; 的 App 长连接网关（重写自 /ws/chat，替代 Web 聊天成为唯一用户触点）：
 /// - 握手必须携带有效 JWT（AppAuthService 签发，与管理端共用密钥），验签失败 401 拒绝升级；
 ///   也支持连接后首帧 {"type":"auth","token":"..."} 兜底鉴权（4.4 协议上行 auth）。
-///   单管理员体系：令牌还必须带 Manager claim——Open AppKey/任务临时令牌禁止连 WS（下行广播含会话内容）
+///   令牌须为当前账号登录用途；Open AppKey 禁止连 WS（下行广播含会话内容）。
 /// - 下行 message/notify 帧带 msgId，客户端 ack 幂等确认送达；断线重连后按 seq 走 sync/REST 补拉
 /// - 接收帧：ping 保活、command 指令（按设备限流 2s）、ack 已送达、sync 增量同步
 /// - 60s 无任何帧踢连接（客户端 25s 应用层心跳，约 2 倍余量，容忍 Doze/网络抖动）
@@ -46,15 +46,14 @@ public class AppWebSocketMiddleware
 
         // 握手鉴权：token 存在但验签失败 → 401 拒绝；留空则等待首帧 auth 兜底
         var token = context.Request.Query["token"].ToString();
-        var principal = JwtTokenValidator.Validate(token);
+        var principal = JwtTokenValidator.ValidateLogin(token);
         if (!string.IsNullOrWhiteSpace(token) && principal == null)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }
-        // 单管理员：仅 Manager 令牌可连（Open AppKey/任务临时令牌无 Manager claim，防广播内容泄露）
         var deviceId = principal?.FindFirst("DeviceId")?.Value ?? "";
-        var authenticated = principal?.FindFirst("Manager")?.Value == "true";
+        var authenticated = principal != null;
         if (principal != null)
         {
             // WS 不经认证中间件，这里手动把已验证令牌挂到 HttpContext：
@@ -145,7 +144,7 @@ public class AppWebSocketMiddleware
                     (authenticated, principal) = await TryAuthenticateAsync(socket, doc);
                     if (!authenticated)
                     {
-                        // 首帧 auth 验签失败/非管理员令牌：下发错误并关闭，客户端应重新登录换取 token
+                        // 首帧 auth 不符合登录用途：下发错误并关闭，客户端应重新登录换取 token。
                         break;
                     }
                     context.User = principal;
@@ -202,7 +201,7 @@ public class AppWebSocketMiddleware
     }
 
     /// <summary>
-    /// 首帧兜底鉴权：type=auth 携带 token；验签失败或非 Manager 令牌下发 error 帧并关闭连接（返回 false）。
+    /// 首帧兜底鉴权：type=auth 携带登录 token；校验失败下发 error 帧并关闭连接。
     /// doc 为调用方一次解析的结果（可空 = 非 JSON 帧，按鉴权失败处理）。
     /// </summary>
     private async Task<(bool ok, ClaimsPrincipal principal)> TryAuthenticateAsync(WebSocket socket, JsonDocument doc)
@@ -215,18 +214,11 @@ public class AppWebSocketMiddleware
         {
             token = tokenElement.GetString();
         }
-        var principal = JwtTokenValidator.Validate(token);
+        var principal = JwtTokenValidator.ValidateLogin(token);
         if (principal == null)
         {
             await SendJson(socket, new { type = "error", content = "token 无效或已过期，请重新登录。" });
             await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "auth failed", CancellationToken.None);
-            return (false, null);
-        }
-        // 单管理员：非 Manager 令牌（Open AppKey/任务临时令牌）拒绝接入
-        if (principal.FindFirst("Manager")?.Value != "true")
-        {
-            await SendJson(socket, new { type = "error", content = "需要管理员权限。" });
-            await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "manager only", CancellationToken.None);
             return (false, null);
         }
         return (true, principal);

@@ -13,7 +13,7 @@ namespace Quantum.Web.Controllers;
 /// 提供对Docker容器、镜像、网络和卷的管理接口（管理员专用：主机容器操作对普通用户开放风险不成比例）
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class DockerController : BaseController
 {
     private readonly DockerManagementService _dockerService;

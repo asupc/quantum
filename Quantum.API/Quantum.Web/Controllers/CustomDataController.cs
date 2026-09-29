@@ -52,7 +52,7 @@ public class CustomDataController : BaseController
     /// </summary>
     /// <returns></returns>
     [HttpPut]
-    [ManagerOnly]
+    [LoggedInUser]
     public Task<CustomDataModel> UpdateAsync([FromBody] CustomDataModel data)
     {
         return _customDataService.UpdateAsync(data);
@@ -63,7 +63,7 @@ public class CustomDataController : BaseController
     /// </summary>
     /// <returns></returns>
     [HttpPut("updates")]
-    [ManagerOnly]
+    [LoggedInUser]
     public Task<List<CustomDataModel>> UpdatesAsync([FromBody] List<CustomDataModel> datas)
     {
         return _customDataService.UpdatesAsync(datas);
@@ -73,7 +73,7 @@ public class CustomDataController : BaseController
     /// 批量提交数据
     /// </summary>
     [HttpPost]
-    [ManagerOnly]
+    [LoggedInUser]
     public Task<List<CustomDataModel>> AddAsync([FromBody] List<CustomDataModel> datas)
     {
         return _customDataService.AddAsync(datas);
@@ -84,7 +84,7 @@ public class CustomDataController : BaseController
     /// </summary>
     /// <returns></returns>
     [HttpDelete]
-    [ManagerOnly]
+    [LoggedInUser]
     public Task<List<CustomDataModel>> DeleteAsync([FromBody] List<string> ids)
     {
         return _customDataService.DeleteAsync(ids);
@@ -96,7 +96,7 @@ public class CustomDataController : BaseController
     /// <param name="type"></param>
     /// <returns></returns>
     [HttpDelete("clear/{type}")]
-    [ManagerOnly]
+    [LoggedInUser]
     public Task<bool> ClearAsync([FromRoute] string type)
     {
         return _customDataService.ClearAsync(type);

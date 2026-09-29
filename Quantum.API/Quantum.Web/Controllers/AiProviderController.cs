@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Quantum.Application;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
@@ -12,7 +12,7 @@ namespace Quantum.Web.Controllers;
 /// 密钥默认只回掩码；明文仅经 {id}/reveal 显式动作返回（记操作日志）。
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class AiProviderController : BaseController
 {
     private readonly AiProviderService _aiProviderService;

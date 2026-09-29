@@ -9,12 +9,12 @@ namespace Quantum.Web.Controllers;
 
 /// <summary>
 /// App 会话接口：seq 增量同步、已读回执、未读数、历史检索、指令提交、厂商推送注册与设备管理。
-/// 单管理员体系：业务端点全部 Manager 专属，身份取 JWT 声明（DeviceId）。
+/// 业务端点要求登录身份，设备信息取 JWT 的 DeviceId 声明。
 /// 版本下发端点（原 version/latest 与 version/download 匿名端点）已随 App 端自更新移除，升级改手动安装 APK。
 /// </summary>
 [Route("api/App")]
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class AppMessageController : BaseController
 {
     private readonly AppMessageService _messageService;
@@ -218,17 +218,17 @@ public class AppMessageController : BaseController
     }
 
     /// <summary>
-    /// 扫码登录管理后台：App 侧管理员（Manager 令牌）授权 Web 登录票据
+    /// 扫码登录 Web：App 侧登录账号授权 Web 登录票据。
     /// </summary>
     [HttpPost("scan-login")]
-    [ManagerOnly]
+    [LoggedInUser]
     public async Task<object> ScanLogin([FromBody] AppScanLoginRequest request)
     {
         if (string.IsNullOrEmpty(request?.Ticket))
         {
             throw new BusinessException("缺少扫码票据！");
         }
-        // 用当前管理员 App 令牌换取等价 Web 管理令牌挂到票据（一次性取走）
+        // 用当前 App 登录令牌换取 Web 登录令牌挂到票据（一次性取走）。
         var appToken = HttpContext.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
         var claims = User.Claims.Select(n => new System.Security.Claims.Claim(n.Type, n.Value)).ToList();
         var webToken = JwtTokenIssuer.Issue(claims, DateTime.Now.AddDays(7));

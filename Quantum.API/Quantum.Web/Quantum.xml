@@ -215,7 +215,7 @@
         <member name="T:Quantum.Web.Controllers.AppMediaController">
             <summary>
             App 媒体通道（M2）：下载根目录（ctx.File 门面产物）的列表/流式下发/内嵌封面。
-            鉴权比 AppUpload 下载更严：[ManagerOnly] 正向 claim，Open 匿名令牌/任务临时令牌天然被拒。
+            鉴权比 AppUpload 下载更严：[LoggedInUser] 正向 claim，Open 匿名令牌/任务临时令牌天然被拒。
             list 走 ResultFilter 信封；file/cover 为二进制直出（Range/ETag/inline/nosniff），
             校验失败直出 404（不套 200 信封——ExoPlayer 对 200+JSON 只会报底层解析错误）。
             </summary>
@@ -241,7 +241,7 @@
         <member name="T:Quantum.Web.Controllers.AppMessageController">
             <summary>
             App 会话接口：seq 增量同步、已读回执、未读数、历史检索、指令提交、厂商推送注册与设备管理。
-            单管理员体系：业务端点全部 Manager 专属，身份取 JWT 声明（DeviceId）。
+            业务端点要求登录身份，设备信息取 JWT 的 DeviceId 声明。
             版本下发端点（原 version/latest 与 version/download 匿名端点）已随 App 端自更新移除，升级改手动安装 APK。
             </summary>
         </member>
@@ -335,7 +335,7 @@
         </member>
         <member name="M:Quantum.Web.Controllers.AppMessageController.ScanLogin(Quantum.Web.Controllers.AppScanLoginRequest)">
             <summary>
-            扫码登录管理后台：App 侧管理员（Manager 令牌）授权 Web 登录票据
+            扫码登录 Web：App 侧登录账号授权 Web 登录票据。
             </summary>
         </member>
         <member name="T:Quantum.Web.Controllers.AppScanLoginRequest">
@@ -427,7 +427,7 @@
             下载带 ETag/Last-Modified 支持缓存协商；图片 inline、其余 attachment + nosniff。
             </summary>
             <remarks>
-            类级 ManagerOnly 与契约 §5.1 的权限清单一致：Open AppKey 匿名令牌同密钥签发但无 Manager claim，
+            类级 LoggedInUser 与凭据契约一致：Open AppKey 令牌虽同密钥签发，仍无登录用途，
             缺这道闸即可上传/下载任意附件（2026-09-18 补齐）。
             </remarks>
         </member>
@@ -445,16 +445,6 @@
             <summary>
             鉴权下载：图片 inline 且带 ETag/Last-Modified；
             Content-Type 服务端按扩展名固定映射 + nosniff；非图片 Content-Disposition: attachment。
-            </summary>
-        </member>
-        <member name="P:Quantum.Web.Controllers.BaseController.IsManager">
-            <summary>
-            当前令牌是否管理员（正向 "Manager" claim；任务列表过滤/Env 限权/日志分型按此收敛）。
-            </summary>
-        </member>
-        <member name="M:Quantum.Web.Controllers.BaseController.Denied">
-            <summary>
-            非 ManagerOnly 语义的拒绝响应：本项目 HTTP 恒 200，与过滤器同款 body Code=401 表达。
             </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.BaseController.GetUserDeviceId">
@@ -525,7 +515,7 @@
             <returns>无内容</returns>
         </member>
         <member name="T:Quantum.Web.Controllers.ChannelController">
-            <summary>平台消息通道管理：系统 Manager 专用；聊天用户永远不获得 Manager 身份。</summary>
+            <summary>平台消息通道管理：登录账号可配置，外部聊天身份不获得登录能力。</summary>
         </member>
         <member name="M:Quantum.Web.Controllers.ChannelController.TestSend(System.String)">
             <summary>手动发送自检消息：目标固定取该平台最近一条有效原路回复路由，接口不接收任何收件人参数。</summary>
@@ -907,7 +897,7 @@
         <member name="T:Quantum.Web.Controllers.ExternalPushCredentialController">
             <summary>
             外部推送接入凭据管理（管理员专用）：创建/列表元数据/轮换/启停/删除。
-            与发送端点分离，且本控制器走普通 JWT + [ManagerOnly]——PushKey 凭据到不了这里。
+            与发送端点分离，且本控制器走普通 JWT + [LoggedInUser]——PushKey 凭据到不了这里。
             明文密钥只在创建/轮换那一次回显；列表与操作日志都不含密钥或摘要。
             </summary>
         </member>
@@ -954,47 +944,36 @@
         </member>
         <member name="T:Quantum.Web.Controllers.LogsController">
             <summary>
-            日志中心（分型按角色过滤）：任务日志(1)/指令触发(5) 全员可见；
-            通知(2)/操作(3)/登录(4)/外触(6)/系统(7) 仅管理员——删除/清空/统计亦为管理员专用。
-            </summary>
-        </member>
-        <member name="F:Quantum.Web.Controllers.LogsController.ManagerOnlyLogTypes">
-            <summary>
-            仅管理员可见的日志类型（含操作日志=3）
-            </summary>
-        </member>
-        <member name="F:Quantum.Web.Controllers.LogsController.PublicLogTypes">
-            <summary>
-            全员可见的日志类型（非管理员未指定类型时强制收敛到该集合）
+            日志中心：全部类型及删除、清空、统计只对登录账号开放。
             </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.LogsController.Index(Quantum.Entities.DTOs.LogQuery)">
             <summary>
-            获取日志信息（非管理员仅任务/指令触发两类，且其中的 Manager 任务日志按服务端过滤隐藏）
+            获取日志信息
             </summary>
             <param name="query"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Web.Controllers.LogsController.DeleteLogs(System.String)">
             <summary>
-            批量删除日志（管理员专用）
+            批量删除日志
             </summary>
             <returns></returns>
         </member>
         <member name="M:Quantum.Web.Controllers.LogsController.ClearLogs">
             <summary>
-            清空全部日志（管理员专用）
+            清空全部日志
             </summary>
             <returns></returns>
         </member>
         <member name="M:Quantum.Web.Controllers.LogsController.Statistics(System.Int32)">
             <summary>
-            日志统计（按级别计数 + 近 N 天按日计数，管理员专用）
+            日志统计（按级别计数 + 近 N 天按日计数）
             </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.LogsController.GetDetails(System.String)">
             <summary>
-            获取详细日志（受限类型的详情对非管理员隐藏；Manager 任务的执行日志同样不得直读）
+            获取详细日志
             </summary>
             <param name="id"></param>
             <returns></returns>
@@ -1189,21 +1168,21 @@
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.Index(Quantum.Entities.DTOs.TaskQuery)">
             <summary>
-            获取所有的脚本指令（服务端按调用者权限过滤：非管理员不返回 Manager 任务）
+            获取所有任务
             </summary>
             <param name="query"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.GetByIdAsync(System.String)">
             <summary>
-            获取任务详情（Manager 任务对非管理员隐藏）
+            获取任务详情
             </summary>
             <param name="id"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.ExecTask(System.Collections.Generic.List{System.String})">
             <summary>
-            执行脚本任务（Manager 任务仅管理员可执行）。
+            执行脚本任务。
             任务→通知接线：手动执行成功受理后广播任务通知（category=task，点按直达任务日志）。
             </summary>
             <param name="ids"></param>
@@ -1218,7 +1197,7 @@
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.ScriptsAsync(System.String)">
             <summary>
-            获取脚本字符串（管理员专用：脚本内容属服务端代码，不对普通 App 用户开放）
+            获取脚本字符串（仅登录账号）。
             </summary>
             <param name="fileName">文件名</param>
             <returns></returns>
@@ -1237,12 +1216,12 @@
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.AddAsync(Quantum.Entities.DTOs.TaskSaveModel)">
             <summary>
-            添加任务（管理员专用：任务会在服务端执行脚本，创建权不开放给普通 App 用户）
+            添加任务（仅登录账号）。
             </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.UpdateAsync(Quantum.Entities.DTOs.TaskSaveModel)">
             <summary>
-            更新任务（非管理员可改非 Manager 任务，但不可变更 Manager 标记，防止借编辑提权）
+            更新任务
             </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.DeleteAsync(System.String)">
@@ -1266,12 +1245,12 @@
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.ExportAsync(Quantum.Entities.DTOs.TaskQuery)">
             <summary>
-            导出脚本指令（非管理员导出内容同样剔除 Manager 任务）
+            导出任务
             </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.TaskController.ImportAsync">
             <summary>
-            导入脚本指令（管理员专用：导入即创建服务端执行的任务）
+            导入任务（仅登录账号）。
             </summary>
             <returns></returns>
         </member>
@@ -1302,8 +1281,7 @@
         <member name="T:Quantum.Web.Controllers.TaskRunController">
             <summary>
             任务执行历史与失败策略（一期 G2/G3）。
-            权限口径：列表与详情按任务正向 Manager claim 过滤（非 Manager 拿不到 Manager 任务的执行记录）；
-            策略写入与手动重新执行是管理动作，一律 [ManagerOnly]。Open/匿名令牌不开放运行历史。
+            登录账号可读取全部运行历史；Open/匿名令牌不可访问。写操作同样校验登录身份。
             </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.TaskRunController.Index(Quantum.Entities.DTOs.TaskRunQuery)">
@@ -1317,7 +1295,7 @@
         </member>
         <member name="M:Quantum.Web.Controllers.TaskRunController.RetryAsync(System.String)">
             <summary>
-            手动重新执行（管理员）：产生**新的**根执行 Id，不复用旧执行链、也不计入旧链的重试次数；
+            手动重新执行：产生**新的**根执行 Id，不复用旧执行链、也不计入旧链的重试次数；
             留操作日志。被拒绝的脚本仍可手动重跑（例如已修好脚本后补跑一次）。
             </summary>
         </member>
@@ -1326,8 +1304,7 @@
         </member>
         <member name="M:Quantum.Web.Controllers.TaskRunController.SavePolicy(System.String,Quantum.Entities.DTOs.TaskFailurePolicyDto)">
             <summary>
-            写失败策略（管理员）。所有限值在此处服务端二次 clamp，不信任 UI。
-            注意：策略里的告警/路由细节不对非 Manager 开放；非 Manager 只能读自己可见任务的执行记录。
+            写失败策略。所有限值在此处服务端二次 clamp，不信任 UI。
             </summary>
         </member>
         <member name="T:Quantum.Web.Controllers.UploadController">
@@ -1347,12 +1324,9 @@
             因此计时器绝不能放实例字段（并发请求会互相 Stop/覆写）——改存 HttpContext.Items，每请求独立。
             </summary>
         </member>
-        <member name="T:Quantum.Web.Filters.ManagerOnlyAttribute">
+        <member name="T:Quantum.Web.Filters.LoggedInUserAttribute">
             <summary>
-            管理员专用端点过滤器：在 CustomAuthorizationFilter（验签）之后执行，只认正向
-            "Manager"="true" claim——该 claim 仅由 LoginService（Web 管理端）与
-            AppAuthService（Manager=1 的 App 用户）签发。普通 App 用户、Open AppKey 匿名令牌、
-            任务临时令牌（后两类无 Manager claim，且匿名/低信任来源）一律拒绝。
+            登录用户端点过滤器：检查已验签的登录用途令牌，拒绝外部凭据。
             本项目 HTTP 状态码恒为 200，拒绝同样以 body Code=401 表达（与 CustomAuthorizationFilter 一致）。
             </summary>
         </member>
@@ -1362,7 +1336,7 @@
             
              与其他鉴权面的隔离：
              - 本过滤器**不读 JWT、不产出 ClaimsPrincipal**，因此 PushKey 拿不到任何身份/角色（更不可能 Manager=true），
-               也无法访问挂 [CustomAuthorizationFilter]/[ManagerOnly] 的旧端点；
+               也无法访问挂 [CustomAuthorizationFilter]/[LoggedInUser] 的旧端点；
              - 反向同理：旧 Open AppKey、普通用户令牌、Manager JWT 都过不了本过滤器（它们没有 PushKey 头）；
              - 挂本过滤器的控制器不得再挂 [AllowAnonymous]，也不参与默认认证方案。
              失败统一 HTTP 200 + 信封 Code=401，且不区分「Id 不存在/密钥错/已吊销/已过期」，避免被用来探测凭据。
@@ -1379,14 +1353,12 @@
         </member>
         <member name="T:Quantum.Web.Filters.RealPrincipalAttribute">
              <summary>
-             要求调用者是**真实登录主体**（Web 管理令牌或 App 登录令牌）。
+             要求调用者是当前账号的真实登录主体。
             
              为什么需要它：<see cref="T:Quantum.Web.Filters.CustomAuthorizationFilter"/> 只验签不认身份，而 Open AppKey 换取的
-             10 分钟令牌同样是合法签名（"Name" 为固定标记、无用户/设备身份），会原样穿透普通受控端点。
-             因此「不对第三方匿名开放」的端点必须正向判定主体，而不是靠"没加 ManagerOnly 就谁都行"。
+             10 分钟令牌同样是合法签名（"Name" 为固定标记），因此须正向判定登录用途。
             
-             用于执行记录/运行详情这类会暴露任务名、脚本路径快照与失败摘要的读接口（一期 G2 契约：
-             Open/匿名不开放运行历史）。它不替代权限分层——Manager 与否仍由 <c>IsManager</c> claim 决定。
+             用于执行记录/运行详情这类会暴露任务名、脚本路径快照与失败摘要的读接口。
              </summary>
         </member>
         <member name="T:Quantum.Web.Middleware.AppWebSocketMiddleware">
@@ -1394,7 +1366,7 @@
             /ws/app?token=&lt;jwt&gt; 的 App 长连接网关（重写自 /ws/chat，替代 Web 聊天成为唯一用户触点）：
             - 握手必须携带有效 JWT（AppAuthService 签发，与管理端共用密钥），验签失败 401 拒绝升级；
               也支持连接后首帧 {"type":"auth","token":"..."} 兜底鉴权（4.4 协议上行 auth）。
-              单管理员体系：令牌还必须带 Manager claim——Open AppKey/任务临时令牌禁止连 WS（下行广播含会话内容）
+              令牌须为当前账号登录用途；Open AppKey 禁止连 WS（下行广播含会话内容）。
             - 下行 message/notify 帧带 msgId，客户端 ack 幂等确认送达；断线重连后按 seq 走 sync/REST 补拉
             - 接收帧：ping 保活、command 指令（按设备限流 2s）、ack 已送达、sync 增量同步
             - 60s 无任何帧踢连接（客户端 25s 应用层心跳，约 2 倍余量，容忍 Doze/网络抖动）
@@ -1417,7 +1389,7 @@
         </member>
         <member name="M:Quantum.Web.Middleware.AppWebSocketMiddleware.TryAuthenticateAsync(System.Net.WebSockets.WebSocket,System.Text.Json.JsonDocument)">
             <summary>
-            首帧兜底鉴权：type=auth 携带 token；验签失败或非 Manager 令牌下发 error 帧并关闭连接（返回 false）。
+            首帧兜底鉴权：type=auth 携带登录 token；校验失败下发 error 帧并关闭连接。
             doc 为调用方一次解析的结果（可空 = 非 JSON 帧，按鉴权失败处理）。
             </summary>
         </member>
@@ -1426,6 +1398,9 @@
             已鉴权连接的帧分发。DB 操作走短生命周期作用域，避免长连接长期占用 DbContext。
             doc 为调用方一次解析的结果（可空 = 非 JSON 帧，直接忽略）。
             </summary>
+        </member>
+        <member name="T:Quantum.Web.ScriptTaskSeeder">
+            <summary>仅在新库初始化时，将随应用分发的正式脚本登记为待配置任务。</summary>
         </member>
     </members>
 </doc>

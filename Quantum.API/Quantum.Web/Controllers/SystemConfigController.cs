@@ -12,7 +12,7 @@ namespace Quantum.Web.Controllers;
 /// 系统设置（管理员专用；footer/install 匿名端点不受影响）
 /// </summary>
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class SystemConfigController : BaseController
 {
     readonly SystemConfigService systemConfigService;

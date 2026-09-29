@@ -12,12 +12,12 @@ namespace Quantum.Web.Controllers;
 /// 下载带 ETag/Last-Modified 支持缓存协商；图片 inline、其余 attachment + nosniff。
 /// </summary>
 /// <remarks>
-/// 类级 ManagerOnly 与契约 §5.1 的权限清单一致：Open AppKey 匿名令牌同密钥签发但无 Manager claim，
+/// 类级 LoggedInUser 与凭据契约一致：Open AppKey 令牌虽同密钥签发，仍无登录用途，
 /// 缺这道闸即可上传/下载任意附件（2026-09-18 补齐）。
 /// </remarks>
 [Route("api/AppUpload")]
 [CustomAuthorizationFilter]
-[ManagerOnly]
+[LoggedInUser]
 public class AppUploadController : BaseController
 {
     private readonly AppUploadService _uploadService;

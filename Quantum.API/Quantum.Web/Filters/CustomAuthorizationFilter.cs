@@ -32,13 +32,18 @@ public class CustomAuthorizationFilter : Attribute, IAsyncAuthorizationFilter
 
         var token = auth.ToString().Replace("Bearer ", "");
 
-        if (JwtTokenValidator.Validate(token) == null)
+        var principal = JwtTokenValidator.ValidateLogin(token);
+        if (principal == null)
         {
             context.Result = new ObjectResult(new ResultModel
             {
                 Code = 401,
                 Message = "Token验证失败"
             });
+        }
+        else
+        {
+            context.HttpContext.User = principal;
         }
         return Task.CompletedTask;
     }
