@@ -38,18 +38,18 @@ build-apk.bat                     # App release APK（keystore 注入）
 ## 架构边界与硬规则
 
 - **HTTP 恒 200 信封**：所有接口经 ResultFilter/ExceptionFilter 包装为 `ResultModel`，`Code=200` 成功 / `401` 认证或权限 / `500` 业务失败（抛 `BusinessException`）。新增端点不要直接返回裸对象或非 200 状态码表达业务错误。
-- **权限分层**：管理员判定一律看 JWT 正向 `Manager="true"` claim（**不要**用"没有某限制就算管理员"的反向推断——Open 匿名令牌/任务临时令牌会穿透）。管理端点加 `[ManagerOnly]` filter；非 Manager 令牌的任务列表/操作由服务端过滤拦截，客户端不做显隐。
+- **单用户登录**：Web/App 共用唯一账号；新令牌须有 `TokenPurpose=User`、当前配置账号名与有效 `LoginTime`。旧令牌只在原有效期内按主体兼容，不依赖角色 claim。受保护端点走登录用途校验，Open AppKey、PushKey、外触 Secret 不得获取登录能力；详见 `docs/单用户登录与外部凭据契约.md`。
 - **双数据库**：`DBType`（appsettings.json，MySql/Sqlite）决定 `QuantumSqliteDbContext` / `QuantumMySqlDbContext` 哪个生效。实体或模型改动必须两侧各加迁移并核对 Up/Down 一致。
 - **任务执行引擎（2026-09-16 改造，.cs 源码任务进程内执行）**：脚本唯一形态 `.cs`（实现 `Quantum.Plugins.IQuantumTask`，示例见 `Quantum.Web/scripts/quantum/demo/`）。保存/上传走「门禁三级扫描（语法粗筛+语义黑名单+启发式警告）→ Roslyn 编译 → SHA256 哈希缓存」，任一不过拒绝落盘（PUT /task/scripts 返回 blocked/warnings/errors 三类诊断）；执行经 collectible ALC 加载产物、独立 DI scope 组装 ctx（`ctx.Env`/`ctx.Notify`/`ctx.CustomData` 门面进程内直调 EnvService/NotifyService/CustomDataService，免环回 HTTP/免令牌；`ctx.Http` 仅外部请求）。**已移除**：node/python 执行、`Extends.TemporaryToken`、`Dockerfile-no-python`/`build-no-python.bat`；根 Dockerfile 已删 node/python/build-essential 安装段。平台能力清单与旧脚本迁移对照见 `docs/脚本执行引擎改造计划.md` 2.5/2.7。
 - **任务脚本数据脱敏（2026-09-19 定，存量已全量改造）**：脚本内不允许保留私有服务地址、账号、密码、Cookie/令牌等敏感数据——一律改为**环境变量必填**读取，缺失即抛「缺少环境变量 X，请先在环境变量页配置」，不写内置缺省值；公网第三方 API 端点（bilibili、SMZDM、财经/晨报数据源等任务固有公开地址）可保留为常量。变量名须匹配 `^[a-zA-Z][a-zA-Z0-9_]{1,64}$`（字母开头、可含下划线、不能带连字符）；多账号配同名多条变量，执行时平台按 `&` 合并投递、脚本自行拆分；注释与帮助文案中的真实内网 IP 一律写 `192.168.x.x` 占位。同步脚本到新实例前，先在目标环境变量页补齐脚本头部声明的全部变量（缺失首跑即报错）。
-- **内置 AI 助手**：`AgentService`/`LlmClient`/`AgentToolbox` + `AiProviderService`（Quantum.Application），端点 `AiAgentController`/`AiProviderController` 为 `[ManagerOnly]`；Web 侧「AI供应商」「AI设置」（全局设置+AI 写权限高危项）挂系统管理、会话分组有「AI助手」页，App 侧 `feature:ai` 为底部 tab；限值上限 最大轮数 100 / 单次时限 3000，保存与运行时双重 clamp；计划文档 `docs/AI*.md`、`docs/App端AI助手功能计划.md`。
+- **内置 AI 助手**：`AgentService`/`LlmClient`/`AgentToolbox` + `AiProviderService`（Quantum.Application），端点 `AiAgentController`/`AiProviderController` 要求登录身份；Web 侧「AI供应商」「AI设置」（全局设置+AI 写权限高危项）挂系统管理、会话分组有「AI助手」页，App 侧 `feature:ai` 为底部 tab；限值上限 最大轮数 100 / 单次时限 3000，保存与运行时双重 clamp；计划文档 `docs/AI*.md`、`docs/App端AI助手功能计划.md`。
 - **App 通道**：WebSocket 走 `Middleware/AppWebSocketManager`，应用层 25s 心跳；消息同步 REST 分页 + msgId 幂等。App 相关端点契约以 `docs/App端API契约.md` 为准（分页三风格、WS 帧定义、错误文案均已定稿）。
 - **已移除的旧通道**：QQ/微信/公众号/WxPusher/Web-Chat/青龙（QingLong）均已整体删除，勿恢复、勿引用其表或接口。
 
-## 安全红线（改认证/上传/脚本链路前必读 docs/security/公网部署安全审计-2026-09-14.md）
+## 安全红线（现行凭据边界见 docs/单用户登录与外部凭据契约.md）
 
-- 上传/任务脚本链路有 ManagerOnly + 扩展名白名单 + SafeFile 执行路径兜底；改动时不得放宽。
-- 口令 PBKDF2（旧 AES 密文登录自动升级）；改密会作废全部 Manager 令牌（ManagerTokenNotBefore）。
+- 上传/任务脚本链路要求登录身份，并有扩展名白名单、三级门禁与 SafeFile 路径兜底；改动时不得放宽。
+- 登录口令按当前配置校验并限流；改密作废全部登录 access token 与 App refresh token。`UserTokenNotBefore` 与旧配置键 `ManagerTokenNotBefore` 在过渡期同步。
 - 生产 Swagger/CORS 由 `EnableSwagger` / `AllowedOrigins` 门控；`KnownProxies` 配合 ForwardedHeaders 防伪造 XFF。
 - `appsettings.json` 内含真实连接串与密钥，改动时不要泄露到日志/文档/新文件中。
 

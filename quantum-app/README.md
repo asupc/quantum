@@ -20,7 +20,7 @@ quantum-app/
 ├─ feature:notify      通知中心（三来源 msgId 幂等/分类 tab/已读）
 ├─ feature:task        任务列表/执行 + 执行记录只读（列表/详情时间轴）+ 日志中心
 ├─ feature:docker      Docker 面板（启停二次确认）
-├─ feature:admin       环境变量/系统设置（单管理员体系，用户管理已随用户体系移除）
+├─ feature:admin       环境变量/系统设置（内部模块名保留，登录账号可访问）
 ├─ feature:ai          AI 助手（会话/对话/diff 提案三级页，AiMarkdown/AiLineDiff/影子试运行）
 └─ feature:mine        设备/通知偏好/生物识别
 ```
@@ -77,7 +77,7 @@ keyPassword=***
 
 仍以服务端测试为全局回归门禁。
 
-## 5. 版本发布（管理员操作）
+## 5. 版本发布
 
 1. 改 `app/build.gradle.kts` 的 `versionCode`（单调递增）与 `versionName`；
 2. 用 `build-apk.bat` 构建 release APK（JDK 自动切换 + keystore 注入）；

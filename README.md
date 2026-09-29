@@ -38,10 +38,10 @@ Kotlin 2.1 + Jetpack Compose (M3) 多模块工程：
 - **脚本门面 API**：`ctx.Env`（环境变量）、`ctx.Notify`（文本/图片/音视频/可点选项）、`ctx.CustomData`（自定义数据）、`ctx.Http`、`ctx.File`，免环回 HTTP、免令牌；
 - **双数据库**：`DBType` 切换 SQLite / MySQL（双 DbContext，实体改动双库迁移）；
 - **HTTP 恒 200 信封**：接口统一 `ResultModel`（Code 200/401/500），业务失败抛 `BusinessException`；
-- **权限分层**：JWT `Manager="true"` claim + `[ManagerOnly]`，口令 PBKDF2，改密作废全部管理令牌；
+- **单用户登录**：Web/App 共用唯一账号，JWT 登录用途与当前账号名共同校验；改密作废全部登录 access token 与 App refresh token；
 - **内置 AI 助手**：多供应商管理、流式对话、工具调用、脚本修复提案（人工应用前影子试运行）、上下文超长压缩兜底；
 - **App 通信层**：`/ws/app` 长连接（握手鉴权、心跳、ACK、增量同步）+ REST 分页补拉；
-- **公网安全基线**：上传/脚本链路 ManagerOnly + 白名单 + SafeFile、ForwardedHeaders/KnownProxies、Swagger/CORS 生产门控等，详见 `docs/security/`。
+- **公网安全基线**：上传/脚本链路登录身份 + 白名单 + SafeFile、ForwardedHeaders/KnownProxies、Swagger/CORS 生产门控等，详见 `docs/单用户登录与外部凭据契约.md`。
 
 ## 仓库结构
 
@@ -82,7 +82,7 @@ docker pull asupc/quantum:latest
 
 ```bash
 docker compose up -d
-docker logs quantum   # 首启自动初始化配置，控制台输出随机管理员账号/密码，请立即保存
+docker logs quantum   # 首启自动初始化配置，控制台输出随机登录账号/密码，请立即保存
 ```
 
 **正式部署（自带配置）**：
@@ -103,7 +103,7 @@ docker compose up -d
 ```bash
 # 1. 后端（仓库根目录）
 dotnet run --project Quantum.API/Quantum.Web
-# 首次启动若无 appsettings.json，会自动生成随机管理员账号/密码与 SQLite 库，
+# 首次启动若无 appsettings.json，会自动生成随机登录账号/密码与 SQLite 库，
 # 账号密码打印在控制台，请立即保存。
 
 # 2. Web 管理端（另开一个终端）
@@ -120,11 +120,11 @@ npm run dev        # http://localhost:8080，/api 与 /ws 代理到 127.0.0.1:50
 
 | 键 | 说明 |
 |---|---|
-| `UserName` / `PassWord` | 管理员账号口令。**不带配置首启时随机生成并打印到控制台**；用模板则必须改掉占位值 |
+| `UserName` / `PassWord` | 唯一登录账号口令。**不带配置首启时随机生成并打印到控制台**；用模板则必须改掉占位值 |
 | `DBType` | `SQLite`（零依赖，默认）或 `MySql` |
 | `DBAddress` | SQLite 填库文件名（如 `quantum.db`）；MySQL 填连接串 `server=...;port=...;database=...;Uid=...;Pwd=...;` |
 | `Port` | 监听端口，默认 `5088` |
-| `SymmetricSecurityKey` / `SecurityIssuer` / `SecurityAudience` | JWT 签名密钥与签发/受众，**必须换成随机长字符串**（泄露即可伪造管理员令牌） |
+| `SymmetricSecurityKey` / `SecurityIssuer` / `SecurityAudience` | JWT 签名密钥与签发/受众，**必须换成随机长字符串**（泄露即可伪造登录令牌） |
 | `EnableSwagger` | 生产环境保持 `false` |
 | `AllowedOrigins` / `KnownProxies` | 公网部署时收敛 CORS、配置可信反向代理 |
 
@@ -139,7 +139,7 @@ cd quantum-app
 ./gradlew assembleDebug     # 调试包：app/build/outputs/apk/debug/
 ```
 
-安装后首启填写**服务器地址**（你的 Quantum 服务地址）与管理员账号登录。Release 签名、版本发布与保活引导见 `quantum-app/README.md` 与 `docs/App部署说明.md`；终端用户日常使用见 `docs/App用户使用说明.md`。
+安装后首启填写**服务器地址**（你的 Quantum 服务地址）与唯一账号登录。Release 签名、版本发布与保活引导见 `quantum-app/README.md` 与 `docs/App部署说明.md`；终端用户日常使用见 `docs/App用户使用说明.md`。
 
 ### 测试
 

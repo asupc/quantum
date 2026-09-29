@@ -1,6 +1,7 @@
 # 执行记录与外部推送 API 契约
 
 > 一期功能增强（G1~G4）与独立交付包 G-Push 的接口契约与运维口径。
+> 2026-09-29 起登录、角色与任务可见性以 `docs/单用户登录与外部凭据契约.md` 为准；下文历史审核记录保留当时结论。
 > 编制日期：2026-09-26。计划来源：`docs/功能增强分期实施计划.md`。
 > 说明：仓库原有的 `docs/security/公网部署安全审计-2026-09-14.md`、`docs/App端API契约.md`、AI 计划文档在当前检出中不存在，
 > 且 `docs/` 从未被 git 跟踪（`git log --all -- docs/**` 为空），已确认**不可找回**。
@@ -11,7 +12,7 @@
 - HTTP 恒 200 信封：`ResultModel{Code,Message,Data}`。`Code=200` 成功 / `401` 认证或权限 / `500` 业务失败（`BusinessException`）。
   业务错误**不用**非 200 状态码表达；边缘层（Kestrel/反代）在进入 MVC 前先行拒绝的场景（如请求体过大 413）不在该保证范围内。
 - 时间：后端持久化一律 UTC；界面按客户端时区显示。字段名以 `Utc` 结尾者即 UTC。
-- 权限：管理员判定一律看 JWT 正向 `Manager="true"` claim。
+- 权限：登录操作要求当前账号的 `TokenPurpose=User` 令牌；Open/PushKey/外触 Secret 不具备登录能力。
 - 「受理成功」不等于「脚本执行成功」：`exec-task` / `execute-runs` 返回 true 或 RunId，只表示运行记录已落库。
 
 ## 1. 执行记录（G2）
@@ -41,15 +42,15 @@
 | CancelReason | string? | 中止原因（如「脚本已变更，取消自动重试」） |
 | ElapsedMs | long? | 起止齐全才有值，否则 null（不把未知画成 0） |
 
-权限：非 Manager 令牌不返回 Manager 任务的执行记录（按 `ManagerSnapshot` 服务端过滤，列表与总数同步收敛）。
+权限：登录账号可读取全部执行记录；外部凭据不可调用该端点。
 
 ### 1.2 `GET /api/TaskRun/{runId}`
 
 返回 `TaskRunDetail{ Run, Attempts[], LogAvailable, LogId }`。`Attempts` 为同一根执行的全部尝试（按 Attempt 升序），用于时间轴。
 
-- 越权与「不存在」返回同一份失败文案，不区分（避免用该接口探测 RunId 是否存在）。
+- 未登录返回信封 `Code=401`，记录不存在返回业务失败。
 - 只回受限 `LogId`，**不回任何文件路径**。`LogAvailable=false` 表示日志已清理或尚未落库，前端显示占位。
-- 日志详情仍走 `GET /api/Logs/details/{id}`，该端点原有的受限类型校验保留，并新增 Manager 任务归属校验（详见 §5）。
+- 日志详情仍走 `GET /api/Logs/details/{id}`，登录账号可读取全部日志类型。
 
 ### 1.3 `POST /api/Task/execute-runs`
 
@@ -57,7 +58,7 @@
 
 旧端点 `POST /api/Task/exec-task` 行为不变（仍返回 `bool`），内部复用同一执行服务；待客户端全部迁移后再讨论移除。**既有成功信封语义未改。**
 
-### 1.4 `POST /api/TaskRun/{runId}/retry`（`[ManagerOnly]`）
+### 1.4 `POST /api/TaskRun/{runId}/retry`（登录身份）
 
 手动重新执行：产生**新的**根执行 Id（不复用旧执行链、不计入旧链重试次数），并留操作日志。任务已删除或该执行无持久任务时返回业务失败。
 
@@ -70,7 +71,7 @@
 无配置行时返回全默认值（**不写库**）：`RetryCount=0`、`BackoffSeconds=60`、`AlertAfterConsecutiveFailures=1`、`SendRecovery=false`、`CooldownMinutes=60`、`Enabled=false`。
 即存量未配置任务**只跑一次、不重试**。
 
-### 2.2 `PUT /api/TaskRun/policy/{taskId}`（`[ManagerOnly]`）
+### 2.2 `PUT /api/TaskRun/policy/{taskId}`（登录身份）
 
 服务端逐项 clamp，UI 只辅助：
 
@@ -112,13 +113,9 @@
   告警事件保留不少于执行记录。清理批量 500 条/轮、限速 6 小时一次，**不删运行中/待重试数据**，不删脚本版本，不改变现有日志清理行为。
 - 列表分页上限 100 与 `(TaskId,CreatedAtUtc)`、`(RootRunId,Attempt)` 唯一、`(Status,NextAttemptAtUtc)` 索引为必须项。
 
-## 5. 任务日志的 Manager 归属过滤（R-02）
+## 5. 任务日志可见性
 
-`GET /api/Logs` 与 `GET /api/Logs/details/{id}` 的「任务日志/指令触发」类型虽对全员开放，但内容可能属 Manager 任务：
-
-- 列表：非 Manager 令牌额外按「Manager 任务脚本名 → 同款净化目录名」过滤，并用运行记录 `ManagerSnapshot` 的
-  `LogId` 子查询兜住**任务已删除**后的历史日志；列表与总数同步收敛。
-- 详情：受限类型判定之外再走 `IsManagerTaskLogAsync`，越权返回信封 `Code=401`（不允许仅凭 LogId 直读）。
+`GET /api/Logs` 与 `GET /api/Logs/details/{id}` 仅接受登录身份。唯一账号可读取全部日志类型，包括任务删除后仍保留的历史；Open 等外部凭据返回信封 `Code=401`。
 
 ## 6. G-Push：第三方受限富文本推送
 
