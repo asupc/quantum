@@ -398,7 +398,7 @@ private fun NotificationPermissionRequester() {
     }
 }
 
-/** 首启「服务器地址」页 + 登录页（凭据 = appsettings 管理员账号，改密在 Web 管理端）。 */
+/** 首启「服务器地址」页 + 登录页（凭据 = appsettings 登录账号，改密在 Web 端）。 */
 @Composable
 private fun ServerAndLoginScreen(shellViewModel: ShellViewModel) {
     val scope = rememberCoroutineScope()
@@ -631,7 +631,7 @@ private fun ServerAndLoginScreen(shellViewModel: ShellViewModel) {
 
         Spacer(modifier = Modifier.height(20.dp))
         Text(
-            "提示：使用 appsettings 配置的管理员账号密码登录；平台未开放自助注册。",
+            "使用服务端配置的账号密码登录。",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -642,12 +642,12 @@ private fun ServerAndLoginScreen(shellViewModel: ShellViewModel) {
 /** 底部导航项：QQ 风格平铺底栏渲染 + 目标路由。 */
 private data class BottomTab(val item: BottomBarItem, val route: String)
 
-/** 底部五项（会话/AI助手/任务/管理/我的）：描边图标样式见 core:common 的 QuantumBottomBar。 */
+/** 底部五项（会话/AI助手/任务/设置/我的）：描边图标样式见 core:common 的 QuantumBottomBar。 */
 private val BottomTabs = listOf(
     BottomTab(BottomBarItem(label = "会话", icon = Icons.AutoMirrored.Outlined.Chat), "chats"),
     BottomTab(BottomBarItem(label = "AI助手", icon = Icons.Outlined.AutoAwesome), "ai"),
     BottomTab(BottomBarItem(label = "任务", icon = Icons.Outlined.TaskAlt), "manage/tasks"),
-    BottomTab(BottomBarItem(label = "管理", icon = Icons.Outlined.Settings), "manage"),
+    BottomTab(BottomBarItem(label = "设置", icon = Icons.Outlined.Settings), "manage"),
     BottomTab(BottomBarItem(label = "我的", icon = Icons.Outlined.Person), "mine")
 )
 
@@ -932,14 +932,13 @@ private fun ManageHub(navController: NavHostController) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        "管理控制台",
+                        "设置",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    QuantumStatusBadge(text = "系统管理员", active = true)
                 }
                 Text(
-                    "核心服务调度与系统级管理面板",
+                    "平台与运行参数",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp)

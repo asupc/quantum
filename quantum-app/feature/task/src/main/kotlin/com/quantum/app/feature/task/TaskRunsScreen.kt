@@ -75,9 +75,8 @@ import javax.inject.Inject
  * 执行记录列表（一期 G2 App 只读）：与 TaskViewModel 同一套分页/刷新/错误态写法
  * （触底加载 + 下拉刷新 + 首屏骨架 + 失败重试），只是数据源换成 GET api/TaskRun。
  *
- * 权限口径：**客户端不做任何显隐判断**——非 Manager 令牌拿不到 Manager 任务的执行记录，
- * 由服务端按 JWT 正向 Manager claim 过滤；空列表可能就是「服务端收敛后的空」。
- * 只读：手动重新执行（POST api/TaskRun/{runId}/retry）是 [ManagerOnly] 写操作，App 首期不提供，
+ * 执行历史对登录账号可见，由服务端校验登录令牌。
+ * 只读：App 首期不提供手动重新执行，
  * 失败策略编辑同样只在 Web。
  */
 @HiltViewModel

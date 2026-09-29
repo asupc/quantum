@@ -125,9 +125,9 @@ class MineViewModel @Inject constructor(
      */
     suspend fun authorizeScan(ticket: String): Boolean {
         return runCatching {
-            appApi.scanLogin(com.quantum.app.core.network.dto.ScanLoginRequest(ticket)).unwrap()
+            appApi.scanLogin(com.quantum.app.core.network.dto.ScanLoginRequest(ticket)).unwrap().authorized
         }.fold(
-            onSuccess = { true },
+            onSuccess = { it },
             onFailure = { e ->
                 _toast.value = (e as? ApiException)?.message ?: e.message ?: "授权失败，请重试"
                 false

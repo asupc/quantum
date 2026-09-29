@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * 管理面（feature:admin）：环境变量 / 系统设置（单管理员体系：服务端 [ManagerOnly]，UI 恒可见）。
+ * 设置面（feature:admin）：环境变量 / 系统设置，由服务端校验登录身份。
  * 快捷回复/自定义数据/书签/外触内执管理入口已按需移除（2026-09-18，聊天页快捷指令面板保留）；
  * 用户管理随用户体系移除；版本管理已移除（升级改为手动安装新 APK）。
  */
@@ -85,7 +85,7 @@ class AdminViewModel @Inject constructor(
         }
     }
 
-    // ---- 系统设置（管理员） ----
+    // ---- 系统设置 ----
     fun loadSetting() {
         viewModelScope.launch {
             runCatching { adminApi.systemSetting().unwrap() }

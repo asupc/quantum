@@ -60,7 +60,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** 日志中心/任务日志（分型按角色：非管理员仅任务日志/指令触发，服务端强制收敛）。 */
+/** 日志中心/任务日志。 */
 @HiltViewModel
 class LogsViewModel @Inject constructor(
     private val adminApi: AdminApi
@@ -133,7 +133,6 @@ class LogsViewModel @Inject constructor(
             runCatching { adminApi.logStatistics(days = 7).unwrap() }
                 .onSuccess { _statistics.value = it }
                 .onFailure { e ->
-                    // 非管理员访问统计被拒（Code=401 语义），静默隐藏入口
                     _statistics.value = null
                     _toast.value = (e as? ApiException)?.message
                 }

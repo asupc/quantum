@@ -6,6 +6,7 @@ import com.quantum.app.core.network.api.EnvelopeDto
 import com.quantum.app.core.network.dto.AppDeviceDto
 import com.quantum.app.core.network.dto.NotifySettingDto
 import com.quantum.app.core.network.dto.ScanLoginRequest
+import com.quantum.app.core.network.dto.ScanLoginResult
 import com.quantum.app.core.network.dto.UnbindDeviceRequest
 import com.quantum.app.core.network.session.SessionManager
 import com.quantum.app.core.network.ws.AppWsClient
@@ -170,10 +171,16 @@ class MineViewModelTest {
 
     @Test
     fun `authorizeScan returns true on success`() = runTest(dispatcher) {
-        coEvery { appApi.scanLogin(any()) } returns EnvelopeDto(code = 200, data = true)
+        coEvery { appApi.scanLogin(any()) } returns EnvelopeDto(code = 200, data = ScanLoginResult(true))
         val vm = viewModel()
         assertTrue(vm.authorizeScan("ticket-1"))
         coVerify { appApi.scanLogin(ScanLoginRequest("ticket-1")) }
+    }
+
+    @Test
+    fun `authorizeScan returns false when server does not authorize`() = runTest(dispatcher) {
+        coEvery { appApi.scanLogin(any()) } returns EnvelopeDto(code = 200, data = ScanLoginResult(false))
+        assertFalse(viewModel().authorizeScan("ticket-1"))
     }
 
     @Test

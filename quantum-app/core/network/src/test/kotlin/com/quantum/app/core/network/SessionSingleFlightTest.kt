@@ -32,7 +32,6 @@ open class FakeTokenStore : TokenStoreApi {
     override val baseUrl: Flow<String?> get() = emptyFlow()
     override val accessToken: Flow<String?> get() = emptyFlow()
     override val loggedIn: Flow<Boolean> get() = emptyFlow()
-    override val isManager: Flow<Boolean> get() = emptyFlow()
     override val userName: Flow<String?> get() = emptyFlow()
 
     override suspend fun currentBaseUrl(): String? = null
@@ -45,7 +44,7 @@ open class FakeTokenStore : TokenStoreApi {
     override suspend fun saveBaseUrl(url: String) = Unit
     override suspend fun saveLogin(
         baseUrl: String, userName: String, accessToken: String,
-        refreshToken: String, refreshExpiresAt: Long, accessExpiresAt: Long, isManager: Boolean
+        refreshToken: String, refreshExpiresAt: Long, accessExpiresAt: Long
     ) {
         accessTokenValue = accessToken
         refreshTokenValue = refreshToken
@@ -57,7 +56,6 @@ open class FakeTokenStore : TokenStoreApi {
         savedTokens += Triple(accessToken, refreshToken, refreshExpiresAt)
     }
 
-    override suspend fun updateManagerFlag(isManager: Boolean) = Unit
     override suspend fun clear() {
         cleared = true
         refreshTokenValue = null

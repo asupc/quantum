@@ -56,7 +56,7 @@ import com.quantum.app.core.network.dto.SystemSettingDto
 
 /**
  * 管理面页面集：环境变量 / 系统设置。
- * 单管理员体系（用户管理已移除），每页独立入口，写操作服务端兜底。
+ * 单用户体系，每页独立入口，写操作由服务端校验登录身份。
  * 2026-09-20：两页均为管理子页——顶部统一返回头、底部导航隐藏；
  * 系统设置字段集与 Web 端对齐（安全三件套补齐——此前 App 每次保存会把这三项清掉，见 DTO 注释）。
  */
@@ -274,7 +274,7 @@ private fun EnvEditorDialog(
 /**
  * 系统设置页（字段集与 Web 端 setting.vue 对齐，2026-09-20）：
  * 安全配置（Open AppKey/可信代理/跨域白名单/Swagger）+ 消息与推送（服务地址/两个间隔/黑名单/登录提醒）
- * + 站点与数据（自定义页脚/收缩数据库）。管理员账号密码不在本页（Web 右上角改密维护）。
+ * + 站点与数据（自定义页脚/收缩数据库）。账号密码在 Web 右上角维护。
  */
 @Composable
 fun SystemSettingScreen(onBack: () -> Unit, viewModel: AdminViewModel = hiltViewModel()) {
@@ -317,7 +317,7 @@ fun SystemSettingScreen(onBack: () -> Unit, viewModel: AdminViewModel = hiltView
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(QuantumSpacing.Sm)
     ) {
-        QuantumBackHeader(title = "系统设置", subtitle = "平台运行参数（管理员）", onBack = onBack)
+        QuantumBackHeader(title = "系统设置", subtitle = "平台运行参数", onBack = onBack)
 
         toast?.let {
             Text(
@@ -388,7 +388,7 @@ fun SystemSettingScreen(onBack: () -> Unit, viewModel: AdminViewModel = hiltView
                 keyboardType = KeyboardType.Number,
                 error = numberError
             )
-            SettingSwitchRow("管理员登录时推送提醒", current.loginNotify) {
+            SettingSwitchRow("账号登录时推送提醒", current.loginNotify) {
                 draft = current.copy(loginNotify = it)
             }
 

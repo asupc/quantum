@@ -65,7 +65,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Docker 只读面板 + 启停（管理员专用：服务端 [ManagerOnly] 双保险，普通用户入口不可见也调不通）。
+ * Docker 面板与启停操作由服务端校验登录身份。
  * 2026-09-20：容器卡片加边框、运行中容器并行拉 stats 显示内存占用（working set 口径）、
  * 日志改独立页面（原弹层放不下长文也没法复制）。
  */

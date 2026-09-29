@@ -33,7 +33,6 @@ data class TaskDto(
     @SerialName("WaitTime") val waitTime: Int = 0,
     @SerialName("TaskStartNotify") val taskStartNotify: String? = null,
     @SerialName("TaskEndNotify") val taskEndNotify: String? = null,
-    @SerialName("Manager") val manager: Boolean = false,
     @SerialName("Remark") val remark: String? = null,
     @SerialName("CommunicationTypes") val communicationTypes: String? = null,
     /** 会话名（相同会话名的任务在会话页合并为一个会话，空 = 任务独立会话）；
@@ -257,4 +256,9 @@ data class UpdatePasswordRequest(
 @Serializable
 data class ScanLoginRequest(
     @SerialName("Ticket") val ticket: String
+)
+
+@Serializable
+data class ScanLoginResult(
+    @SerialName("Authorized") val authorized: Boolean
 )

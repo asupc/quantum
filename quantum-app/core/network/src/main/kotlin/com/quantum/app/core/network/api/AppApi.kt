@@ -13,6 +13,7 @@ import com.quantum.app.core.network.dto.NotifySettingDto
 import com.quantum.app.core.network.dto.PageResultDto
 import com.quantum.app.core.network.dto.RefreshRequest
 import com.quantum.app.core.network.dto.ScanLoginRequest
+import com.quantum.app.core.network.dto.ScanLoginResult
 import com.quantum.app.core.network.dto.SessionPageResult
 import com.quantum.app.core.network.dto.SessionsOverviewRequest
 import com.quantum.app.core.network.dto.SessionsOverviewResult
@@ -176,7 +177,7 @@ interface AppApi {
     @PUT("api/App/notify-setting")
     suspend fun updateNotifySetting(@Body body: NotifySettingDto): EnvelopeDto<NotifySettingDto>
 
-    // ---- 扫码登录（P2：App 侧 Manager 令牌授权） ----
+    // ---- 扫码登录（App 侧登录令牌授权） ----
     @POST("api/App/scan-login")
-    suspend fun scanLogin(@Body body: ScanLoginRequest): EnvelopeDto<Boolean>
+    suspend fun scanLogin(@Body body: ScanLoginRequest): EnvelopeDto<ScanLoginResult>
 }

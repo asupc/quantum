@@ -7,7 +7,6 @@ interface TokenStoreApi {
     val baseUrl: kotlinx.coroutines.flow.Flow<String?>
     val accessToken: kotlinx.coroutines.flow.Flow<String?>
     val loggedIn: kotlinx.coroutines.flow.Flow<Boolean>
-    val isManager: kotlinx.coroutines.flow.Flow<Boolean>
     val userName: kotlinx.coroutines.flow.Flow<String?>
 
     suspend fun currentBaseUrl(): String?
@@ -24,11 +23,9 @@ interface TokenStoreApi {
         accessToken: String,
         refreshToken: String,
         refreshExpiresAt: Long,
-        accessExpiresAt: Long,
-        isManager: Boolean
+        accessExpiresAt: Long
     )
 
     suspend fun updateTokens(accessToken: String, refreshToken: String, refreshExpiresAt: Long, accessExpiresAt: Long)
-    suspend fun updateManagerFlag(isManager: Boolean)
     suspend fun clear()
 }

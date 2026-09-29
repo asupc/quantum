@@ -98,8 +98,7 @@ class SessionManager @Inject constructor(
             accessToken = accessToken,
             refreshToken = refreshToken,
             refreshExpiresAt = ServerTime.parseServer(refreshExpiresAtRaw),
-            accessExpiresAt = cachedAccessExpiresAt,
-            isManager = JwtUtil.claimOf(accessToken, "Manager") == "true"
+            accessExpiresAt = cachedAccessExpiresAt
         )
     }
 
@@ -264,14 +263,10 @@ class RawAuthHttp @Inject constructor(private val json: Json) {
     }
 }
 
-/** JWT 工具：解 exp 与自定义 claim（客户端不校验签名——签名由服务端拦截器校验）。 */
+/** JWT 工具：解 exp（客户端不校验签名——签名由服务端拦截器校验）。 */
 object JwtUtil {
     fun expOf(token: String): Long? = runCatching {
         decodePayload(token).optLong("exp", -1L).takeIf { it > 0 }?.times(1000L)
-    }.getOrNull()
-
-    fun claimOf(token: String, name: String): String? = runCatching {
-        decodePayload(token).optString(name).takeIf { it.isNotEmpty() }
     }.getOrNull()
 
     private fun decodePayload(token: String): org.json.JSONObject {

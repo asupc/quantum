@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * 任务域（A5.4）：Manager 任务已由服务端按调用者身份过滤（A5.0④），客户端不自行显隐。
+ * 任务域（A5.4）：任务访问由服务端校验登录身份。
  * 手动执行 → 完成一次「执行任务 → 收通知 → 看日志」闭环。
  */
 @HiltViewModel
@@ -108,6 +108,7 @@ class TaskViewModel @Inject constructor(
                     _page.value = TaskPage(it.data, it.totalCount)
                     _endReached.value = it.data.size >= it.totalCount
                     _error.value = null
+                    _toast.value = null
                 }
                 .onFailure { e ->
                     val message = (e as? ApiException)?.message ?: e.message

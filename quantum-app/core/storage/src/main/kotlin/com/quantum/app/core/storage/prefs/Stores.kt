@@ -28,7 +28,6 @@ class TokenStore(private val context: Context) : TokenStoreApi {
         val ACCESS_EXPIRES_AT = longPreferencesKey("access_expires_at")
         val DEVICE_ID = stringPreferencesKey("device_id")
         val USER_NAME = stringPreferencesKey("user_name")
-        val IS_MANAGER = booleanPreferencesKey("is_manager")
 
         // 登录页「记住账号密码」（与登录态生命周期解耦：登出/被踢都不清除，卸载清数据自然全清）
         val REMEMBER_USER_NAME = stringPreferencesKey("remember_user_name")
@@ -39,7 +38,6 @@ class TokenStore(private val context: Context) : TokenStoreApi {
     override val baseUrl: Flow<String?> = context.authDataStore.data.map { it[Keys.BASE_URL] }
     override val accessToken: Flow<String?> = context.authDataStore.data.map { it[Keys.ACCESS_TOKEN] }
     override val loggedIn: Flow<Boolean> = context.authDataStore.data.map { !it[Keys.REFRESH_TOKEN].isNullOrBlank() }
-    override val isManager: Flow<Boolean> = context.authDataStore.data.map { it[Keys.IS_MANAGER] ?: false }
     override val userName: Flow<String?> = context.authDataStore.data.map { it[Keys.USER_NAME] }
 
     override suspend fun currentBaseUrl(): String? = baseUrl.first()
@@ -62,17 +60,15 @@ class TokenStore(private val context: Context) : TokenStoreApi {
         accessToken: String,
         refreshToken: String,
         refreshExpiresAt: Long,
-        accessExpiresAt: Long,
-        isManager: Boolean
+        accessExpiresAt: Long
     ) {
         context.authDataStore.edit {
             it[Keys.BASE_URL] = baseUrl.trimEnd('/')
-        it[Keys.USER_NAME] = userName
-        it[Keys.ACCESS_TOKEN] = accessToken
-        it[Keys.REFRESH_TOKEN] = refreshToken
-        it[Keys.REFRESH_EXPIRES_AT] = refreshExpiresAt
-        it[Keys.ACCESS_EXPIRES_AT] = accessExpiresAt
-            it[Keys.IS_MANAGER] = isManager
+            it[Keys.USER_NAME] = userName
+            it[Keys.ACCESS_TOKEN] = accessToken
+            it[Keys.REFRESH_TOKEN] = refreshToken
+            it[Keys.REFRESH_EXPIRES_AT] = refreshExpiresAt
+            it[Keys.ACCESS_EXPIRES_AT] = accessExpiresAt
         }
     }
 
@@ -83,11 +79,6 @@ class TokenStore(private val context: Context) : TokenStoreApi {
             it[Keys.REFRESH_EXPIRES_AT] = refreshExpiresAt
             it[Keys.ACCESS_EXPIRES_AT] = accessExpiresAt
         }
-    }
-
-    /** 管理员标识随令牌轮换同步更新（claim 正向读取）。 */
-    override suspend fun updateManagerFlag(isManager: Boolean) {
-        context.authDataStore.edit { it[Keys.IS_MANAGER] = isManager }
     }
 
     override suspend fun currentRefreshExpiresAt(): Long =

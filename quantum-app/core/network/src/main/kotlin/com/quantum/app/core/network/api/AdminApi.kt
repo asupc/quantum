@@ -40,7 +40,7 @@ import retrofit2.http.Query
 
 /**
  * 复用管理面端点（契约见 docs/App端API契约.md §5）：
- * 权限由服务端按 JWT Manager claim / 调用者身份收敛，客户端不自行显隐。
+ * 权限由服务端校验当前登录账号，客户端不自行显隐。
  * 所有写操作 body 按 PascalCase DTO 传输；批量 ids 一律逗号分隔 query。
  */
 interface AdminApi {
@@ -118,7 +118,7 @@ interface AdminApi {
      * 执行历史分页（GET api/TaskRun，服务端按 CreatedAtUtc+Id 倒序，PageSize 上限 100）。
      * query 用后端模型的小写名（taskId/status/page/pageSize/days），与旧列表接口的
      * PageIndex/PageSize/Key 风格**不同**，属 TaskRun 控制器自身契约，勿"顺手统一"。
-     * status 传枚举名字符串（如 Failed）；权限由服务端按正向 Manager claim 过滤，客户端不自行显隐。
+     * status 传枚举名字符串（如 Failed）；服务端校验登录身份。
      */
     @GET("api/TaskRun")
     suspend fun taskRuns(
@@ -159,7 +159,7 @@ interface AdminApi {
         @Query("key") key: String? = null
     ): EnvelopeDto<List<EnvDto>>
 
-    // ---- 系统设置（管理员） ----
+    // ---- 系统设置 ----
     @GET("api/SystemConfig")
     suspend fun systemSetting(): EnvelopeDto<SystemSettingDto>
 
@@ -196,7 +196,7 @@ interface AdminApi {
     @PUT("api/Command/disable")
     suspend fun disableCommands(@Body ids: List<String>): EnvelopeDto<Boolean>
 
-    // ---- Docker（管理员） ----
+    // ---- Docker ----
     @GET("api/Docker/containers")
     suspend fun dockerContainers(@Query("all") all: Boolean = true): EnvelopeDto<List<DockerContainerDto>>
 
@@ -232,7 +232,7 @@ interface AdminApi {
     @GET("api/Login/qr-status")
     suspend fun qrStatus(@Query("ticket") ticket: String): EnvelopeDto<QrStatusDto>
 
-    // ---- AI 助手（AiAgent 控制器，ManagerOnly，与 Web AI 页共用；轮询式：消息增量 + 运行状态） ----
+    // ---- AI 助手（AiAgent 控制器，与 Web AI 页共用；轮询式：消息增量 + 运行状态） ----
 
     @GET("api/AiAgent/conversations")
     suspend fun aiConversations(): EnvelopeDto<List<AiConversationDto>>

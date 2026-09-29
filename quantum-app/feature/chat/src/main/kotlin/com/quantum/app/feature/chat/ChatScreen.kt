@@ -612,7 +612,7 @@ private fun TimeSeparator(createTime: String) {
 
 /**
  * 点选代发系统提示（QQ IM 系统消息样式）：居中小字灰、无头像无气泡。
- * pickLabel 是本端单端记忆（docs/选项已选态改造计划.md §3），其它端该行仍显示为普通用户气泡。
+ * pickLabel 是本端单端记忆（docs/选项已选态改造计划.md §3），其它端该行仍显示为普通消息气泡。
  */
 @Composable
 private fun PickHint(message: ChatMessageEntity) {

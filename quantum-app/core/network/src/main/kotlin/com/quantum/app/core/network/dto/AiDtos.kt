@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * AI 助手 DTO（feature:ai，2026-09-21）：全部复用 Web 端 AiAgent 端点契约（ManagerOnly，HTTP 恒 200 信封）。
+ * AI 助手 DTO（feature:ai）：复用 Web 端 AiAgent 登录端点契约（HTTP 恒 200 信封）。
  *
  * 双层 JSON：消息的 Payload 是**字符串化的 JSON**——外层信封解到 Payload 字符串后，
  * 由 feature:ai 的 AiPayloadParser 二次解析（解析失败按普通文本兜底，不炸页面）。

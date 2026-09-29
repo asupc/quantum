@@ -170,7 +170,7 @@ private fun RunSelfCheckCard(viewModel: MineViewModel) {
 
 /**
  * 我的页：设备管理、扫码授权（摄像头扫码登录）、通知偏好（三类开关+免打扰）、
- * 个人信息（单管理员；改密在 Web 管理端）、生物识别门禁开关、登出。
+ * 个人信息（改密在 Web 端）、生物识别门禁开关、登出。
  * 版本检查/端内自更新已整体移除（升级改为手动安装新 APK），仅保留只读版本号展示。
  */
 @Composable
@@ -236,11 +236,6 @@ fun MineScreen(
                     )
                 }
 
-                QuantumStatusBadge(
-                    text = "管理员",
-                    active = true,
-                    activeColor = MaterialTheme.colorScheme.secondary
-                )
             }
         }
 
