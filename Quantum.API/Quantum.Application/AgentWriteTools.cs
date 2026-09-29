@@ -375,7 +375,7 @@ public class AgentWriteTools
 
     /// <summary>
     /// 新增/编辑任务（计划 §4.2 B）：编辑按 JObject 键存在性合并（bool/int 不可空，「非 null」判不出未传）；
-    /// manager/communicationTypes 不暴露、恒回填库中原值；taskSubs 不传时回填现有子任务（防全删重插清空）。
+    /// communicationTypes 不暴露、恒回填库中原值；taskSubs 不传时回填现有子任务（防全删重插清空）。
     /// </summary>
     private async Task<string> SaveTaskAsync(JObject args, string conversation, CancellationToken ct)
     {
@@ -392,7 +392,7 @@ public class AgentWriteTools
             return $"任务不存在（Id={id}），请用 list_tasks 确认后重试。";
         }
 
-        // 读现状回填全部字段（含不暴露的 Manager/CommunicationTypes），再按原始键存在性覆盖显式传入的字段
+        // 读现状回填全部字段（含不暴露的 CommunicationTypes），再按原始键存在性覆盖显式传入的字段
         var save = new TaskSaveModel
         {
             Id = existing.Id,
@@ -408,7 +408,6 @@ public class AgentWriteTools
             EnablePush = existing.EnablePush,
             PushGroup = existing.PushGroup,
             Revocation = existing.Revocation,
-            Manager = existing.Manager,
             WaitTime = existing.WaitTime,
             TaskStartNotify = existing.TaskStartNotify,
             TaskEndNotify = existing.TaskEndNotify,
@@ -519,8 +518,7 @@ public class AgentWriteTools
             EnablePush = Bool(args, "enablePush") ?? false,
             PushGroup = Bool(args, "pushGroup") ?? false,
             Revocation = Bool(args, "revocation") ?? false,
-            // AI 不可制造管理员专属任务；CommunicationTypes 是已移除旧通道的遗留字段，恒 null
-            Manager = false,
+            // CommunicationTypes 是已移除旧通道的遗留字段，恒 null。
             WaitTime = Int(args, "waitTime") ?? 0,
             TaskStartNotify = Text(args, "taskStartNotify"),
             TaskEndNotify = Text(args, "taskEndNotify"),

@@ -73,8 +73,7 @@ public static class TaskRunRecorder
         using (var scope = _scopeFactory.CreateScope())
         {
             var runs = scope.ServiceProvider.GetRequiredService<TaskRunService>();
-            run = await runs.AcceptAsync(taskId, step.Task.Name, step.Task.FileName, source, triggerRef,
-                step.Task.Manager);
+            run = await runs.AcceptAsync(taskId, step.Task.Name, step.Task.FileName, source, triggerRef);
 
             if (!await runs.ClaimAsync(run.Id))
             {

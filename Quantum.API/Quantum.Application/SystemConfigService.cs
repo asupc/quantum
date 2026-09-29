@@ -55,25 +55,33 @@ public class SystemConfigService
         {
             throw new BusinessException("新密码不能为空！");
         }
-        var setting = SystemConfigHelper.GetSetting();
-        var pwd = setting.PassWord;
-        // 与 LoginService 登录口同款常数时间比较（审计「低危杂项」的覆盖补齐：改密口旧口令不再普通 != 比较）
-        var passwordOk = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-            System.Text.Encoding.UTF8.GetBytes(request.OldPassword ?? string.Empty),
-            System.Text.Encoding.UTF8.GetBytes(pwd ?? string.Empty));
-        if (!passwordOk || request.OldUserName != setting.UserName)
+        long userTokenNotBefore = 0;
+        SystemConfigHelper.UpdateSetting(setting =>
         {
-            throw new BusinessException("验证原用户名密码错误！");
-        }
-        if (!string.IsNullOrEmpty(request.NewUserName))
-        {
-            setting.UserName = request.NewUserName;
-        }
-        setting.PassWord = request.NewPassword;
-        // 改密即吊销：早于当前时刻签发的 Manager 令牌（Web 7 天/App 2 小时）全部失效
-        setting.ManagerTokenNotBefore = DateTimeOffset.Now.ToUnixTimeSeconds();
-        Consts.ManagerTokenNotBefore = setting.ManagerTokenNotBefore;
-        SystemConfigHelper.SetSetting(setting);
+            // 与 LoginService 登录口同款常数时间比较。
+            var passwordOk = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(request.OldPassword ?? string.Empty),
+                System.Text.Encoding.UTF8.GetBytes(setting.PassWord ?? string.Empty));
+            if (!passwordOk || request.OldUserName != setting.UserName)
+            {
+                throw new BusinessException("验证原用户名密码错误！");
+            }
+            if (!string.IsNullOrEmpty(request.NewUserName))
+            {
+                if (request.NewUserName == HttpContextExtension.OpenAppTokenName)
+                {
+                    throw new BusinessException("不能使用保留的外部凭据主体名作为登录账号");
+                }
+                setting.UserName = request.NewUserName;
+            }
+            setting.PassWord = request.NewPassword;
+            // 同写新旧键，旧版本回退时仍保留吊销下限。
+            setting.UserTokenNotBefore = Math.Max(DateTimeOffset.Now.ToUnixTimeSeconds() + 1,
+                Math.Max(setting.UserTokenNotBefore, setting.ManagerTokenNotBefore) + 1);
+            setting.ManagerTokenNotBefore = setting.UserTokenNotBefore;
+            userTokenNotBefore = setting.UserTokenNotBefore;
+        });
+        Consts.UserTokenNotBefore = userTokenNotBefore;
         // App 刷新令牌同批吊销（access 由 NotBefore 闸作废，refresh 不吊销的话旧 App 仍可凭它续签，穿透改密语义）
         await QuantumDbContext.AppRefreshTokens
             .Where(n => !n.Revoked)
@@ -100,32 +108,31 @@ public class SystemConfigService
     /// 上层据此回传「需重启生效」提示（本方法不改动热加载机制）。</param>
     public bool Update(Setting setting, out bool restartRequired)
     {
-        var currentConfig = SystemConfigHelper.GetSetting();
-
-        // 写入前用旧值对比入参：仅这三项属启动期配置，变更才需重启（其余字段即时生效）
-        restartRequired =
-            currentConfig.KnownProxies != setting.KnownProxies
-            || currentConfig.AllowedOrigins != setting.AllowedOrigins
-            || currentConfig.EnableSwagger != setting.EnableSwagger;
-
-        currentConfig.CommandTimeInterval = setting.CommandTimeInterval;
-        currentConfig.MessageQueueInterval = Math.Max(1, setting.MessageQueueInterval);
-        currentConfig.ServerPath = setting.ServerPath;
-        currentConfig.IntegralProportion = setting.IntegralProportion;
-        currentConfig.MessageInterval = setting.MessageInterval;
-        currentConfig.LoginNotify = setting.LoginNotify;
-        currentConfig.Footer = setting.Footer;
-        // 高敏键（Open AppKey）：空串或脱敏掩码不回写（「保存时空字段不覆盖」约定，防止掩码覆盖真实值）。
-        // AppKey 例外：未配置过（当前为空）时允许写入新值，否则永远无法首次设置。
-        if (!string.IsNullOrEmpty(setting.AppKey) && setting.AppKey != SecretMask)
+        var requiresRestart = false;
+        SystemConfigHelper.UpdateSetting(currentConfig =>
         {
-            currentConfig.AppKey = setting.AppKey;
-        }
-        // 安全开关三件套（非敏感，随设置页一起管理）：可信代理/跨域白名单/Swagger 暴露
-        currentConfig.KnownProxies = setting.KnownProxies;
-        currentConfig.AllowedOrigins = setting.AllowedOrigins;
-        currentConfig.EnableSwagger = setting.EnableSwagger;
-        SystemConfigHelper.SetSetting(currentConfig);
+            // 三项在 Startup 只读取一次，变更需重启。
+            requiresRestart =
+                currentConfig.KnownProxies != setting.KnownProxies
+                || currentConfig.AllowedOrigins != setting.AllowedOrigins
+                || currentConfig.EnableSwagger != setting.EnableSwagger;
+
+            currentConfig.CommandTimeInterval = setting.CommandTimeInterval;
+            currentConfig.MessageQueueInterval = Math.Max(1, setting.MessageQueueInterval);
+            currentConfig.ServerPath = setting.ServerPath;
+            currentConfig.IntegralProportion = setting.IntegralProportion;
+            currentConfig.MessageInterval = setting.MessageInterval;
+            currentConfig.LoginNotify = setting.LoginNotify;
+            currentConfig.Footer = setting.Footer;
+            if (!string.IsNullOrEmpty(setting.AppKey) && setting.AppKey != SecretMask)
+            {
+                currentConfig.AppKey = setting.AppKey;
+            }
+            currentConfig.KnownProxies = setting.KnownProxies;
+            currentConfig.AllowedOrigins = setting.AllowedOrigins;
+            currentConfig.EnableSwagger = setting.EnableSwagger;
+        });
+        restartRequired = requiresRestart;
         return true;
     }
 

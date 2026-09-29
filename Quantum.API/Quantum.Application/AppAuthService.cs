@@ -13,8 +13,8 @@ namespace Quantum.Application;
 
 /// <summary>
 /// App（安卓客户端）认证服务：账号密码换 access token（2 小时）+ refresh token（滑动窗口，默认 365 天，可吊销轮换）。
-/// 单管理员体系：凭据即 appsettings 的 Quantum:UserName/PassWord（与 Web 管理端登录同源），
-/// 签发的令牌恒带 Manager=true；设备按 DeviceId 维度注册/解绑/推送。
+/// 凭据即 appsettings 的 Quantum:UserName/PassWord（与 Web 登录同源），
+/// 签发 TokenPurpose=User；设备按 DeviceId 维度注册/解绑/推送。
 /// 吊销链（长效窗口的安全前提）：改密全量吊销 / 解绑设备吊销其令牌 / 旧令牌重放或跨设备使用按疑似泄露全量吊销并推送安全提醒。
 /// </summary>
 public class AppAuthService
@@ -58,7 +58,7 @@ public class AppAuthService
     }
 
     /// <summary>
-    /// 登录：校验管理员凭据（appsettings），注册/更新设备，签发 access + refresh。
+    /// 登录：校验账号凭据（appsettings），注册/更新设备，签发 access + refresh。
     /// </summary>
     public async Task<(string accessToken, string refreshToken, DateTime refreshExpiresAt)> LoginAsync(
         string userName, string password, string deviceId, string deviceName, string platform, string ip)
@@ -139,6 +139,10 @@ public class AppAuthService
         if (stored == null || stored.ExpiresAt < DateTime.Now)
         {
             throw new UnauthorizedBusinessException("刷新令牌无效或已过期，请重新登录！");
+        }
+        if (stored.CreateTime.ToUnix() < Consts.UserTokenNotBefore)
+        {
+            throw new UnauthorizedBusinessException("刷新令牌已因改密作废，请重新登录！");
         }
         if (!string.IsNullOrEmpty(stored.DeviceId) && stored.DeviceId != deviceId)
         {
@@ -257,10 +261,8 @@ public class AppAuthService
             new(JwtRegisteredClaimNames.Exp, $"{new DateTimeOffset(time.AddMinutes(AccessTokenMinutes)).ToUnixTimeSeconds()}"),
             new("Name", userName ?? string.Empty),
             new("DeviceId", deviceId ?? string.Empty),
-            new("LoginTime", time.ToUnix().ToString()),
-            // 单管理员：App 令牌恒带正向 Manager claim（[ManagerOnly] 唯一放行依据；
-            // Open AppKey 令牌/任务临时令牌无该 claim，天然被 [ManagerOnly] 拒绝）
-            new("Manager", "true"),
+            new("LoginTime", Math.Max(time.ToUnix(), Consts.UserTokenNotBefore).ToString()),
+            new("TokenPurpose", "User"),
         };
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Consts.SymmetricSecurityKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -287,6 +289,8 @@ public class AppAuthService
             Id = Guid.NewGuid().ToString().Replace("-", ""),
             TokenHash = HashToken(raw),
             DeviceId = deviceId ?? string.Empty,
+            CreateTime = DateTimeOffset.FromUnixTimeSeconds(
+                Math.Max(DateTimeOffset.Now.ToUnixTimeSeconds(), Consts.UserTokenNotBefore)).LocalDateTime,
             ExpiresAt = DateTime.Now.AddDays(ResolveRefreshDays())
         };
         _dbContext.AppRefreshTokens.Add(model);
@@ -295,7 +299,7 @@ public class AppAuthService
     }
 
     /// <summary>
-    /// 疑似泄露处置（单管理员体系取最简最狠）：全量吊销刷新令牌 + 安全提醒进通知中心。
+    /// 疑似泄露处置：全量吊销刷新令牌 + 安全提醒进通知中心。
     /// 推送属旁路：通知落库/推送失败不得让处置本身失败。
     /// </summary>
     private async Task HandleSuspectedLeakAsync(string reason)

@@ -79,7 +79,7 @@ public class TaskService
                      .Where(n => n != null))
         {
             var run = await _runService.AcceptAsync(taskInfo.Id, taskInfo.Name, taskInfo.FileName,
-                source, triggerRef, taskInfo.Manager);
+                source, triggerRef);
             receipts.Add(new TaskRunReceipt(taskInfo.Id, run.Id));
             // 后台执行必须落在自己的作用域里：请求一结束，本实例的 scoped DbContext 就被 Dispose，
             // 直接捕获 this 会让终态落库抛 ObjectDisposedException、运行记录永久停在 Running
@@ -102,7 +102,7 @@ public class TaskService
                      .Where(n => n != null))
         {
             var run = await _runService.AcceptAsync(taskInfo.Id, taskInfo.Name, taskInfo.FileName,
-                TaskTriggerSource.Cron, null, taskInfo.Manager);
+                TaskTriggerSource.Cron, null);
             runs.Add(RunTrackedAsync(taskInfo, run, ct));
         }
 
@@ -141,7 +141,7 @@ public class TaskService
         // 策略一旦启用，通知改由告警事件投递（含重试链的「最后一次确定失败」时点），旧路径必须让位。
         if (result.IsFinalFailure && !completion.PolicyOwned)
         {
-            NotifyManagersAsync(taskInfo.Id, taskInfo.Name,
+            NotifyDevicesAsync(taskInfo.Id, taskInfo.Name,
                 $"任务「{taskInfo.Name}」执行失败（{result.OutcomeLabel}）：{result.SafeSummary}");
             AgentAutoAnalyze.OnTaskFailure(taskInfo.Id, taskInfo.Name, taskInfo.FileName, result.SafeSummary);
         }
@@ -216,7 +216,7 @@ public class TaskService
     /// 任务→通知（category=task）：fire-and-forget，不阻塞执行链路。
     /// 任务模型无归属用户字段：失败/定时口径广播给全部设备；手动执行同样广播。
     /// </summary>
-    private static void NotifyManagersAsync(string taskId, string taskName, string content)
+    private static void NotifyDevicesAsync(string taskId, string taskName, string content)
     {
         _ = Task.Run(async () =>
         {
@@ -235,8 +235,7 @@ public class TaskService
     /// 分页获取脚本指令（含任务子步骤）
     /// </summary>
     /// <param name="query">查询条件</param>
-    /// <param name="excludeManager">服务端权限过滤：非管理员令牌不返回 Manager 任务（列表+总数同步收敛）</param>
-    public async Task<PageResult<TaskModel>> GetPageAsync(TaskQuery query, bool excludeManager = false)
+    public async Task<PageResult<TaskModel>> GetPageAsync(TaskQuery query)
     {
         if (!string.IsNullOrEmpty(query.Key))
         {
@@ -244,8 +243,7 @@ public class TaskService
         }
 
         var tasks = _dbContext.Tasks.AsNoTracking().Where(n =>
-            (!excludeManager || !n.Manager)
-            && (query.Enable == null || query.Enable.Value == n.Enable)
+            (query.Enable == null || query.Enable.Value == n.Enable)
         && (string.IsNullOrEmpty(query.Key) || n.Name.ToLower().Contains(query.Key)
         || (!string.IsNullOrEmpty(n.Command) && n.Command.ToLower().Contains(query.Key))
         || (!string.IsNullOrEmpty(n.FileName) && n.FileName.ToLower().Contains(query.Key))));
@@ -266,22 +264,6 @@ public class TaskService
             Page = query.PageIndex,
             PageSize = query.PageSize
         };
-    }
-
-    /// <summary>
-    /// 校验调用者可操作全部目标任务：非管理员令牌不得触碰 Manager 任务
-    /// （列表已被服务端过滤，此处补齐按 id 直呼的执行/编辑/删除入口）
-    /// </summary>
-    public void EnsureAccessible(List<string> ids, bool includeManager)
-    {
-        if (includeManager || ids == null || ids.Count == 0)
-        {
-            return;
-        }
-        if (CacheManager.Get<TaskModel>().Any(n => ids.Contains(n.Id) && n.Manager))
-        {
-            throw new BusinessException("包含无权操作的任务！");
-        }
     }
 
     /// <summary>
@@ -390,9 +372,9 @@ public class TaskService
     }
 
     /// <summary>
-    /// 更新任务（isManager=false 时 Manager 标记保持库中原值，防止非管理员借编辑提权）
+    /// 更新任务
     /// </summary>
-    public async Task<bool> UpdateAsync(TaskSaveModel saveModel, bool isManager = true)
+    public async Task<bool> UpdateAsync(TaskSaveModel saveModel)
     {
         ValidateCron(saveModel?.Cron);
         await ValidateSessionNameAsync(saveModel?.SessionName);
@@ -402,16 +384,11 @@ public class TaskService
             throw new BusinessException("任务不存在，可能已被删除，请刷新列表！");
         }
         await t.DeleteQuartzJob();
-        var managerFlagBefore = t.Manager;
         // 改名迁移钩子（§2.5）：ApplyTo 前按库中原值算旧出站键、ApplyTo 后算新出站键，
         // 满足迁移条件时在下方事务内调用 RenameSession 搬迁历史消息与会话行
         var oldSessionKey = TaskExcuteService.ResolveSessionKey(t.Id, t.SessionName);
         ApplyTo(t, saveModel);
         var newSessionKey = TaskExcuteService.ResolveSessionKey(t.Id, t.SessionName);
-        if (!isManager)
-        {
-            t.Manager = managerFlagBefore;
-        }
         PrepareSubs(t);
         await using var tx = await _dbContext.Database.BeginTransactionAsync();
         // 会话名改名迁移（§2.5，全部条件满足才执行）：
@@ -546,7 +523,6 @@ public class TaskService
         t.EnablePush = m.EnablePush;
         t.PushGroup = m.PushGroup;
         t.Revocation = m.Revocation;
-        t.Manager = m.Manager;
         t.WaitTime = m.WaitTime;
         t.TaskStartNotify = m.TaskStartNotify;
         t.TaskEndNotify = m.TaskEndNotify;
@@ -670,12 +646,12 @@ public class TaskService
     /// <summary>
     /// 导出脚本指令内容（文件名与响应类型由控制器决定）
     /// </summary>
-    public async Task<byte[]> ExportAsync(TaskQuery query, bool excludeManager = false)
+    public async Task<byte[]> ExportAsync(TaskQuery query)
     {
         using MemoryStream mem = new();
         query.PageIndex = 1;
         query.PageSize = 999999;
-        var result = await GetPageAsync(query, excludeManager);
+        var result = await GetPageAsync(query);
         var info = JsonConvert.SerializeObject(result.Data.Select(s => new
         {
             s.Name,
@@ -691,7 +667,6 @@ public class TaskService
             s.EnablePush,
             s.Remark,
             s.Revocation,
-            s.Manager,
             s.TextToPicture,
             // 显式白名单投影：新增模型字段不会自动带出，会话名须显式加入才随导出
             s.SessionName,
@@ -803,34 +778,16 @@ public class TaskService
     }
 
     /// <summary>
-    /// §9.2：多步骤指令步骤句柄鉴权——路由入参是 threadId（脚本侧环境变量 StepCommandTaskThreadId），
-    /// 字典键唯一命中即单一步骤；鉴权从「拿入参走 EnsureAccessible」挪到命中之后，
-    /// 用 step 实际所属任务的 Manager 标志判定（非 Manager 令牌命中他人 Manager 任务 → 401）。
-    /// </summary>
-    private static void EnsureStepAccessible(TaskCommandStep step, bool isManager)
-    {
-        if (isManager || step?.Task == null)
-        {
-            return;
-        }
-        if (CacheManager.Get<TaskModel>().Any(n => n.Id == step.Task.Id && n.Manager))
-        {
-            throw new UnauthorizedBusinessException("包含无权操作的任务！");
-        }
-    }
-
-    /// <summary>
     /// 手动结束多步骤任务
     /// </summary>
     /// <param name="threadId">指令步骤句柄（StepCommandTaskThreadId，非任务 Id）</param>
-    public bool Finish(string threadId, bool isManager)
+    public bool Finish(string threadId)
     {
         if (!MemoryObjectCache.TaskCommandSteps.TryGetValue(threadId, out var t))
         {
             // §9.2：查不中不再静默 return true，明确业务错误语义
             throw new BusinessException("该指令步骤不存在或已结束");
         }
-        EnsureStepAccessible(t, isManager);
         MemoryObjectCache.TaskCommandSteps.TryRemove(threadId, out _);
         return true;
     }
@@ -839,13 +796,12 @@ public class TaskService
     /// 多步骤任务回到上一步
     /// </summary>
     /// <param name="threadId">指令步骤句柄（StepCommandTaskThreadId，非任务 Id）</param>
-    public string Redo(string threadId, bool isManager)
+    public string Redo(string threadId)
     {
         if (!MemoryObjectCache.TaskCommandSteps.TryGetValue(threadId, out var t) || t == null)
         {
             throw new BusinessException("该指令步骤不存在或已结束");
         }
-        EnsureStepAccessible(t, isManager);
         if (string.IsNullOrEmpty(t.CurrentSubTaskId))
         {
             throw new BusinessException("当前任务不在子任务状态下，无法退回");
@@ -872,7 +828,7 @@ public class TaskService
     /// <summary>
     /// 为当前任务添加一个环境变量
     /// </summary>
-    public string AddEnv(string threadId, EnvModel env, bool isManager)
+    public string AddEnv(string threadId, EnvModel env)
     {
         // 编译正则表达式
         Regex regex = new(@"^[a-zA-Z][a-zA-Z0-9_]{1,64}$");
@@ -886,7 +842,6 @@ public class TaskService
         {
             throw new BusinessException("该指令步骤不存在或已结束");
         }
-        EnsureStepAccessible(t, isManager);
         // §1-4：构建新 List（剔除同名 + 追加新项）整体换引用，避免与执行线程读取并发冲突
         var snapshot = t.Envs;
         var kept = snapshot.Where(n => n.Name != env.Name).ToList();

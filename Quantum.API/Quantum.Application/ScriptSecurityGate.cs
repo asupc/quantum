@@ -11,7 +11,7 @@ namespace Quantum.Application;
 /// ② 语义级黑名单：经 SemanticModel 解析标识符最终绑定符号，按符号所属命名空间/类型判定
 ///    ——别名、var、using 改名均无法绕过；
 /// ③ 启发式警告（不阻断）：疑似死循环（未引用取消令牌）、硬编码 URL。
-/// 定位是防误用 + 粗粒度拦截，不是对抗性沙箱；真正的权限边界仍是 ManagerOnly 上传。
+/// 定位是防误用 + 粗粒度拦截，不是对抗性沙箱；真正的权限边界仍是 LoggedInUser 上传。
 /// </summary>
 public static partial class ScriptSecurityGate
 {

@@ -7,7 +7,7 @@ namespace Quantum.Application;
 /// 扫码登录管理后台（A5.5 P2）：
 /// 1. Web 登录页 POST api/Login/qr-create 换 ticket（匿名，2 分钟有效）并展示二维码；
 /// 2. Web 轮询 GET api/Login/qr-status?ticket=（匿名）；
-/// 3. 已登录的 App 管理员（Manager 令牌）扫得 ticket 后 POST api/App/scan-login 授权；
+/// 3. 已登录的 App 账号扫得 ticket 后 POST api/App/scan-login 授权；
 /// 4. qr-status 检测到授权即取回 Web 管理端令牌（票据一次性，取后即焚）。
 /// </summary>
 public class QrLoginService
@@ -77,7 +77,7 @@ public class QrLoginService
     }
 
     /// <summary>
-    /// App 侧授权：仅 Manager 令牌（控制器保证）把 Web 管理端令牌挂到票据上
+    /// App 侧授权：仅登录令牌（控制器保证）把 Web 登录令牌挂到票据上。
     /// </summary>
     public bool Authorize(string ticket, string webToken)
     {

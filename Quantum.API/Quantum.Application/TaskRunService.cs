@@ -62,7 +62,7 @@ public class TaskRunService
     /// 只有这一步落库成功，调用方才被允许把 RunId 暴露给客户端。
     /// </summary>
     public async Task<TaskRunModel> AcceptAsync(string taskId, string taskName, string scriptFile,
-        TaskTriggerSource source, string triggerRef, bool manager, string scriptHash = null)
+        TaskTriggerSource source, string triggerRef, string scriptHash = null)
     {
         var run = new TaskRunModel
         {
@@ -75,7 +75,6 @@ public class TaskRunService
             TriggerRef = Truncate(RedactRef(triggerRef), 200),
             Status = TaskRunStatus.Pending,
             LogId = NewRunId(),
-            ManagerSnapshot = manager,
             IsRetry = source == TaskTriggerSource.Retry
         };
         run.RootRunId = run.Id;
@@ -289,7 +288,6 @@ public class TaskRunService
                 // 新尝试仍走 Pending → Running 的同一领取口径，不给重试开第二条状态路径
                 Status = TaskRunStatus.Pending,
                 LogId = NewRunId(),
-                ManagerSnapshot = run.ManagerSnapshot,
                 IsRetry = true
             };
             _db.TaskRuns.Add(next);
@@ -352,21 +350,16 @@ public class TaskRunService
     // ------------------------------------------------------------------ 查询与权限
 
     /// <summary>
-    /// 执行历史分页。权限口径：非 Manager 令牌不返回 Manager 任务的执行记录
-    /// （正向 claim 判定，不用「没有某限制就算管理员」的反向推断）。
+    /// 执行历史分页。
     /// </summary>
     public async Task<(List<TaskRunModel> Rows, int Total)> GetPageAsync(string taskId, TaskRunStatus? status,
-        int page, int pageSize, bool isManager, int days = 90)
+        int page, int pageSize, int days = 90)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
         var since = DateTime.UtcNow.AddDays(-Math.Clamp(days, 1, 3650));
 
         var query = _db.TaskRuns.AsNoTracking().Where(n => n.CreatedAtUtc >= since);
-        if (!isManager)
-        {
-            query = query.Where(n => !n.ManagerSnapshot);
-        }
         if (!string.IsNullOrEmpty(taskId))
         {
             query = query.Where(n => n.TaskId == taskId);
@@ -385,9 +378,9 @@ public class TaskRunService
     }
 
     /// <summary>
-    /// 单条详情。找不到、或访问者非 Manager 而该执行属 Manager 任务 → 一律 null（不区分，避免探测）。
+    /// 单条详情。
     /// </summary>
-    public async Task<TaskRunModel> GetAsync(string runId, bool isManager)
+    public async Task<TaskRunModel> GetAsync(string runId)
     {
         if (string.IsNullOrEmpty(runId))
         {
@@ -395,13 +388,13 @@ public class TaskRunService
         }
 
         return await _db.TaskRuns.AsNoTracking()
-            .FirstOrDefaultAsync(n => n.Id == runId && (isManager || !n.ManagerSnapshot));
+            .FirstOrDefaultAsync(n => n.Id == runId);
     }
 
     /// <summary>同一根执行的全部尝试（详情时间轴用）。</summary>
-    public async Task<List<TaskRunModel>> GetChainAsync(string rootRunId, bool isManager)
+    public async Task<List<TaskRunModel>> GetChainAsync(string rootRunId)
         => await _db.TaskRuns.AsNoTracking()
-            .Where(n => n.RootRunId == rootRunId && (isManager || !n.ManagerSnapshot))
+            .Where(n => n.RootRunId == rootRunId)
             .OrderBy(n => n.Attempt)
             .ToListAsync();
 
@@ -428,7 +421,7 @@ public class TaskRunService
     }
 
     /// <summary>
-    /// 写策略。所有上限在此处服务端校验并 clamp（UI 只辅助），权限判定在控制器侧 [ManagerOnly]。
+    /// 写策略。所有上限在此处服务端校验并 clamp（UI 只辅助），权限判定在控制器侧 [LoggedInUser]。
     /// </summary>
     public async Task<TaskFailurePolicyModel> SavePolicyAsync(string taskId, TaskFailurePolicyModel input,
         string updatedBy)

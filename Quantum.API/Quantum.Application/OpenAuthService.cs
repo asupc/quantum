@@ -58,6 +58,7 @@ public class OpenAuthService
                 new Claim(JwtRegisteredClaimNames.Nbf,$"{new DateTimeOffset(DateTime.Now).ToUnixTimeSeconds()}") ,
                 new Claim (JwtRegisteredClaimNames.Exp,$"{new DateTimeOffset(DateTime.Now.AddMinutes(10)).ToUnixTimeSeconds()}"),
                 new Claim("Name", appTokenName),
+                new Claim("TokenPurpose", "Open"),
                 new Claim("IP", ip),
                 new Claim("LoginTime", time.ToUnix().ToString()),
             };

@@ -49,9 +49,8 @@ public class LoginService
                 new Claim(JwtRegisteredClaimNames.Exp, $"{new DateTimeOffset(DateTime.Now.AddMinutes(60 * 24 * 7)).ToUnixTimeSeconds()}"),
                 new Claim("Name", config.UserName),
                 new Claim("IP", ip),
-                // 正向管理员 claim：[ManagerOnly] 端点唯一放行依据（单管理员体系下 App 令牌恒带同款 claim）
-                new Claim("Manager", "true"),
-                new Claim("LoginTime", time.ToUnix().ToString()),
+                new Claim("TokenPurpose", "User"),
+                new Claim("LoginTime", Math.Max(time.ToUnix(), Consts.UserTokenNotBefore).ToString()),
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Consts.SymmetricSecurityKey));

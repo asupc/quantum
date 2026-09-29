@@ -216,7 +216,6 @@ public class OpenTriggerTaskService
             {
                 FileName = task.SrciptFile,
                 Name = task.Name,
-                Manager = false,
                 EnableProxy = task.EnableProxy,
                 EnablePush = task.EnablePush
             }
