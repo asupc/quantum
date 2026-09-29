@@ -192,7 +192,7 @@ describe('applyMessageMove 跨会话触发消息迁移（2026-09-18 批次）', 
         await store.handleFrame({ type: 'message_moved', msgId: 'm12', seq: 12, to: 'task-pwd' })
         // 默认会话（from 缺省）的行已搬到任务会话
         expect(store.messagesBySession['']).toHaveLength(0)
-        expect(store.messagesBySession['task-pwd'][0]).toMatchObject({ MsgId: 'm12' })
+        expect(store.messagesBySession['task-pwd'][0]).toMatchObject({ MsgId: 'm12', SessionKey: 'task-pwd' })
         // 会话列表快照刷新（预览/排序以服务端为准）
         expect(SessionsOverview).toHaveBeenCalledTimes(1)
         // D4 自动切换：currentKey（默认会话 ''）=== from（缺省）→ 打开目标会话；
@@ -210,6 +210,21 @@ describe('applyMessageMove 跨会话触发消息迁移（2026-09-18 批次）', 
         await store.applyMessageMove({ type: 'message_moved', msgId: 'm12', seq: 12, from: '', to: 'task-pwd' })
         expect(store.currentKey).toBe('task-music')
         expect(store.messagesBySession['task-pwd']).toHaveLength(1)
+    })
+
+    it('目标会话已补拉同一消息时不重复插入', async () => {
+        const store = useChatStore()
+        store.currentKey = 'other'
+        store.messagesBySession = {
+            'task-other': [{ Seq: 12, MsgId: 'm12', SessionKey: 'task-other' }],
+            'task-music': [{ Seq: 12, MsgId: 'm12', SessionKey: 'task-music' }]
+        }
+
+        await store.applyMessageMove({ msgId: 'm12', from: 'task-other', to: 'task-music' })
+
+        expect(store.messagesBySession['task-other']).toHaveLength(0)
+        expect(store.messagesBySession['task-music']).toHaveLength(1)
+        expect(store.messagesBySession['task-music'][0].SessionKey).toBe('task-music')
     })
 
     it('迁移帧先于 echo 到达（乱序防御）：先记 moves，echo 落行时改写会话键并清来源 pending 乐观气泡', async () => {

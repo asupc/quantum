@@ -814,7 +814,10 @@ export const useChatStore = defineStore('chat', {
             const row = list?.find((item) => item.MsgId === frame.msgId);
             if (list && row) {
                 const rest = list.filter((item) => item.MsgId !== frame.msgId);
-                const target = [...(this.messagesBySession[to] || []), row];
+                const target = [...(this.messagesBySession[to] || [])];
+                if (!target.some((item) => item.MsgId === frame.msgId)) {
+                    target.push({ ...row, SessionKey: to });
+                }
                 target.sort((a, b) => (a.Seq || 0) - (b.Seq || 0));
                 this.messagesBySession = { ...this.messagesBySession, [from]: rest, [to]: target };
             }
