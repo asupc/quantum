@@ -311,15 +311,16 @@ public class MessageProcess
     }
 
     /// <summary>
-    /// 任务触发候选筛选（internal 供单测）。三级路由（2026-09-18 会话分组归并批次，P4 版）：
+    /// 任务触发候选筛选（internal 供单测）：
     /// ① 点选精确路由——TargetTaskId 非空、命中 commTasks 中启用任务、且指令匹配该任务 → 只返回它；
-    ///    任务不存在/禁用/通讯类型不符/指令不匹配 → 视为失效落入 ②，不直接否决
+    ///    任务不存在/禁用/通讯类型不符/指令不匹配 → 视为失效落入后续匹配，不直接否决
     ///    （选项 reply 是任意文本，可能本就指向会话内另一个指令匹配的任务）；
-    /// ② 会话任务集路由——SessionKey 非空时取组（Id == SessionKey 或 ResolveSessionKey(任务) == SessionKey）：
+    /// ② 全局唯一命中——只有一个任务匹配时，由任务决定会话归属，与发送位置无关；
+    /// ③ 会话任务集路由——SessionKey 非空时取组（Id == SessionKey 或 ResolveSessionKey(任务) == SessionKey）：
     ///    组内指令匹配唯一命中 → 只返回它；多命中 → 仅返回组内命中集、不外溢全局
     ///    （P4 决策：合并会话内手打只在组内多触发，不再误触会话外任务，纯数字双触发不回归）；
     ///    零命中或组不存在（含已删任务的会话键）→ 回落全局；
-    /// ③ 无会话键 → 全局 commTasks（与旧版行为一致，由上层做指令匹配）。
+    /// ④ 无会话键或组内零命中 → 全局匹配集。
     /// </summary>
     internal static List<TaskModel> SelectTaskCandidates(
         IReadOnlyList<TaskModel> enabledTasks, MessageProccessDTO message, Func<string, string, bool, bool> matcher)
@@ -338,31 +339,34 @@ public class MessageProcess
             }
         }
 
-        // ② 会话任务集路由
+        var globalHits = commTasks.Where(n => matcher(n.Command, message.message, n.EnableRegex)).ToList();
+        if (globalHits.Count == 1)
+        {
+            return globalHits;
+        }
+
+        // 多任务匹配时才用来源会话消歧；单任务匹配始终归任务会话。
         if (!string.IsNullOrWhiteSpace(message.SessionKey))
         {
             var sessionKey = message.SessionKey.Trim();
-            var group = commTasks.Where(n => n.Id == sessionKey
+            var group = globalHits.Where(n => n.Id == sessionKey
                 || TaskExcuteService.ResolveSessionKey(n.Id, n.SessionName) == sessionKey).ToList();
             if (group.Count > 0)
             {
-                var hits = group.Where(n => matcher(n.Command, message.message, n.EnableRegex)).ToList();
-                if (hits.Count == 1)
+                if (group.Count == 1)
                 {
-                    return [hits[0]];
+                    return group;
                 }
                 // 多命中：仅返回组内命中集，不外溢全局（P4）
-                if (hits.Count > 1)
+                if (group.Count > 1)
                 {
-                    return hits;
+                    return group;
                 }
-                // 组内零命中 → 回落全局（会话不是指令隔离区，与现状语义一致）
             }
             // 组不存在（含已删任务的会话键）→ 回落全局
         }
 
-        // ③ 无会话键 → 全局候选（由上层做指令匹配）
-        return commTasks;
+        return globalHits;
     }
 
     /// <summary>
