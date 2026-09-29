@@ -1,6 +1,6 @@
 import axios from '@/libs/api.request'
 
-// 登录（凭据 = appsettings 管理员账号；单管理员体系已移除用户管理）
+// 登录（Web/App 共用 appsettings 中的唯一账号）
 export const login = ({ userName, password }) => {
     const data = {
         userName,
@@ -13,7 +13,7 @@ export const login = ({ userName, password }) => {
     })
 }
 
-// 扫码登录（App 管理员授权，A5.5 P2）：票据 2 分钟有效，授权后 Token 一次性返回
+// 扫码登录（App 登录账号授权）：票据 2 分钟有效，授权后 Token 一次性返回
 export const QrCreate = () => {
     return axios.request({
         url: '/api/Login/qr-create',

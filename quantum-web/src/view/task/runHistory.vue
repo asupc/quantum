@@ -93,8 +93,7 @@
                     <n-alert type="warning" :bordered="false" size="small" style="margin-bottom: 8px">
                         自动重试会重放脚本的外部副作用，仅适合幂等脚本；默认关闭。
                     </n-alert>
-                    <n-button type="primary" size="small" :disabled="!canWritePolicy" @click="savePolicy">保存策略</n-button>
-                    <span v-if="!canWritePolicy" class="muted" style="margin-left: 8px">策略修改仅管理员可用</span>
+                    <n-button type="primary" size="small" @click="savePolicy">保存策略</n-button>
                 </n-form>
             </n-space>
 
@@ -124,8 +123,6 @@ export default {
     props: {
         show: { type: Boolean, default: false },
         task: { type: Object, default: null },
-        // 客户端不做管理端显隐（权限由服务端 [ManagerOnly] 拦截，非 Manager 保存返回信封 401）
-        canWritePolicy: { type: Boolean, default: true },
         focusRunId: { type: String, default: '' }
     },
     emits: ['update:show'],

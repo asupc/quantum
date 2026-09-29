@@ -1,6 +1,6 @@
 import axios from '@/libs/api.request'
 
-// 脚本版本管理（管理员专属，2026-09-20 新增）
+// 脚本版本管理（需登录）
 
 export const GetScriptVersions = (query) => {
     return axios.request({

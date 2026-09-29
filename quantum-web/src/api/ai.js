@@ -1,6 +1,6 @@
 import axios from '@/libs/api.request'
 
-// AI 供应商与模型配置（管理员专属，2026-09-20 新增）
+// AI 供应商与模型配置（需登录）
 
 export const GetAiProviders = () => {
     return axios.request({

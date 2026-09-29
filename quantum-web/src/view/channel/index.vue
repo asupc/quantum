@@ -254,7 +254,7 @@ async function saveFeishu() {
 }
 async function beginWeixin(row) {
   // 协议版本元数据由服务端内置默认值解析（QUANTUM_CHANNEL_WEIXIN_* 环境变量可覆盖），
-  // 前端不再弹「协议版本」填写窗——普通用户不可能知道该填什么，不该让这一步拦住扫码。
+  // 扫码时无需填写协议版本。
   const run = async (confirm) => {
     stopQr()
     try {

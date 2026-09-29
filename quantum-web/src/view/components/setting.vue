@@ -3,7 +3,7 @@
         <n-form ref="SystemConfig" :model="SystemConfig" label-placement="left" label-width="150"
             style="padding: 0 10px">
             <n-alert type="info" :show-icon="true" style="margin-bottom: 16px">
-                管理员用户名与登录密码请通过右上角用户菜单「修改密码」维护；此处为平台运行参数。
+                登录账号与密码请通过右上角用户菜单「修改密码」维护；此处为平台运行参数。
             </n-alert>
 
             <n-divider title-placement="left">安全配置</n-divider>
@@ -129,7 +129,7 @@
                 <n-gi :span="12">
                     <n-form-item label="登录提醒">
                         <n-checkbox v-model:checked="SystemConfig.LoginNotify">
-                            <span class="checkbox-label">管理员登录时推送提醒</span>
+                            <span class="checkbox-label">账号登录时推送提醒</span>
                         </n-checkbox>
                     </n-form-item>
                 </n-gi>

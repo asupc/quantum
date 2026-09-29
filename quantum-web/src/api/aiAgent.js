@@ -1,6 +1,6 @@
 import axios from '@/libs/api.request'
 
-// AI 脚本修复 Agent：会话、消息、运行轮询与修复提案（管理员专属，2026-09-20 新增）
+// AI 脚本修复 Agent：会话、消息、运行轮询与修复提案（需登录）
 
 export const GetConversations = () => {
     return axios.request({

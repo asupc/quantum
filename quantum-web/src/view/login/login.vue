@@ -6,7 +6,7 @@
             <div class="sub">QUANTUM AUTOMATION CONSOLE</div>
             <login-form @on-success-valid="handleSubmit"></login-form>
             <div class="qr-login" v-if="QrTicket">
-                <div class="qr-tip">用量子助手 App（管理员）扫码授权</div>
+                <div class="qr-tip">用量子助手 App 扫码授权</div>
                 <div class="qr-code mono">{{ QrTicket }}</div>
                 <div class="qr-tip" :class="{ done: QrStatus === 1 }">{{ QrStatusText }}</div>
             </div>
