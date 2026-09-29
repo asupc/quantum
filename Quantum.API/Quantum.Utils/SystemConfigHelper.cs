@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Serialization;
 using Quantum.Entities.Config;
@@ -36,15 +36,28 @@ public static class SystemConfigHelper
     /// 消除整文件读改写的丢更新与「A 文本 @ B mtime」缓存错配。
     /// </summary>
     public static void SetSetting(Setting config)
+        => SetSetting(config, configPath);
+
+    private static void SetSetting(Setting config, string path)
     {
         lock (ConfigWriteLock)
         {
-            var root = LoadRoot() ?? NewSkeleton(config);
+            if (config.UserName == HttpContextExtension.OpenAppTokenName)
+            {
+                throw new InvalidOperationException("登录账号不能使用 Open 凭据的保留名称");
+            }
+            var root = LoadRoot(path) ?? NewSkeleton(config);
+            var persisted = root[SectionName]?.Deserialize<Setting>(ReadOptions);
+            var notBefore = Math.Max(
+                Math.Max(config.UserTokenNotBefore, config.ManagerTokenNotBefore),
+                Math.Max(persisted?.UserTokenNotBefore ?? 0, persisted?.ManagerTokenNotBefore ?? 0));
+            config.UserTokenNotBefore = notBefore;
+            config.ManagerTokenNotBefore = notBefore;
             root[SectionName] = JsonSerializer.SerializeToNode(config);
             var text = root.ToJsonString(WriteOptions);
             for (var attempt = 0; ; attempt++)
             {
-                var tempPath = $"{configPath}.{Guid.NewGuid():N}.tmp";
+                var tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
                 try
                 {
                     using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
@@ -52,13 +65,13 @@ public static class SystemConfigHelper
                     {
                         writer.Write(text);
                     }
-                    File.Move(tempPath, configPath, true);
+                    File.Move(tempPath, path, true);
                     // 写后同步文本缓存：消除「缓存仍持旧文本，而磁盘 mtime 恰与写前相同（同 tick 写入）」的读旧窗口
                     lock (ConfigTextLock)
                     {
                         _cachedText = text;
-                        _cachedPath = configPath;
-                        _cachedWriteUtc = File.GetLastWriteTimeUtc(configPath);
+                        _cachedPath = path;
+                        _cachedWriteUtc = File.GetLastWriteTimeUtc(path);
                     }
                     break;
                 }
@@ -72,18 +85,31 @@ public static class SystemConfigHelper
         }
     }
 
+    /// <summary>在同一写锁内读取并修改配置，防止并发设置保存覆盖刚改过的登录凭据。</summary>
+    public static void UpdateSetting(Action<Setting> update)
+    {
+        lock (ConfigWriteLock)
+        {
+            var current = GetSetting();
+            update(current);
+            SetSetting(current);
+        }
+    }
+
     public static Setting GetSetting()
     {
         // §1-7：文本未变（ReadConfigText 命中缓存返回同一 string 引用）→ 复用解析结果，跳过 JsonNode.Parse/Deserialize。
         // 返回克隆而非缓存实例本身：调用方会就地修改返回对象（脱敏/改密），共享会污染权威缓存。
-        var currentText = ReadConfigText();
+        var path = configPath;
+        var currentText = ReadConfigText(path);
         var memo = _memo;
-        if (currentText != null && memo != null && memo.Setting != null && ReferenceEquals(memo.Text, currentText))
+        if (currentText != null && memo != null && memo.Path == path && memo.Setting != null
+            && ReferenceEquals(memo.Text, currentText))
         {
             return memo.Setting.Clone();
         }
 
-        var config = LoadRoot()?[SectionName]?.Deserialize<Setting>(ReadOptions);
+        var config = LoadRoot(path)?[SectionName]?.Deserialize<Setting>(ReadOptions);
         if (config == null)
         {
             config = new Setting
@@ -102,91 +128,101 @@ public static class SystemConfigHelper
             Console.WriteLine($"数据库类型：{config.DBType}");
             Console.WriteLine($"数据库文件：{config.DBAddress}");
             Console.WriteLine($"访问地址：{config.Host}:{config.Port}，请手动替换localhost为您的IP地址。");
-            SetSetting(config);
+            SetSetting(config, path);
         }
         #region  配置文件容错处理
         if (config.Port <= 0)
         {
             config.Port = 5088;
-            SetSetting(config);
+            SetSetting(config, path);
         }
 
         if (config.CommandTimeInterval < 0)
         {
             config.CommandTimeInterval = 3;
-            SetSetting(config);
+            SetSetting(config, path);
         }
 
         if (config.MaxConcurrentTasks <= 0)
         {
             config.MaxConcurrentTasks = 8;
-            SetSetting(config);
+            SetSetting(config, path);
         }
 
         if (config.MessageQueueInterval < 0)
         {
             config.MessageQueueInterval = 100;
-            SetSetting(config);
+            SetSetting(config, path);
         }
 
         if (string.IsNullOrEmpty(config.DBAddress))
         {
             config.DBAddress = $"Quantum-{RandomStringBuilder.Create(8)}.db";
-            SetSetting(config);
+            SetSetting(config, path);
         }
 
         if (string.IsNullOrEmpty(config.Host))
         {
             config.Host = "http://*";
-            SetSetting(config);
+            SetSetting(config, path);
         }
         if (string.IsNullOrEmpty(config.DBType))
         {
             config.DBType = "SQLite";
-            SetSetting(config);
+            SetSetting(config, path);
         }
         if (string.IsNullOrEmpty(config.PassWord))
         {
             config.PassWord = RandomStringBuilder.Create();
-            SetSetting(config);
+            SetSetting(config, path);
         }
         if (string.IsNullOrEmpty(config.UserName))
         {
             config.UserName = "Quantum" + RandomStringBuilder.Create(6);
-            SetSetting(config);
+            SetSetting(config, path);
         }
         if (string.IsNullOrEmpty(config.SymmetricSecurityKey))
         {
             config.SymmetricSecurityKey = RandomStringBuilder.Create(64);
-            SetSetting(config);
+            SetSetting(config, path);
         }
         if (string.IsNullOrEmpty(config.SecurityAudience))
         {
             config.SecurityAudience = "Audience." + RandomStringBuilder.Create();
-            SetSetting(config);
+            SetSetting(config, path);
         }
         if (string.IsNullOrEmpty(config.SecurityIssuer))
         {
             config.SecurityIssuer = "Issuer." + RandomStringBuilder.Create();
-            SetSetting(config);
+            SetSetting(config, path);
         }
         if (string.IsNullOrEmpty(config.ChannelMasterKey))
         {
             // 消息通道主密钥：32 字节随机数 Base64 落盘，一次生成终身使用（丢钥=已存凭据全部作废），
             // 生成路径与 SymmetricSecurityKey 同款；环境变量 QUANTUM_CHANNEL_KEY_FILE/MASTER_KEY 存在时运行期不读本值。
             config.ChannelMasterKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-            SetSetting(config);
+            SetSetting(config, path);
+        }
+        if (config.UserName == HttpContextExtension.OpenAppTokenName)
+        {
+            throw new InvalidOperationException("登录账号不能使用 Open 凭据的保留名称");
         }
         if (ConstsAutoRefresh)
         {
             // §1-8：单次换入四字段快照，避免读者在四次赋值之间看到跨字段撕裂的密钥组合
             Consts.SetJwtSecrets(config.SymmetricSecurityKey, config.SecurityAudience,
-                config.SecurityIssuer, config.ManagerTokenNotBefore);
+                config.SecurityIssuer, Math.Max(config.UserTokenNotBefore, config.ManagerTokenNotBefore));
         }
 
         #endregion
 
-        _memo = new ParsedConfig { Text = _cachedText, Setting = config };
+        lock (ConfigTextLock)
+        {
+            if (_cachedPath == path)
+            {
+                _memo = new ParsedConfig { Path = path, Text = _cachedText, Setting = config };
+            }
+        }
         return config.Clone();
     }
 
@@ -227,21 +263,22 @@ public static class SystemConfigHelper
 
     private sealed class ParsedConfig
     {
+        public string Path;
         public string Text;
         public Setting Setting;
     }
 
-    private static string ReadConfigText()
+    private static string ReadConfigText(string path)
     {
         lock (ConfigTextLock)
         {
-            if (!File.Exists(configPath))
+            if (!File.Exists(path))
             {
                 _cachedText = null;
                 return null;
             }
-            var writeUtc = File.GetLastWriteTimeUtc(configPath);
-            if (_cachedText != null && _cachedPath == configPath && _cachedWriteUtc == writeUtc)
+            var writeUtc = File.GetLastWriteTimeUtc(path);
+            if (_cachedText != null && _cachedPath == path && _cachedWriteUtc == writeUtc)
             {
                 return _cachedText;
             }
@@ -252,16 +289,16 @@ public static class SystemConfigHelper
                     // §2-14 TOCTOU：读前后各 stat 一次，两次 mtime 一致才认定「文本」与「时间戳」同属一个落盘版本；
                     // 不一致说明 ReadAllText 期间文件被改写（缓存会把半成品文本钉死到下次同 mtime 命中），
                     // 按未命中重读，最多重试两次后接受最终态兜底。
-                    var writeBefore = File.GetLastWriteTimeUtc(configPath);
-                    var text = File.ReadAllText(configPath);
-                    var writeAfter = File.GetLastWriteTimeUtc(configPath);
+                    var writeBefore = File.GetLastWriteTimeUtc(path);
+                    var text = File.ReadAllText(path);
+                    var writeAfter = File.GetLastWriteTimeUtc(path);
                     if (writeBefore != writeAfter && attempt < 2)
                     {
                         Thread.Sleep(50);
                         continue;
                     }
                     _cachedText = text;
-                    _cachedPath = configPath;
+                    _cachedPath = path;
                     _cachedWriteUtc = writeAfter;
                     return text;
                 }
@@ -283,9 +320,9 @@ public static class SystemConfigHelper
     /// 读取配置文件根节点；文件缺失返回 null（由调用方走自动生成），
     /// 内容不是 JSON 对象则 fail-fast（带病配置不自动覆盖）。
     /// </summary>
-    private static JsonObject LoadRoot()
+    private static JsonObject LoadRoot(string path)
     {
-        var text = ReadConfigText();
+        var text = ReadConfigText(path);
         if (text == null)
         {
             return null;
@@ -301,7 +338,7 @@ public static class SystemConfigHelper
             // 给出同样的可操作提示，而不是抛裸 JsonException
             root = null;
         }
-        return root ?? throw new InvalidOperationException($"配置文件 {configPath} 不是 JSON 对象，请修复或删除后重启自动生成。");
+        return root ?? throw new InvalidOperationException($"配置文件 {path} 不是 JSON 对象，请修复或删除后重启自动生成。");
     }
 }
 
@@ -323,21 +360,18 @@ public static class SystemCommandHelper
                 {
                     Key = "重新分配",
                     Command = "重新分配",
-                    IsManager = true,
                     Tips = "重置分配未指定的环境变量"
                 },
                 new()
                 {
                     Key = "重置分配",
                     Command = "重置分配",
-                    IsManager = true,
                     Tips = "重置分配所有环境变量，包含手动指定容器的"
                 },
                 new()
                 {
                     Key = "我的量子",
                     Command = "我的量子",
-                    IsManager = true,
                 }
             ];
         }
@@ -350,8 +384,6 @@ public class SystemCommand
     public string Key { get; set; }
 
     public string Command { get; set; }
-
-    public bool IsManager { get; set; }
 
     public string Tips { get; set; }
 }

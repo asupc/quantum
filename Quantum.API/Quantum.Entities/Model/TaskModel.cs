@@ -89,11 +89,6 @@ public class TaskModel : BaseModel
     //public string ConcEnvName { get; set; }
 
     /// <summary>
-    /// 是否管理员指令（管理员指令将只能管理员触发，且消息只通知管理员）
-    /// </summary>
-    public bool Manager { get; set; }
-
-    /// <summary>
     /// 任务等待时间
     /// </summary>
     public int WaitTime { get; set; }

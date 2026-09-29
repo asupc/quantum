@@ -138,9 +138,6 @@ public class TaskRunModel : BaseModel
     /// <summary>到期重试时刻（仅 Failed 且策略允许时非空）</summary>
     public DateTime? NextAttemptAtUtc { get; set; }
 
-    /// <summary>任务 Manager 快照（R-02）：任务删除后仍能按管理员可见性拦截历史读取</summary>
-    public bool ManagerSnapshot { get; set; }
-
     /// <summary>是否重试尝试（便于列表一眼区分，不依赖 Attempt 推断）</summary>
     public bool IsRetry { get; set; }
 

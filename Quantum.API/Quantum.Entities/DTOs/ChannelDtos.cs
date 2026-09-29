@@ -87,7 +87,7 @@ public sealed class FeishuQrStatusDto
     public string CandidateFingerprint { get; set; }
 }
 
-/// <summary>二维码内容仅发给 Manager，不含确认后的 bot_token。</summary>
+/// <summary>二维码内容仅发给登录账号，不含确认后的 bot_token。</summary>
 public sealed class WeixinQrStartDto
 {
     public string SessionId { get; set; }
@@ -122,7 +122,7 @@ public sealed class ChannelDeliveryDto
     public DateTime? AcceptedAtUtc { get; set; }
 }
 
-/// <summary>扫码前由 Manager 确认兼容版本；这些字段仅是协议元数据，不冒用 OpenClaw 身份。</summary>
+/// <summary>扫码前由登录账号确认兼容版本；这些字段仅是协议元数据，不冒用 OpenClaw 身份。</summary>
 public sealed class WeixinQrStartRequestDto
 {
     public bool ConfirmRebind { get; set; }

@@ -12,14 +12,14 @@ public static class Consts
         public readonly string SymmetricSecurityKey;
         public readonly string SecurityAudience;
         public readonly string SecurityIssuer;
-        public readonly long ManagerTokenNotBefore;
+        public readonly long UserTokenNotBefore;
 
         public Snapshot(string key, string audience, string issuer, long notBefore)
         {
             SymmetricSecurityKey = key;
             SecurityAudience = audience;
             SecurityIssuer = issuer;
-            ManagerTokenNotBefore = notBefore;
+            UserTokenNotBefore = notBefore;
         }
     }
 
@@ -31,7 +31,7 @@ public static class Consts
         set
         {
             var cur = Volatile.Read(ref _snap);
-            Volatile.Write(ref _snap, new Snapshot(value, cur.SecurityAudience, cur.SecurityIssuer, cur.ManagerTokenNotBefore));
+            Volatile.Write(ref _snap, new Snapshot(value, cur.SecurityAudience, cur.SecurityIssuer, cur.UserTokenNotBefore));
         }
     }
 
@@ -41,7 +41,7 @@ public static class Consts
         set
         {
             var cur = Volatile.Read(ref _snap);
-            Volatile.Write(ref _snap, new Snapshot(cur.SymmetricSecurityKey, value, cur.SecurityIssuer, cur.ManagerTokenNotBefore));
+            Volatile.Write(ref _snap, new Snapshot(cur.SymmetricSecurityKey, value, cur.SecurityIssuer, cur.UserTokenNotBefore));
         }
     }
 
@@ -51,17 +51,16 @@ public static class Consts
         set
         {
             var cur = Volatile.Read(ref _snap);
-            Volatile.Write(ref _snap, new Snapshot(cur.SymmetricSecurityKey, cur.SecurityAudience, value, cur.ManagerTokenNotBefore));
+            Volatile.Write(ref _snap, new Snapshot(cur.SymmetricSecurityKey, cur.SecurityAudience, value, cur.UserTokenNotBefore));
         }
     }
 
     /// <summary>
-    /// 管理令牌签发下限（Unix 秒，与 Setting.ManagerTokenNotBefore 同步刷新）：
-    /// 改密后作废旧 Manager 令牌的吊销闸（JwtTokenValidator/JwtBearer 共用）。
+    /// 登录令牌签发下限（Unix 秒）。
     /// </summary>
-    public static long ManagerTokenNotBefore
+    public static long UserTokenNotBefore
     {
-        get => Volatile.Read(ref _snap).ManagerTokenNotBefore;
+        get => Volatile.Read(ref _snap).UserTokenNotBefore;
         set
         {
             var cur = Volatile.Read(ref _snap);

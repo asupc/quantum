@@ -6,7 +6,7 @@ namespace Quantum.Entities.Model;
 /// 外部推送接入凭据（G-Push）：第三方以 <c>Authorization: PushKey {Id}.{Secret}</c> 调用受限富文本推送 API。
 ///
 /// 隔离口径：本凭据**不是** JWT，不携带任何身份/角色声明，绝不能抵达任务/日志/管理端点；
-/// 旧 Open AppKey、普通用户令牌、Manager JWT 同样没有推送权限。明文密钥只在创建/轮换时回显一次，
+/// Open AppKey 与登录 JWT 同样没有外部推送权限。明文密钥只在创建/轮换时回显一次，
 /// 库里只存 SHA-256 摘要。
 /// </summary>
 [Table("t_external_push_credential")]

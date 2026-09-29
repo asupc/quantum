@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 
 namespace Quantum.Utils;
 
@@ -33,15 +33,6 @@ public static class HttpContextExtension
             return t.Value;
         }
         return "";
-    }
-
-    /// <summary>
-    /// 当前令牌是否管理员（正向 "Manager"="true" claim；Open/任务临时令牌无该 claim 恒为 false）。
-    /// 服务端任务列表过滤、Env 限权等按调用者身份收敛的场景使用，与 [ManagerOnly] 同一事实源。
-    /// </summary>
-    public static bool IsManager(this HttpContext context)
-    {
-        return string.Equals(context.User?.FindFirst("Manager")?.Value, "true", StringComparison.Ordinal);
     }
 
     /// <summary>

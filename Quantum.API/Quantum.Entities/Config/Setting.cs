@@ -110,9 +110,11 @@ public class Setting
     public bool EnableSwagger { get; set; }
 
     /// <summary>
-    /// 管理令牌签发下限（Unix 秒）：修改管理员密码时置为当前时间，早于该时刻签发的
-    /// Manager 令牌（Web 7 天/App 2 小时）全部作废，作为无状态令牌的吊销语义。
+    /// 登录令牌签发下限（Unix 秒）。
     /// </summary>
+    public long UserTokenNotBefore { get; set; }
+
+    /// <summary>旧配置键，升级期间与新键同步写入以支持回退。</summary>
     public long ManagerTokenNotBefore { get; set; }
 
     /// <summary>

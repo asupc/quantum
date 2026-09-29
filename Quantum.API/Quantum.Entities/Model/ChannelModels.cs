@@ -21,7 +21,7 @@ public class ChannelAccountModel : BaseModel
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
-    // QQ 一次性挑战：只存摘要，候选 OpenID 等待 Web Manager 二次确认。
+    // QQ 一次性挑战：只存摘要，候选 OpenID 等待 Web 登录账号二次确认。
     [Column(TypeName = "nvarchar(64)")]
     public string ChallengeHash { get; set; }
     public DateTime? ChallengeExpiresAtUtc { get; set; }
@@ -154,7 +154,7 @@ public class ChannelOutboxModel : BaseModel
     public string PlatformMessageId { get; set; }
 }
 
-/// <summary>由 Manager 显式允许的纯文本快捷回复；不赋予聊天用户任务/脚本/系统命令权限。</summary>
+/// <summary>由登录账号显式允许的纯文本快捷回复；不赋予聊天用户任务/脚本/系统命令权限。</summary>
 [Table("t_channel_allowed_command")]
 public class ChannelAllowedCommandModel : BaseModel
 {

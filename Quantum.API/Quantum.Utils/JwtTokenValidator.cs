@@ -49,9 +49,9 @@ public static class JwtTokenValidator
                 ClockSkew = TimeSpan.Zero // 默认允许的小偏差时间
             };
             var principal = handler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
-            if (!ValidateManagerNotBefore(principal))
+            if (!ValidateUserNotBefore(principal))
             {
-                Log.Warn("管理令牌已因改密作废");
+                Log.Warn("登录令牌已因改密作废");
                 return null;
             }
             return principal;
@@ -69,21 +69,56 @@ public static class JwtTokenValidator
     }
 
     /// <summary>
-    /// 管理令牌吊销闸（属性过滤器与 JwtBearer OnTokenValidated 共用）：
-    /// Manager=true 的令牌若 LoginTime 早于 Consts.ManagerTokenNotBefore（改密时置位）即拒绝。
+    /// 登录令牌吊销闸：Open 等外部凭据不受改密影响。
     /// </summary>
-    public static bool ValidateManagerNotBefore(ClaimsPrincipal principal)
+    public static bool ValidateUserNotBefore(ClaimsPrincipal principal)
     {
-        if (!string.Equals(principal?.FindFirst("Manager")?.Value, "true", StringComparison.Ordinal))
+        if (principal == null || principal.FindFirst("Name")?.Value == HttpContextExtension.OpenAppTokenName)
         {
             return true;
         }
-        var loginTime = principal.FindFirst("LoginTime")?.Value;
-        if (long.TryParse(loginTime, out var seconds))
+        var purpose = principal.FindFirst("TokenPurpose")?.Value;
+        if (purpose != null && purpose != "User")
         {
-            return seconds >= Consts.ManagerTokenNotBefore;
+            return true;
         }
-        // 无 LoginTime 声明的管理令牌（历史存量格式）按不合规拒绝
+        if (long.TryParse(principal.FindFirst("LoginTime")?.Value, out var seconds))
+        {
+            return seconds >= Consts.UserTokenNotBefore;
+        }
         return false;
     }
+
+    /// <summary>旧 Web/App 令牌只按原主体、签发时间和有效期兼容，不使用角色声明。</summary>
+    public static bool IsLoginPrincipal(ClaimsPrincipal principal)
+    {
+        if (principal == null)
+        {
+            return false;
+        }
+        var name = principal.FindFirst("Name")?.Value;
+        var purpose = principal.FindFirst("TokenPurpose")?.Value;
+        if (string.IsNullOrWhiteSpace(name) || name == HttpContextExtension.OpenAppTokenName
+            || (purpose != null && purpose != "User"))
+        {
+            return false;
+        }
+        var configuredName = SystemConfigHelper.GetSetting()?.UserName;
+        if (string.IsNullOrWhiteSpace(configuredName) || configuredName == HttpContextExtension.OpenAppTokenName
+            || !string.Equals(name, configuredName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+        return long.TryParse(principal.FindFirst("LoginTime")?.Value, out var seconds)
+            && seconds > 0
+            && seconds <= DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 60
+            && seconds >= Consts.UserTokenNotBefore;
+    }
+
+    public static ClaimsPrincipal ValidateLogin(string token)
+    {
+        var principal = Validate(token);
+        return IsLoginPrincipal(principal) ? principal : null;
+    }
+
 }

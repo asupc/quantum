@@ -71,11 +71,6 @@ public class TaskSaveModel
     public bool Revocation { get; set; }
 
     /// <summary>
-    /// 是否管理员指令
-    /// </summary>
-    public bool Manager { get; set; }
-
-    /// <summary>
     /// 任务等待时间
     /// </summary>
     public int WaitTime { get; set; }
