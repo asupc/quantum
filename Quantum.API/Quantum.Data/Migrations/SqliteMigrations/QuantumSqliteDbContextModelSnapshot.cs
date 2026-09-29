@@ -1551,9 +1551,6 @@ namespace Quantum.Migrations.SqliteMigrations
                     b.Property<string>("FileName")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("Manager")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Name")
                         .HasColumnType("TEXT");
 
@@ -1623,9 +1620,6 @@ namespace Quantum.Migrations.SqliteMigrations
 
                     b.Property<string>("LogId")
                         .HasColumnType("nvarchar(64)");
-
-                    b.Property<bool>("ManagerSnapshot")
-                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("NextAttemptAtUtc")
                         .HasColumnType("TEXT");

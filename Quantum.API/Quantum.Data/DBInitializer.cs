@@ -16,22 +16,23 @@ namespace Quantum.Data;
 /// </summary>
 public static class DbInitializer
 {
-    public static void Initialize(IServiceProvider serviceProvider)
+    public static void Initialize(IServiceProvider serviceProvider, Action<IQuantumDbContext> seedAdditional = null)
     {
         var setting = SystemConfigHelper.GetSetting();
         if (setting.DBType.ToLower() == "sqlite")
         {
             Initialize(serviceProvider.GetRequiredService<DbContextOptions<QuantumSqliteDbContext>>(),
-                () => new QuantumSqliteDbContext());
+                () => new QuantumSqliteDbContext(), seedAdditional);
         }
         else
         {
             Initialize(serviceProvider.GetRequiredService<DbContextOptions<QuantumMySqlDbContext>>(),
-                () => new QuantumMySqlDbContext());
+                () => new QuantumMySqlDbContext(), seedAdditional);
         }
     }
 
-    private static void Initialize<TContext>(DbContextOptions<TContext> options, Func<TContext> create)
+    private static void Initialize<TContext>(DbContextOptions<TContext> options, Func<TContext> create,
+        Action<IQuantumDbContext> seedAdditional)
         where TContext : DbContext, IQuantumDbContext
     {
         using var db = create();
@@ -49,7 +50,7 @@ public static class DbInitializer
 
         if (created)
         {
-            Seed(db);
+            Seed(db, seedAdditional);
             // EnsureCreated 不写 __EFMigrationsHistory：立即把当前迁移链全部记为已应用，
             // 否则未来新增迁移时 GetPendingMigrations 返回全部、Migrate 对已存在表报错被兜底吞掉，
             // 新装库从此永远无法增量演进且无任何告警
@@ -68,6 +69,7 @@ public static class DbInitializer
                 {
                     // 库已存在、无任何迁移历史、且具备当前模型全量结构 = 早年 EnsureCreated 建的库：
                     // 与新装库同样回填迁移历史（后续迁移可增量应用），无需走迁移重放
+                    RemoveLegacyRoleColumns(db);
                     MarkAllMigrationsAsApplied(db);
                     Console.WriteLine("检测到 EnsureCreated 存量库（无迁移历史），已回填全部迁移为已应用。");
                     return;
@@ -241,6 +243,23 @@ public static class DbInitializer
         }
 
         return map;
+    }
+
+    /// <summary>无迁移历史的旧 EnsureCreated 库需先完成删列，再补记整条迁移链。</summary>
+    internal static void RemoveLegacyRoleColumns(DbContext db)
+    {
+        var actual = LoadSchemaColumns(db);
+        foreach (var (table, column) in new[]
+                 {
+                     ("t_task_run", "ManagerSnapshot"),
+                     ("t_task", "Manager")
+                 })
+        {
+            if (actual.TryGetValue(table, out var columns) && columns.Contains(column))
+            {
+                db.Database.ExecuteSqlRaw($"ALTER TABLE {table} DROP COLUMN {column}");
+            }
+        }
     }
 
     /// <summary>
@@ -426,7 +445,7 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_task_sub' AND INDEX_NAME = '
     /// <summary>
     /// 新库种子数据。
     /// </summary>
-    private static void Seed(IQuantumDbContext db)
+    private static void Seed(IQuantumDbContext db, Action<IQuantumDbContext> seedAdditional)
     {
         db.Commands.Add(new CommandModel
         {
@@ -434,6 +453,7 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_task_sub' AND INDEX_NAME = '
             Key = "你好",
             Message = "你好，欢迎使用量子助手。",
         });
+        seedAdditional?.Invoke(db);
         db.SaveChanges();
     }
 }
