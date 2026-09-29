@@ -28,7 +28,7 @@ public class AppWebSocketMiddlewareTests
         Consts.SymmetricSecurityKey = "ws-mw-test-symmetric-security-key-0123456789abcdef";
         Consts.SecurityIssuer = "Issuer.WsMwTest";
         Consts.SecurityAudience = "Audience.WsMwTest";
-        Consts.ManagerTokenNotBefore = 0;
+        Consts.UserTokenNotBefore = 0;
     }
 
     private static AppWebSocketMiddleware CreateMiddleware()
@@ -37,20 +37,20 @@ public class AppWebSocketMiddlewareTests
     private static object InvokeStatic(string name, params object?[] args)
         => typeof(AppWebSocketMiddleware).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, args)!;
 
-    private static string CreateToken(bool manager)
+    private static string CreateToken(bool login)
     {
         var claims = new List<Claim>
         {
-            new("Name", "tester"),
+            new("Name", login ? "tester" : HttpContextExtension.OpenAppTokenName),
             new("UserId", "user-1"),
             new("DeviceId", "device-1"),
         };
-        if (manager)
+        if (login)
         {
-            claims.Add(new Claim("Manager", "true"));
-            // 管理令牌吊销闸要求携带 LoginTime（Unix 秒），否则 ValidateManagerNotBefore 直接拒绝
+            claims.Add(new Claim("TokenPurpose", "User"));
             claims.Add(new Claim("LoginTime", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()));
         }
+        else claims.Add(new Claim("TokenPurpose", "Open"));
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Consts.SymmetricSecurityKey));
         var token = new JwtSecurityToken(
             Consts.SecurityIssuer, Consts.SecurityAudience, claims: claims,
@@ -98,16 +98,17 @@ public class AppWebSocketMiddlewareTests
     }
 
     [Fact]
-    public void TryAuthenticate_ManagerToken_SucceedsAndKeepsSocketOpen()
+    public void TryAuthenticate_LoginToken_SucceedsAndKeepsSocketOpen()
     {
+        using var setting = new TestLoginSettingScope();
         var socket = new RecordingWebSocket();
-        var frame = "{\"type\":\"auth\",\"token\":\"" + CreateToken(manager: true) + "\"}";
+        var frame = "{\"type\":\"auth\",\"token\":\"" + CreateToken(login: true) + "\"}";
 
         var (ok, principal) = Authenticate(socket, frame);
 
         Assert.True(ok);
         Assert.NotNull(principal);
-        Assert.Equal("true", principal.FindFirst("Manager")?.Value);
+        Assert.Equal("User", principal.FindFirst("TokenPurpose")?.Value);
         Assert.Equal(WebSocketState.Open, socket.State);
         Assert.Equal(0, socket.SendCount);
     }
@@ -126,11 +127,11 @@ public class AppWebSocketMiddlewareTests
     }
 
     [Fact]
-    public void TryAuthenticate_NonManagerToken_RejectsAndCloses()
+    public void TryAuthenticate_OpenToken_RejectsAndCloses()
     {
-        // Open AppKey/任务临时令牌：验签通过但无 Manager claim，禁止连 WS（下行广播含会话内容）
+        // Open AppKey 令牌不能进入广播连接。
         var socket = new RecordingWebSocket();
-        var frame = "{\"type\":\"auth\",\"token\":\"" + CreateToken(manager: false) + "\"}";
+        var frame = "{\"type\":\"auth\",\"token\":\"" + CreateToken(login: false) + "\"}";
 
         var (ok, principal) = Authenticate(socket, frame);
 

@@ -10,7 +10,7 @@ namespace Quantum.API.Tests;
 
 /// <summary>
 /// 公网部署安全加固（2026-09-14 审计修复）回归：
-/// 1) 管理令牌吊销闸：改密后（ManagerTokenNotBefore 置位）旧 Manager 令牌失效；
+/// 1) 登录令牌吊销闸：改密后旧登录令牌失效；
 /// 2) CSPRNG 随机串：长度与字符集。
 /// （PasswordHasher 已随用户体系移除删除：口令校验统一为 Setting 配置常数时间比较）
 /// </summary>
@@ -59,44 +59,44 @@ public class SecurityHardeningTests
         var principal = ManagerPrincipal(before);
         Assert.NotNull(principal);
 
-        var oldNotBefore = Consts.ManagerTokenNotBefore;
+        var oldNotBefore = Consts.UserTokenNotBefore;
         try
         {
-            Consts.ManagerTokenNotBefore = DateTimeOffset.Now.ToUnixTimeSeconds();
+            Consts.UserTokenNotBefore = DateTimeOffset.Now.ToUnixTimeSeconds();
             // 闸门判定 + 端到端验签（Validate 同样拒绝）
-            Assert.False(JwtTokenValidator.ValidateManagerNotBefore(principal));
+            Assert.False(JwtTokenValidator.ValidateUserNotBefore(principal));
             Assert.Null(JwtTokenValidator.Validate(CreateManagerToken(before)));
         }
         finally
         {
-            Consts.ManagerTokenNotBefore = oldNotBefore;
+            Consts.UserTokenNotBefore = oldNotBefore;
         }
     }
 
     [Fact]
     public void ManagerNotBefore_TokenIssuedAfterCutoffAccepted()
     {
-        var oldNotBefore = Consts.ManagerTokenNotBefore;
+        var oldNotBefore = Consts.UserTokenNotBefore;
         try
         {
-            Consts.ManagerTokenNotBefore = DateTimeOffset.Now.AddHours(-2).ToUnixTimeSeconds();
+            Consts.UserTokenNotBefore = DateTimeOffset.Now.AddHours(-2).ToUnixTimeSeconds();
             var after = DateTimeOffset.Now.AddMinutes(-5).ToUnixTimeSeconds();
             var principal = ManagerPrincipal(after);
             Assert.NotNull(principal);
-            Assert.True(JwtTokenValidator.ValidateManagerNotBefore(principal));
+            Assert.True(JwtTokenValidator.ValidateUserNotBefore(principal));
         }
         finally
         {
-            Consts.ManagerTokenNotBefore = oldNotBefore;
+            Consts.UserTokenNotBefore = oldNotBefore;
         }
     }
 
     [Fact]
-    public void ManagerNotBefore_NonManagerTokenUnaffected()
+    public void UserNotBefore_TokenWithoutLoginTimeRejected()
     {
         var claims = new[] { new Claim("Name", "user-1"), new Claim("UserId", "u1") };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims));
-        Assert.True(JwtTokenValidator.ValidateManagerNotBefore(principal));
+        Assert.False(JwtTokenValidator.ValidateUserNotBefore(principal));
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public class SecurityHardeningTests
     {
         var claims = new[] { new Claim("Name", "admin"), new Claim("Manager", "true") };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims));
-        Assert.False(JwtTokenValidator.ValidateManagerNotBefore(principal));
+        Assert.False(JwtTokenValidator.ValidateUserNotBefore(principal));
     }
 
     #endregion

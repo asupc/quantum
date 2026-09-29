@@ -36,30 +36,19 @@ public class TaskCommandStepAuthTests : IDisposable
     }
 
     [Fact]
-    public void Finish_ForeignManagerTaskStep_NonManagerToken_ReturnsUnauthorized()
+    public void Finish_RemovesStep()
     {
-        CacheManager.Set(new List<TaskModel> { new() { Id = "MGR-1", Manager = true } });
-        var threadId = Register(new TaskCommandStep { Task = new TaskModel { Id = "MGR-1", Manager = true } });
+        CacheManager.Set(new List<TaskModel> { new() { Id = "MGR-1",  } });
+        var threadId = Register(new TaskCommandStep { Task = new TaskModel { Id = "MGR-1",  } });
 
-        Assert.Throws<UnauthorizedBusinessException>(() => _service.Finish(threadId, isManager: false));
-        // 鉴权失败不得移除步骤（否则非 Manager 令牌可 Denial-of-Service 掉他人活跃步骤）
-        Assert.True(MemoryObjectCache.TaskCommandSteps.ContainsKey(threadId));
-    }
-
-    [Fact]
-    public void Finish_ManagerToken_RemovesStep()
-    {
-        CacheManager.Set(new List<TaskModel> { new() { Id = "MGR-1", Manager = true } });
-        var threadId = Register(new TaskCommandStep { Task = new TaskModel { Id = "MGR-1", Manager = true } });
-
-        Assert.True(_service.Finish(threadId, isManager: true));
+        Assert.True(_service.Finish(threadId));
         Assert.False(MemoryObjectCache.TaskCommandSteps.ContainsKey(threadId));
     }
 
     [Fact]
     public void Finish_UnknownThreadId_BusinessErrorNotSilentSuccess()
     {
-        var ex = Assert.Throws<BusinessException>(() => _service.Finish("no-such-thread", isManager: true));
+        var ex = Assert.Throws<BusinessException>(() => _service.Finish("no-such-thread"));
         Assert.IsNotType<UnauthorizedBusinessException>(ex); // 明确是业务错误「不存在或已结束」，非 401
     }
 
@@ -67,11 +56,11 @@ public class TaskCommandStepAuthTests : IDisposable
     public void Finish_SameTaskTwoThreads_OnlyAffectsTargetThread()
     {
         // 回归保护：同任务被两条入站消息各建一个 ThreadId，操作 A 不得波及 B
-        CacheManager.Set(new List<TaskModel> { new() { Id = "T1", Manager = false } });
+        CacheManager.Set(new List<TaskModel> { new() { Id = "T1",  } });
         var a = Register(new TaskCommandStep { Task = new TaskModel { Id = "T1" } });
         var b = Register(new TaskCommandStep { Task = new TaskModel { Id = "T1" } });
 
-        Assert.True(_service.Finish(a, isManager: true));
+        Assert.True(_service.Finish(a));
 
         Assert.False(MemoryObjectCache.TaskCommandSteps.ContainsKey(a));
         Assert.True(MemoryObjectCache.TaskCommandSteps.ContainsKey(b));
@@ -81,12 +70,12 @@ public class TaskCommandStepAuthTests : IDisposable
     public void AddEnv_SwapsEnvsReference_LeavesOldSnapshotIntact()
     {
         // §1-4：AddEnv 不得就地改共享 List，读者持有的旧引用应保持一致快照
-        CacheManager.Set(new List<TaskModel> { new() { Id = "T1", Manager = false } });
+        CacheManager.Set(new List<TaskModel> { new() { Id = "T1",  } });
         var original = new List<EnvModel> { new() { Name = "K1", Value = "v1" } };
         var step = new TaskCommandStep { Task = new TaskModel { Id = "T1" }, Envs = original };
         var threadId = Register(step);
 
-        var result = _service.AddEnv(threadId, new EnvModel { Name = "K1", Value = "v2" }, isManager: true);
+        var result = _service.AddEnv(threadId, new EnvModel { Name = "K1", Value = "v2" });
 
         Assert.Contains("移除同名环境变量：【1】", result);
         Assert.NotSame(original, step.Envs);            // 换引用而非原地改
@@ -100,6 +89,6 @@ public class TaskCommandStepAuthTests : IDisposable
     public void AddEnv_UnknownThreadId_BusinessError()
     {
         Assert.Throws<BusinessException>(() =>
-            _service.AddEnv("no-such-thread", new EnvModel { Name = "OK", Value = "v" }, isManager: true));
+            _service.AddEnv("no-such-thread", new EnvModel { Name = "OK", Value = "v" }));
     }
 }

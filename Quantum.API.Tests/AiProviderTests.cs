@@ -466,10 +466,10 @@ public class AiProviderTests : IDisposable
     // ==================================================================== 权限
 
     [Fact]
-    public void AiProviderController_IsManagerOnly()
+    public void AiProviderController_IsLoggedInUser()
     {
         var type = typeof(AiProviderController);
-        Assert.NotNull(type.GetCustomAttributes(typeof(ManagerOnlyAttribute), inherit: true).SingleOrDefault());
+        Assert.NotNull(type.GetCustomAttributes(typeof(LoggedInUserAttribute), inherit: true).SingleOrDefault());
         Assert.NotNull(type.GetCustomAttributes(typeof(CustomAuthorizationFilter), inherit: true).SingleOrDefault());
     }
 

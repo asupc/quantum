@@ -108,29 +108,24 @@ public class TaskRunPersistenceTests : TaskRunTestBase
     // ============================================================ G2 权限边界
 
     [Fact]
-    public async Task Page_NonManagerToken_NeverSeesManagerTaskRuns()
+    public async Task Page_ReturnsAllTaskRuns()
     {
-        await AcceptAsync("T-PUB", manager: false);
-        await AcceptAsync("T-SEC", manager: true);
+        await AcceptAsync("T-PUB");
+        await AcceptAsync("T-SEC");
 
-        var (rows, total) = await _runs.GetPageAsync(null, null, 1, 20, isManager: false);
-        Assert.Equal(1, total);
-        Assert.All(rows, n => Assert.Equal("T-PUB", n.TaskId));
-
-        var (managerRows, managerTotal) = await _runs.GetPageAsync(null, null, 1, 20, isManager: true);
-        Assert.Equal(2, managerTotal);
-        Assert.Equal(2, managerRows.Count);
+        var (rows, total) = await _runs.GetPageAsync(null, null, 1, 20);
+        Assert.Equal(2, total);
+        Assert.Equal(2, rows.Count);
     }
 
     [Fact]
-    public async Task Detail_NonManagerGet_HiddenManagerRunButFindsOwn()
+    public async Task Detail_FindsAllRuns()
     {
-        var open = await AcceptAsync("T-PUB", manager: false);
-        var secret = await AcceptAsync("T-SEC", manager: true);
+        var open = await AcceptAsync("T-PUB");
+        var secret = await AcceptAsync("T-SEC");
 
-        Assert.Null(await _runs.GetAsync(secret.Id, isManager: false));
-        Assert.NotNull(await _runs.GetAsync(secret.Id, isManager: true));
-        Assert.NotNull(await _runs.GetAsync(open.Id, isManager: false));
+        Assert.NotNull(await _runs.GetAsync(secret.Id));
+        Assert.NotNull(await _runs.GetAsync(open.Id));
     }
 
     [Fact]
@@ -141,10 +136,10 @@ public class TaskRunPersistenceTests : TaskRunTestBase
             await AcceptAsync($"T{i}");
         }
 
-        var (rows, _) = await _runs.GetPageAsync(null, null, 1, 5000, isManager: true);
+        var (rows, _) = await _runs.GetPageAsync(null, null, 1, 5000);
         Assert.True(rows.Count <= TaskRunService.MaxPageSize);
 
-        var (_, total) = await _runs.GetPageAsync(null, null, 1, 2, isManager: true);
+        var (_, total) = await _runs.GetPageAsync(null, null, 1, 2);
         Assert.Equal(3, total);
     }
 

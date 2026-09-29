@@ -1,4 +1,5 @@
 using Quantum.Entities.Config;
+using Quantum.Entities.DTOs;
 using Quantum.Utils;
 
 namespace Quantum.API.Tests;
@@ -81,6 +82,57 @@ public class SystemConfigHelperTests : IDisposable
             Footer = "changed-footer"
         }, out restartOnOrigins));
         Assert.True(restartOnOrigins);
+    }
+
+    [Fact]
+    public void Update_StaleSettingsForm_DoesNotRestoreOldPasswordOrCutoff()
+    {
+        SystemConfigHelper.SetSetting(new Setting
+        {
+            UserName = "tester", PassWord = "old-password", DBType = "SQLite", DBAddress = "test.db"
+        });
+        var service = new Quantum.Application.SystemConfigService(null!);
+        var staleForm = service.GetSetting();
+
+        SystemConfigHelper.UpdateSetting(current =>
+        {
+            current.PassWord = "new-password";
+            current.UserTokenNotBefore = 42;
+            current.ManagerTokenNotBefore = 42;
+        });
+        service.Update(staleForm);
+
+        var saved = SystemConfigHelper.GetSetting();
+        Assert.Equal("new-password", saved.PassWord);
+        Assert.Equal(42, saved.UserTokenNotBefore);
+        Assert.Equal(42, saved.ManagerTokenNotBefore);
+    }
+
+    [Fact]
+    public async Task UpdatePassword_FailedConfigWrite_DoesNotAdvanceInMemoryCutoff()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        SystemConfigHelper.SetSetting(new Setting
+        {
+            UserName = "tester", PassWord = "old-password", DBType = "SQLite",
+            DBAddress = "test.db", Host = "http://127.0.0.1", Port = 5088
+        });
+        SystemConfigHelper.GetSetting();
+        var originalCutoff = Consts.UserTokenNotBefore;
+
+        using (new FileStream(SystemConfigHelper.configPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var service = new Quantum.Application.SystemConfigService(null!);
+            var error = await Record.ExceptionAsync(() => service.UpdatePassword(new UpdatePasswordRequest
+            {
+                OldUserName = "tester", OldPassword = "old-password", NewPassword = "new-password"
+            }));
+            Assert.True(error is IOException or UnauthorizedAccessException);
+        }
+
+        Assert.Equal(originalCutoff, Consts.UserTokenNotBefore);
+        Assert.Equal("old-password", SystemConfigHelper.GetSetting().PassWord);
     }
 
     [Fact]

@@ -24,6 +24,7 @@ namespace Quantum.API.Tests;
 /// - 旧 Open AppKey 换签的通用 JWT **不能**读执行历史（它只验签的过滤器挡不住，需正向判定主体）；
 /// - 未认证与「Id 不存在」在外部推送端点上不可区分。
 /// </summary>
+[Collection("ConstsState")]
 public class ExternalPushIsolationTests : IDisposable
 {
     private readonly SqliteConnection _connection;
@@ -125,7 +126,7 @@ public class ExternalPushIsolationTests : IDisposable
             context.HttpContext.Items[PushKeyAuthAttribute.CredentialItemKey]);
         Assert.Equal(id, stashed.Id);
         // 关键：不产出 ClaimsPrincipal，也不带 Manager claim——推送凭据永远换不来身份
-        Assert.False(context.HttpContext.IsManager());
+        Assert.False(JwtTokenValidator.IsLoginPrincipal(context.HttpContext.User));
         Assert.Equal("", context.HttpContext.GetUserId());
     }
 
@@ -150,11 +151,14 @@ public class ExternalPushIsolationTests : IDisposable
     [Fact]
     public async Task RealPrincipal_RejectsAnonymousAndAcceptsLoginSubject()
     {
+        using var setting = new Quantum.API.Tests.Contract.TestLoginSettingScope("admin");
         var anonymous = Context("Bearer x");
         await new RealPrincipalAttribute().OnAuthorizationAsync(anonymous);
         Assert.Equal(401, EnvelopeCode((ObjectResult)anonymous.Result));
 
-        var real = Context("Bearer x", PrincipalWithName("admin"));
+        var real = Context("Bearer x", new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("Name", "admin"), new Claim("TokenPurpose", "User"),
+                new Claim("LoginTime", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())], "Test")));
         await new RealPrincipalAttribute().OnAuthorizationAsync(real);
         Assert.Null(real.Result);
     }

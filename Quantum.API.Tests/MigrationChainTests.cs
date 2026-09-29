@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Quantum.Data;
 using Xunit;
 
@@ -9,8 +11,7 @@ namespace Quantum.API.Tests;
 /// 迁移链可执行性冒烟（一期 G2/G5 门禁）：既有测试都走 <c>EnsureCreated</c>（按模型直接建表），
 /// 只能证明「模型自洽」，证明不了迁移 SQL 本身能跑。本类用 <c>Migrate</c> 从空库依次应用
 /// Init → TaskRunBaseline → ExternalPushBaseline 全链，断言新表与新列真的被建出来。
-/// MySQL 侧本机无可用实例，只能停在「生成的幂等脚本可解析、DDL 与唯一索引逐条核对」，
-/// 明确记为**未验证**，不以 SQLite 通过代替双库通过。
+/// 本类自动验证 SQLite；MySQL 8.4 的本次删列迁移另在隔离容器完成 Up/Down 演练。
 /// </summary>
 public class MigrationChainTests
 {
@@ -66,6 +67,98 @@ public class MigrationChainTests
             Assert.Contains("t_task_alert_event", tables);
             Assert.Contains("t_external_push_credential", tables);
             Assert.Contains("t_external_push_request", tables);
+            Assert.DoesNotContain("Manager", ColumnsOf(db, "t_task"));
+            Assert.DoesNotContain("ManagerSnapshot", ColumnsOf(db, "t_task_run"));
+        }
+    }
+
+    [Fact]
+    public void LegacyEnsureCreatedColumns_AreDroppedWithoutLosingRows()
+    {
+        var (connection, db) = OpenMigrated();
+        using (connection)
+        using (db)
+        {
+            db.Tasks.Add(new Entities.Model.TaskModel { Id = "T1", Name = "旧任务" });
+            db.TaskRuns.Add(new Entities.Model.TaskRunModel
+            {
+                Id = "R1", RootRunId = "R1", TaskId = "T1", Attempt = 1,
+                TriggerSource = Entities.Model.TaskTriggerSource.Manual,
+                Status = Entities.Model.TaskRunStatus.Succeeded
+            });
+            db.SaveChanges();
+            db.Database.ExecuteSqlRaw("ALTER TABLE t_task ADD COLUMN Manager INTEGER NOT NULL DEFAULT 0");
+            db.Database.ExecuteSqlRaw("ALTER TABLE t_task_run ADD COLUMN ManagerSnapshot INTEGER NOT NULL DEFAULT 0");
+            db.Database.ExecuteSqlRaw("UPDATE t_task SET Manager = 1 WHERE Id = 'T1'");
+            db.Database.ExecuteSqlRaw("UPDATE t_task_run SET ManagerSnapshot = 1 WHERE Id = 'R1'");
+
+            DbInitializer.RemoveLegacyRoleColumns(db);
+
+            Assert.DoesNotContain("Manager", ColumnsOf(db, "t_task"));
+            Assert.DoesNotContain("ManagerSnapshot", ColumnsOf(db, "t_task_run"));
+            Assert.Equal("旧任务", db.Tasks.AsNoTracking().Single().Name);
+            Assert.Equal("R1", db.TaskRuns.AsNoTracking().Single().Id);
+        }
+    }
+
+    [Fact]
+    public void RemoveTaskRolesMigration_PreservesRowsWithBothOldValues()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<QuantumSqliteDbContext>().UseSqlite(connection).Options;
+        using var db = new QuantumSqliteDbContext(options);
+        db.Database.EnsureCreated();
+        db.Database.ExecuteSqlRaw("ALTER TABLE t_task ADD COLUMN Manager INTEGER NOT NULL DEFAULT 0");
+        db.Database.ExecuteSqlRaw("ALTER TABLE t_task_run ADD COLUMN ManagerSnapshot INTEGER NOT NULL DEFAULT 0");
+        db.Tasks.AddRange(
+            new Entities.Model.TaskModel { Id = "T0", Name = "旧任务零" },
+            new Entities.Model.TaskModel { Id = "T1", Name = "旧任务一" });
+        db.TaskRuns.AddRange(
+            new Entities.Model.TaskRunModel
+            {
+                Id = "R0", RootRunId = "R0", TaskId = "T0", Attempt = 1,
+                TriggerSource = Entities.Model.TaskTriggerSource.Manual,
+                Status = Entities.Model.TaskRunStatus.Succeeded
+            },
+            new Entities.Model.TaskRunModel
+            {
+                Id = "R1", RootRunId = "R1", TaskId = "T1", Attempt = 1,
+                TriggerSource = Entities.Model.TaskTriggerSource.Manual,
+                Status = Entities.Model.TaskRunStatus.Succeeded
+            });
+        db.SaveChanges();
+        db.Database.ExecuteSqlRaw("UPDATE t_task SET Manager = 1 WHERE Id = 'T1'");
+        db.Database.ExecuteSqlRaw("UPDATE t_task_run SET ManagerSnapshot = 1 WHERE Id = 'R1'");
+
+        DbInitializer.MarkAllMigrationsAsApplied(db);
+        var lastMigration = db.Database.GetMigrations().Last();
+        db.Database.ExecuteSqlRaw("DELETE FROM __EFMigrationsHistory WHERE MigrationId = {0}", lastMigration);
+        db.Database.Migrate();
+
+        Assert.DoesNotContain("Manager", ColumnsOf(db, "t_task"));
+        Assert.DoesNotContain("ManagerSnapshot", ColumnsOf(db, "t_task_run"));
+        Assert.Equal(2, db.Tasks.AsNoTracking().Count());
+        Assert.Equal(2, db.TaskRuns.AsNoTracking().Count());
+        Assert.Empty(db.Database.GetPendingMigrations());
+    }
+
+    [Fact]
+    public void RemoveTaskRolesMigration_DownRestoresDefaultColumns()
+    {
+        var (connection, db) = OpenMigrated();
+        using (connection)
+        using (db)
+        {
+            var previous = db.Database.GetMigrations().Reverse().Skip(1).First();
+            db.GetService<IMigrator>().Migrate(previous);
+
+            Assert.Contains("Manager", ColumnsOf(db, "t_task"));
+            Assert.Contains("ManagerSnapshot", ColumnsOf(db, "t_task_run"));
+
+            db.Database.Migrate();
+            Assert.DoesNotContain("Manager", ColumnsOf(db, "t_task"));
+            Assert.DoesNotContain("ManagerSnapshot", ColumnsOf(db, "t_task_run"));
         }
     }
 
@@ -111,8 +204,7 @@ public class MigrationChainTests
             {
                 Id = "R1", RootRunId = "R1", TaskId = "T1", Attempt = 1,
                 TriggerSource = Entities.Model.TaskTriggerSource.Manual,
-                Status = Entities.Model.TaskRunStatus.Succeeded,
-                ManagerSnapshot = true
+                Status = Entities.Model.TaskRunStatus.Succeeded
             });
             db.TaskFailurePolicies.Add(new Entities.Model.TaskFailurePolicyModel
             {

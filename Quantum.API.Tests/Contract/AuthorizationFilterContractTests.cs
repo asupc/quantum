@@ -38,13 +38,14 @@ public class AuthorizationFilterContractTests
         return new AuthorizationFilterContext(actionContext, []);
     }
 
-    private static string CreateValidToken()
+    private static string CreateValidToken(string name = "tester", string purpose = "User")
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestKey));
         var token = new JwtSecurityToken(
             issuer: TestIssuer,
             audience: TestAudience,
-            claims: [new Claim("Id", "U1")],
+            claims: [new Claim("Name", name), new Claim("TokenPurpose", purpose),
+                new Claim("LoginTime", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())],
             expires: DateTime.Now.AddMinutes(5),
             signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
         return new JwtSecurityTokenHandler().WriteToken(token);
@@ -101,6 +102,7 @@ public class AuthorizationFilterContractTests
     [Fact]
     public async Task Valid_Token_Passes_Through()
     {
+        using var setting = new TestLoginSettingScope();
         var original = (Consts.SymmetricSecurityKey, Consts.SecurityIssuer, Consts.SecurityAudience);
         try
         {
@@ -114,6 +116,32 @@ public class AuthorizationFilterContractTests
             await new CustomAuthorizationFilter().OnAuthorizationAsync(context);
 
             Assert.Null(context.Result);
+        }
+        finally
+        {
+            (Consts.SymmetricSecurityKey, Consts.SecurityIssuer, Consts.SecurityAudience) = original;
+        }
+    }
+
+    [Fact]
+    public async Task Open_AppKey_Token_Is_Rejected_By_Protected_Http_Filter()
+    {
+        using var setting = new TestLoginSettingScope();
+        var original = (Consts.SymmetricSecurityKey, Consts.SecurityIssuer, Consts.SecurityAudience);
+        try
+        {
+            Consts.SymmetricSecurityKey = TestKey;
+            Consts.SecurityIssuer = TestIssuer;
+            Consts.SecurityAudience = TestAudience;
+
+            var context = CreateContext();
+            context.HttpContext.Request.Headers.Authorization =
+                $"Bearer {CreateValidToken(HttpContextExtension.OpenAppTokenName, "Open")}";
+            await new CustomAuthorizationFilter().OnAuthorizationAsync(context);
+
+            var envelope = Assert.IsType<ResultModel>(Assert.IsType<ObjectResult>(context.Result).Value);
+            Assert.Equal(401, envelope.Code);
+            Assert.Equal(200, context.HttpContext.Response.StatusCode);
         }
         finally
         {

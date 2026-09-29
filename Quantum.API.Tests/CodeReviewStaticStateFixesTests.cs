@@ -109,7 +109,7 @@ public class CodeReviewStaticStateFixesTests
 
             var step = new TaskCommandStep
             {
-                Task = new TaskModel { FileName = "crfix_cancel_test.cs", Name = "取消测试", Manager = false },
+                Task = new TaskModel { FileName = "crfix_cancel_test.cs", Name = "取消测试",  },
                 CreateTime = DateTime.Now,
                 ForceEndTime = DateTime.Now.AddSeconds(2),
                 Envs = []

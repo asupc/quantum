@@ -39,9 +39,9 @@ public abstract class TaskRunTestBase : IDisposable
 
     protected TaskRunService RunsOverTheSameDb() => _runs;
 
-    protected async Task<TaskRunModel> AcceptAsync(string taskId = "T1", bool manager = false,
+    protected async Task<TaskRunModel> AcceptAsync(string taskId = "T1",
         TaskTriggerSource source = TaskTriggerSource.Manual, string script = "run_test.cs")
-        => await _runs.AcceptAsync(taskId, "运行测试任务", script, source, null, manager);
+        => await _runs.AcceptAsync(taskId, "运行测试任务", script, source, null);
 
     protected static TaskExecutionResult Ok(TaskRunModel run)
         => TaskExecutionResult.Succeeded(DateTime.UtcNow.AddSeconds(-2), DateTime.UtcNow, "run_test", "1.log");

@@ -279,11 +279,11 @@ public class ScriptVersionTests : IDisposable
     }
 
     [Fact]
-    public void ScriptVersionController_IsManagerOnly()
+    public void ScriptVersionController_IsLoggedInUser()
     {
         // 版本历史含脚本全文与密钥扫描结果，必须与脚本编辑同权（管理员专属）
         var type = typeof(ScriptVersionController);
-        Assert.NotNull(type.GetCustomAttributes(typeof(ManagerOnlyAttribute), inherit: true).SingleOrDefault());
+        Assert.NotNull(type.GetCustomAttributes(typeof(LoggedInUserAttribute), inherit: true).SingleOrDefault());
         Assert.NotNull(type.GetCustomAttributes(typeof(CustomAuthorizationFilter), inherit: true).SingleOrDefault());
     }
 

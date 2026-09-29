@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -948,7 +948,7 @@ public class ScriptEngineTests : IDisposable
     {
         return new TaskCommandStep
         {
-            Task = new TaskModel { FileName = Path.GetFileName(scriptPath), Name = taskName, Manager = false },
+            Task = new TaskModel { FileName = Path.GetFileName(scriptPath), Name = taskName,  },
             CreateTime = DateTime.Now,
             ForceEndTime = DateTime.Now.AddSeconds(forceEndSeconds),
             Envs = []

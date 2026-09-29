@@ -30,6 +30,8 @@ public class JwtTokenValidatorTests
             new Claim("Name", "tester"),
             new Claim("UserId", "user-1"),
             new Claim("DeviceId", "device-1"),
+            new Claim("TokenPurpose", "User"),
+            new Claim("LoginTime", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
         };
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Consts.SymmetricSecurityKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

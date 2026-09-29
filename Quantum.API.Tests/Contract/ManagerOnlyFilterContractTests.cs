@@ -6,18 +6,18 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Quantum.Entities.Result;
+using Quantum.Utils;
 using Quantum.Web.Filters;
 
 namespace Quantum.API.Tests.Contract;
 
 /// <summary>
-/// 契约测试：[ManagerOnly] 的正向 claim 语义——仅 "Manager"="true" 放行；
-/// 普通用户令牌（无该 claim）、Open AppKey 令牌与任务临时令牌（同样无该 claim）一律 401。
+/// 登录过滤器只接受当前账号的有效登录用途声明。
 /// </summary>
 [Collection("ConstsState")]
-public class ManagerOnlyFilterContractTests
+public class LoggedInUserFilterContractTests
 {
-    static ManagerOnlyFilterContractTests() => Log4NetTestSetup.EnsureRepository();
+    static LoggedInUserFilterContractTests() => Log4NetTestSetup.EnsureRepository();
 
     private static AuthorizationFilterContext CreateContext(params object[] endpointMetadata)
     {
@@ -39,7 +39,7 @@ public class ManagerOnlyFilterContractTests
     public async Task AllowAnonymous_Endpoint_Passes_Without_Claim()
     {
         var context = CreateContext(new AllowAnonymousAttribute());
-        await new ManagerOnlyAttribute().OnAuthorizationAsync(context);
+        await new LoggedInUserAttribute().OnAuthorizationAsync(context);
         Assert.Null(context.Result);
     }
 
@@ -47,7 +47,7 @@ public class ManagerOnlyFilterContractTests
     public async Task Anonymous_Request_Is_Rejected()
     {
         var context = CreateContext();
-        await new ManagerOnlyAttribute().OnAuthorizationAsync(context);
+        await new LoggedInUserAttribute().OnAuthorizationAsync(context);
 
         var envelope = Assert.IsType<ResultModel>(Assert.IsType<ObjectResult>(context.Result).Value);
         Assert.Equal(401, envelope.Code);
@@ -55,40 +55,46 @@ public class ManagerOnlyFilterContractTests
     }
 
     [Fact]
-    public async Task App_User_Token_Without_Manager_Claim_Is_Rejected()
+    public async Task Other_Account_Is_Rejected()
     {
+        using var setting = new TestLoginSettingScope();
         var context = CreateContext();
         SetPrincipal(context,
             new Claim("Name", "user-a"),
+            new Claim("TokenPurpose", "User"),
+            new Claim("LoginTime", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
             new Claim("UserId", "uid-1"),
             new Claim("DeviceId", "dev-1"));
 
-        await new ManagerOnlyAttribute().OnAuthorizationAsync(context);
+        await new LoggedInUserAttribute().OnAuthorizationAsync(context);
 
         var envelope = Assert.IsType<ResultModel>(Assert.IsType<ObjectResult>(context.Result).Value);
         Assert.Equal(401, envelope.Code);
     }
 
     [Fact]
-    public async Task Manager_Claim_False_Value_Is_Rejected()
+    public async Task Open_Token_Is_Rejected()
     {
         var context = CreateContext();
-        SetPrincipal(context, new Claim("Manager", "false"));
+        SetPrincipal(context, new Claim("Name", HttpContextExtension.OpenAppTokenName),
+            new Claim("TokenPurpose", "Open"));
 
-        await new ManagerOnlyAttribute().OnAuthorizationAsync(context);
+        await new LoggedInUserAttribute().OnAuthorizationAsync(context);
 
         Assert.NotNull(context.Result);
     }
 
     [Fact]
-    public async Task Manager_Claim_True_Passes()
+    public async Task Login_Token_Passes_Without_Role_Claim()
     {
+        using var setting = new TestLoginSettingScope();
         var context = CreateContext();
         SetPrincipal(context,
-            new Claim("UserId", "uid-1"),
-            new Claim("Manager", "true"));
+            new Claim("Name", "tester"),
+            new Claim("TokenPurpose", "User"),
+            new Claim("LoginTime", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()));
 
-        await new ManagerOnlyAttribute().OnAuthorizationAsync(context);
+        await new LoggedInUserAttribute().OnAuthorizationAsync(context);
 
         Assert.Null(context.Result);
     }

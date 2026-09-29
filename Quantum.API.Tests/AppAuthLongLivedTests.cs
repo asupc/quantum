@@ -22,7 +22,7 @@ public class AppAuthLongLivedTests : IDisposable
 {
     private readonly string _tempDir;
     private readonly string _originalConfigPath;
-    private readonly long _originalManagerNotBefore;
+    private readonly long _originalUserNotBefore;
     private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
     private readonly QuantumSqliteDbContext _db;
 
@@ -49,7 +49,7 @@ public class AppAuthLongLivedTests : IDisposable
             DBAddress = "app-auth-longlived-test.db",
             Port = 5088
         });
-        _originalManagerNotBefore = Consts.ManagerTokenNotBefore;
+        _originalUserNotBefore = Consts.UserTokenNotBefore;
 
         (_connection, _db) = AppTestDb.Create();
     }
@@ -59,7 +59,7 @@ public class AppAuthLongLivedTests : IDisposable
         _db.Dispose();
         _connection.Dispose();
         SystemConfigHelper.configPath = _originalConfigPath;
-        Consts.ManagerTokenNotBefore = _originalManagerNotBefore;
+        Consts.UserTokenNotBefore = _originalUserNotBefore;
         try { Directory.Delete(_tempDir, recursive: true); } catch { /* 临时目录清理失败不影响测试结论 */ }
     }
 
@@ -232,6 +232,24 @@ public class AppAuthLongLivedTests : IDisposable
         // 新密码可正常登录
         var (_, newToken, _) = await auth.LoginAsync("admin", "brand-new-pass", "dev-1", null, null, UniqueIp());
         Assert.False(string.IsNullOrEmpty(newToken));
+    }
+
+    [Fact]
+    public async Task PasswordCutoff_RejectsOldRefreshEvenIfDatabaseRevokeWasNotRecorded()
+    {
+        var auth = CreateAuthService();
+        var (_, oldRefresh, _) = await auth.LoginAsync("admin", "secret-pass", "dev-cutoff", null, null, UniqueIp());
+        var oldRow = await _db.AppRefreshTokens.AsNoTracking()
+            .SingleAsync(n => n.TokenHash == Sha256(oldRefresh));
+        Consts.UserTokenNotBefore = oldRow.CreateTime.ToUnix() + 1;
+
+        await Assert.ThrowsAsync<UnauthorizedBusinessException>(() => auth.RefreshAsync(oldRefresh, "dev-cutoff"));
+        Assert.False((await _db.AppRefreshTokens.AsNoTracking()
+            .SingleAsync(n => n.Id == oldRow.Id)).Revoked);
+
+        var (_, freshRefresh, _) = await auth.LoginAsync("admin", "secret-pass", "dev-fresh", null, null, UniqueIp());
+        var (_, rotated, _) = await auth.RefreshAsync(freshRefresh, "dev-fresh");
+        Assert.False(string.IsNullOrEmpty(rotated));
     }
 
     [Fact]

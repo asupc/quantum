@@ -239,7 +239,6 @@ public class AgentWriteToolsTests : IDisposable
         var task = await _db.Tasks.AsNoTracking().SingleAsync(n => n.Name == "AI新任务");
         Assert.Equal("wtool_new.cs", task.FileName);
         Assert.Equal("ai-cmd", task.Command);
-        Assert.False(task.Manager);   // AI 不可制造管理员专属任务
         Assert.True(task.Enable);     // 新增默认启用
     }
 
@@ -247,7 +246,7 @@ public class AgentWriteToolsTests : IDisposable
     public async Task SaveTask_EditOnlyCron_OtherFieldsUntouched()
     {
         await SeedTaskAsync("wtool-t-edit", "编辑目标", "wtool_edit.cs", enable: false,
-            sessionName: "影视", remark: "原备注", manager: true, communicationTypes: "legacy", enablePush: true);
+            sessionName: "影视", remark: "原备注", communicationTypes: "legacy", enablePush: true);
         WriteScript("wtool_edit.cs", TaskSource);
         await EnableWritePermissions(task: true);
 
@@ -256,11 +255,10 @@ public class AgentWriteToolsTests : IDisposable
         Assert.Contains("Cron", result);
         var task = await _db.Tasks.AsNoTracking().SingleAsync(n => n.Id == "wtool-t-edit");
         Assert.Equal("0 0 8 * * ?", task.Cron);
-        // 未传字段一律保留（含不暴露的 Manager/CommunicationTypes 与会话名、推送开关）
+        // 未传字段一律保留（含 CommunicationTypes、会话名与推送开关）
         Assert.Equal("编辑目标", task.Name);
         Assert.Equal("影视", task.SessionName);
         Assert.Equal("原备注", task.Remark);
-        Assert.True(task.Manager);
         Assert.Equal("legacy", task.CommunicationTypes);
         Assert.True(task.EnablePush);
         Assert.False(task.Enable);
@@ -679,15 +677,15 @@ public class AgentWriteToolsTests : IDisposable
 
     private static string ScriptPath(string fileName) => Path.Combine("scripts", "quantum", fileName);
 
-    /// <summary>种一个任务（含会话名/Manager 等编辑用例需要守住的原值）。</summary>
+    /// <summary>种一个任务（含会话名等编辑用例需要守住的原值）。</summary>
     private async Task<TaskModel> SeedTaskAsync(string id, string name, string fileName, bool enable,
-        string sessionName = null, string remark = null, bool manager = false, string communicationTypes = null,
+        string sessionName = null, string remark = null, string communicationTypes = null,
         bool enablePush = false, int dayLimit = 0)
     {
         var task = new TaskModel
         {
             Id = id, Name = name, Command = "cmd-" + id, FileName = fileName, Enable = enable,
-            SessionName = sessionName, Remark = remark, Manager = manager, CommunicationTypes = communicationTypes,
+            SessionName = sessionName, Remark = remark, CommunicationTypes = communicationTypes,
             EnablePush = enablePush, DayLimit = dayLimit, CreateTime = DateTime.Now
         };
         _db.Tasks.Add(task);

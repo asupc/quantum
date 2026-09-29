@@ -780,10 +780,10 @@ public class AgentServiceTests : IDisposable
     // ==================================================================== 权限
 
     [Fact]
-    public void AiAgentController_IsManagerOnly()
+    public void AiAgentController_IsLoggedInUser()
     {
         var type = typeof(AiAgentController);
-        Assert.NotNull(type.GetCustomAttributes(typeof(ManagerOnlyAttribute), inherit: true).SingleOrDefault());
+        Assert.NotNull(type.GetCustomAttributes(typeof(LoggedInUserAttribute), inherit: true).SingleOrDefault());
         Assert.NotNull(type.GetCustomAttributes(typeof(CustomAuthorizationFilter), inherit: true).SingleOrDefault());
     }
 

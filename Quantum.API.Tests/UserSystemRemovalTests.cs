@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quantum.API.Tests.Contract;
@@ -82,18 +82,19 @@ public class UserSystemRemovalTests : IDisposable
     private static string UniqueIp() => "ip-" + Guid.NewGuid().ToString("N")[..12];
 
     [Fact]
-    public async Task AppLogin_WithSettingCredentials_IssuesManagerToken_AndRegistersDevice()
+    public async Task AppLogin_WithSettingCredentials_IssuesUserToken_AndRegistersDevice()
     {
         var auth = CreateAuthService();
 
         var (accessToken, refreshToken, expiresAt) = await auth.LoginAsync("admin", "secret-pass", "dev-1", "Pixel 8", "android", UniqueIp());
 
-        // access token：Name/DeviceId/Manager=true（无 UserId claim）
+        // access token：Name/DeviceId/（无 UserId claim）
         var principal = JwtTokenValidator.Validate(accessToken);
         Assert.NotNull(principal);
         Assert.Equal("admin", principal.FindFirst("Name")?.Value);
         Assert.Equal("dev-1", principal.FindFirst("DeviceId")?.Value);
-        Assert.Equal("true", principal.FindFirst("Manager")?.Value);
+        Assert.Equal("User", principal.FindFirst("TokenPurpose")?.Value);
+        Assert.Null(principal.FindFirst("Manager"));
         Assert.Null(principal.FindFirst("UserId"));
 
         // refresh token 落库 30 天；设备行按 DeviceId 注册

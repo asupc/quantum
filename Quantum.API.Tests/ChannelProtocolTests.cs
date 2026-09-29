@@ -230,7 +230,7 @@ public sealed class ChannelProtocolTests
     [Fact]
     public void ManagementController_RequiresPositiveManagerClaimFilter()
     {
-        Assert.True(Attribute.IsDefined(typeof(ChannelController), typeof(ManagerOnlyAttribute)));
+        Assert.True(Attribute.IsDefined(typeof(ChannelController), typeof(LoggedInUserAttribute)));
         Assert.True(Attribute.IsDefined(typeof(ChannelController), typeof(CustomAuthorizationFilter)));
     }
 }

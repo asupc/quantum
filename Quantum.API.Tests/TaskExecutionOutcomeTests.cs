@@ -55,7 +55,7 @@ public class TaskExecutionOutcomeTests : IDisposable
 
         return new TaskCommandStep
         {
-            Task = new TaskModel { FileName = fileName, Name = Path.GetFileNameWithoutExtension(fileName), Manager = false },
+            Task = new TaskModel { FileName = fileName, Name = Path.GetFileNameWithoutExtension(fileName),  },
             CreateTime = DateTime.Now,
             ForceEndTime = DateTime.Now.AddSeconds(forceEndSeconds),
             Envs = []
@@ -75,7 +75,7 @@ public class TaskExecutionOutcomeTests : IDisposable
     {
         var step = new TaskCommandStep
         {
-            Task = new TaskModel { FileName = "g1out_definitely_absent.cs", Name = "缺文件", Manager = false },
+            Task = new TaskModel { FileName = "g1out_definitely_absent.cs", Name = "缺文件",  },
             CreateTime = DateTime.Now,
             ForceEndTime = DateTime.Now.AddMinutes(1),
             Envs = []
@@ -94,7 +94,7 @@ public class TaskExecutionOutcomeTests : IDisposable
     {
         var step = new TaskCommandStep
         {
-            Task = new TaskModel { FileName = "../../../Windows/win.ini", Name = "穿越", Manager = false },
+            Task = new TaskModel { FileName = "../../../Windows/win.ini", Name = "穿越",  },
             CreateTime = DateTime.Now,
             ForceEndTime = DateTime.Now.AddMinutes(1),
             Envs = []
@@ -166,7 +166,7 @@ public class TaskExecutionOutcomeTests : IDisposable
         var createTime = DateTime.Now;
         var step = new TaskCommandStep
         {
-            Task = new TaskModel { FileName = "g1out_leakcheck_absent.cs", Name = "缺文件", Manager = false },
+            Task = new TaskModel { FileName = "g1out_leakcheck_absent.cs", Name = "缺文件",  },
             CreateTime = createTime,
             ForceEndTime = DateTime.Now.AddMinutes(1),
             Envs = []
