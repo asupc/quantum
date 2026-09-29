@@ -175,9 +175,9 @@ public class SessionGroupingTests : IDisposable
     }
 
     [Fact]
-    public void SelectTaskCandidates_SessionGroupZeroHit_FallsBackToAll()
+    public void SelectTaskCandidates_SessionGroupZeroHit_RoutesToUniqueGlobalMatch()
     {
-        // 组内零命中 → 回落全局（会话不是指令隔离区，与现状语义一致；由上层做指令匹配）
+        // 组内零命中 → 由唯一匹配的组外任务处理
         var movie = NewTask("t-movie", "^[0-9,，\\s]+$", sessionName: "媒体");
         var music = NewTask("t-music", "^[0-9,，\\s]+$", sessionName: "媒体");
         var weather = NewTask("t-weather", "^天气.*");
@@ -187,7 +187,7 @@ public class SessionGroupingTests : IDisposable
             new MessageProccessDTO { message = "天气 北京", SessionKey = "媒体", CommunicationType = CommunicationType.App },
             process.commandReg);
 
-        Assert.Equal(3, candidates.Count);
+        Assert.Equal("t-weather", Assert.Single(candidates).Id);
     }
 
     // ==================================================================== 会话名校验

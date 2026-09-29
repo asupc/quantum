@@ -236,9 +236,9 @@ public class RichMessagePayloadTests : IDisposable
     }
 
     [Fact]
-    public void SelectTaskCandidates_SessionTaskNotMatch_FallsBackToAll()
+    public void SelectTaskCandidates_OtherSession_RoutesToUniqueMatchingTask()
     {
-        // 会话内发了会话任务不匹配的指令（如关键字搜索）：回落全局匹配，行为与旧版一致
+        // 其他会话发送明确的音乐搜索指令：全局唯一命中仍归音乐搜索任务
         var movie = NewTask("t-movie", "^[0-9,，\\s]+$", regex: true);
         var music = NewTask("t-music", "^音乐搜索.*", regex: true);
         var process = new MessageProcess();
@@ -247,7 +247,7 @@ public class RichMessagePayloadTests : IDisposable
             new MessageProccessDTO { message = "音乐搜索 周杰伦", SessionKey = "t-movie", CommunicationType = CommunicationType.App },
             process.commandReg);
 
-        Assert.Equal(2, candidates.Count);
+        Assert.Equal("t-music", Assert.Single(candidates).Id);
     }
 
     [Fact]
