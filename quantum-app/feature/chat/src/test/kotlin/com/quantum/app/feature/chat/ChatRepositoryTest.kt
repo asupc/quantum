@@ -706,6 +706,25 @@ class ChatRepositoryTest {
     }
 
     @Test
+    fun onWsMessageMoved_StaleRestEcho_DoesNotMoveRowBack() = runBlocking {
+        chatDao.upsert(
+            ChatMessageEntity(seq = 5, msgId = "m5", direction = 2, content = "音乐搜索 晴天",
+                contentType = "text", createTime = "t", sessionId = "task-other")
+        )
+        repository.onWsMessageMoved(WsFrame(type = "message_moved", msgId = "m5", seq = 5,
+            from = "task-other", to = "task-music"))
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                MockResponse().setHeader("Content-Type", "application/json")
+                    .setBody("""{"Code":200,"Data":{"MaxSeq":5,"Data":[{"Id":"m5","Seq":5,"Direction":2,"Content":"音乐搜索 晴天","ContentType":"text","MsgId":"m5","Status":2,"CreateTime":"t","SessionKey":"task-other"}]}}""")
+        }
+
+        repository.syncAll()
+
+        assertEquals("task-music", chatDao.rows["m5"]?.sessionId)
+    }
+
+    @Test
     fun onWsMessageMoved_FromEqualsTo_Ignored() = runBlocking {
         chatDao.upsert(
             ChatMessageEntity(seq = 5, msgId = "m5", direction = 2, content = "c", contentType = "text", createTime = "t", sessionId = "task-pwd")

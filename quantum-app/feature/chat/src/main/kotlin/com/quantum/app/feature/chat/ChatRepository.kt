@@ -107,8 +107,8 @@ class ChatRepository @Inject constructor(
 
     /**
      * 乱序防御（msgId → 目标会话键）：迁移帧先于 echo/REST 补拉到达时行不在本地，先记映射；
-     * [onWsMessage] 落行前用其覆盖帧携带的会话键（echo 的 session 仍是来源，直接落库会把
-     * 已迁移行 REPLACE 回旧会话），命中即消费。仅内存态，重进/清缓存自愈（服务端行已是新键）。
+     * [onWsMessage] 和 REST 补拉落行前用其覆盖来源会话键（迟到的 echo 仍可能携带旧 session）。
+     * 仅内存态，重进/清缓存自愈（服务端行已是新键）。
      */
     private val movesMap = LinkedHashMap<String, String>()
 
@@ -340,8 +340,7 @@ class ChatRepository @Inject constructor(
                     payload = frame.payload,
                     status = ChatMessageEntity.STATUS_DELIVERED,
                     createTime = frame.createTime.orEmpty(),
-                    // movesMap 命中优先：迁移帧先到时 echo 的 session 还是来源会话，直接落库会把行写回旧会话
-                    sessionId = movesMap.remove(msgId) ?: frame.session.orEmpty(),
+                    sessionId = movesMap[msgId] ?: frame.session.orEmpty(),
                     sessionTitle = frame.sessionTitle
                 )
             )
@@ -416,7 +415,10 @@ class ChatRepository @Inject constructor(
      * 直接 upsert 会把 pickLabel/pickedKeys 抹掉（2026-09-19 发布实测踩中）。
      */
     private suspend fun persistMessages(messages: List<ChatMessageEntity>) {
-        val resolved = mergeLocalMarks(messages.map { matchPendingPick(it) })
+        val resolved = mergeLocalMarks(messages.map { incoming ->
+            val target = movesMap[incoming.msgId]
+            matchPendingPick(if (target == null) incoming else incoming.copy(sessionId = target))
+        })
         chatMessageDao.upsertAll(resolved)
         chatSessionDao.advanceAll(resolved)
     }
