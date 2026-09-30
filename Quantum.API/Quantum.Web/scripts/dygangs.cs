@@ -25,10 +25,15 @@
 //   5) 下载与推送不再看旧「自动下载/消息推送」开关：推送每页合并一条 App 通知（旧脚本逐条推送且汇总文案从未发出）；
 //      推送正文只列剧集标题不带磁力串（2026-09-20 改——磁力动辄百余字节刷屏且手机上无从复制使用，
 //      磁力仍完整存 video_update_monitoring 的 Data3 与任务日志，需要时去自定义数据页/日志取）；
-//      下载保留旧 2160P/4K 筛选——仅标题含 2160P/4K（忽略大小写，旧脚本先把标题转大写再匹配）的磁力提交 QB，
-//      非高清条目只入库+推送不下载；EnablePush 由平台通知门面自行把关，脚本侧不再判断。
+//      下载保留旧 2160P/4K 筛选——仅标题含 2160P/4K（忽略大小写，旧脚本先把标题转大写再匹配）的磁力自动提交 QB；
+//      非 2160P/4K 条目不自动下载（2026-09-25 改）：推送附点选卡片，点按即回复该磁力（等价手打 magnet: 消息），
+//      由「添加qb磁力任务」任务（触发词 magnet:，正则）接续提交 qBittorrent 下载，添加成败看 qB 回执；
+//      EnablePush 由平台通知门面自行把关，脚本侧不再判断。
 //   6) 提交成败按 HTTP 状态码 + qB 响应体判定（旧脚本收到 403 / 响应体 Fails. 也报「添加成功」）。
-//   去重仍与旧脚本一致：按来源页查询（Data1/Data2 包含匹配）后，用磁力精确相等判断是否已采集。
+//      去重仍与旧脚本一致：按来源页查询（Data1/Data2 包含匹配）后，用磁力精确相等判断是否已采集。
+//   7) 2026-09-30 修复：电影港页面把磁力 href 里的 & 转义成 &amp;，HtmlAgilityPack 的 GetAttributeValue
+//      按原始属性值返回、不做解码，&amp; 原样入库/提交 qB —— dn/xl/tr 参数全部失效（只剩 btih、没有 tracker），
+//      种子集体停在「正在下载元数据」。现抓取后先还原 HTML 实体再入库（&amp;→&、&#x26;→& 等）。
 // ============================================================================
 using System.Text;
 using HtmlAgilityPack;
@@ -120,7 +125,7 @@ public class DygangsMonitorTask : IQuantumTask
             foreach (var anchor in anchors)
             {
                 ct.ThrowIfCancellationRequested();
-                var link = anchor.GetAttributeValue("href", null);
+                var link = DecodeHtml(anchor.GetAttributeValue("href", null));
                 if (string.IsNullOrEmpty(link))
                 {
                     continue;
@@ -180,7 +185,7 @@ public class DygangsMonitorTask : IQuantumTask
                     }
                 }
 
-                // App 通知（每页一条汇总，只列标题不带磁力；磁力在入库 Data3 与任务日志里；是否实际送达由平台推送开关决定）
+                // App 通知（每页一条汇总，正文只列标题不带磁力；磁力在入库 Data3 与任务日志里；是否实际送达由平台推送开关决定）
                 var detail = string.Join("\r\n", newData.Select(n => n.Data2));
                 string tail;
                 if (string.IsNullOrEmpty(qbUrl))
@@ -196,12 +201,38 @@ public class DygangsMonitorTask : IQuantumTask
                     }
                     if (eligible < newData.Count)
                     {
-                        tail += $"，另有 {newData.Count - eligible} 条非 2160P/4K 未提交";
+                        tail += $"，另有 {newData.Count - eligible} 条非 2160P/4K 未自动下载";
                     }
                     tail += "。";
                 }
-                await ctx.Notify.SendAsync("电影港更新",
-                    $"【{page.Name}】采集到 {newData.Count} 条新剧集：\r\n{detail}\r\n\r\n{tail}", ct);
+                var content = $"【{page.Name}】采集到 {newData.Count} 条新剧集：\r\n{detail}\r\n\r\n{tail}";
+
+                // 非 2160P/4K 条目附点选卡片（2026-09-25）：点按即回复磁力链接（等价手打 magnet: 消息），
+                // 由「添加qb磁力任务」任务（触发词 magnet:，正则）接续提交 qBittorrent 下载，添加成败看 qB 回执；
+                // 无非高清条目时维持纯文本汇总推送（旧版 App 不渲染选项块，正文已含全部标题）。
+                var lowRes = newData.Where(n => !IsHighRes(n.Data2)).ToList();
+                if (lowRes.Count > 0)
+                {
+                    const int MaxOptions = 20;
+                    if (lowRes.Count > MaxOptions)
+                    {
+                        ctx.Log($"非 2160P/4K 新条目 {lowRes.Count} 条，超出点选卡片上限 {MaxOptions}，" +
+                                $"仅附前 {MaxOptions} 条（磁力均在入库 Data3 与任务日志）。");
+                        lowRes = lowRes.Take(MaxOptions).ToList();
+                    }
+                    var options = lowRes.Select((n, i) => new QuantumOption(
+                        Key: n.Data3,
+                        Label: $"{i + 1}. {Ellipsis(n.Data2, 80)}",
+                        Desc: "非 2160P/4K 资源，点选提交 qB 下载",
+                        Color: "blue")).ToList();
+                    await ctx.Notify.SendOptionsAsync(
+                        content + "\r\n\r\n以下非 2160P/4K 资源可点选提交下载：",
+                        options, ct);
+                }
+                else
+                {
+                    await ctx.Notify.SendAsync("电影港更新", content, ct);
+                }
             }
             ctx.Log($"[{page.Name}]本页磁力 {anchors.Count} 条，新采集 {newData.Count} 条。");
             total += newData.Count;
@@ -217,6 +248,28 @@ public class DygangsMonitorTask : IQuantumTask
         return string.IsNullOrEmpty(text) || !text.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? null : text;
     }
 
+    /// <summary>
+    /// 还原 HTML 属性值实体（&amp;→&、&lt;→&lt;、&gt;→&gt;、&quot;→"、&#x26;/&#38;→&、&nbsp;→空格）。
+    /// 电影港磁力 href 中 & 被转义成 &amp;，原样入库/提交 qB 会让 dn/xl/tr 参数全部失效（只剩 btih、
+    /// 没有 tracker，种子停在「正在下载元数据」）；GetAttributeValue 按原始属性值返回、不做解码，须在此还原。
+    /// </summary>
+    private static string DecodeHtml(string value)
+    {
+        if (string.IsNullOrEmpty(value) || value.IndexOf('&') < 0)
+        {
+            return value;
+        }
+        return value
+            .Replace("&amp;", "&", StringComparison.OrdinalIgnoreCase)
+            .Replace("&lt;", "<", StringComparison.OrdinalIgnoreCase)
+            .Replace("&gt;", ">", StringComparison.OrdinalIgnoreCase)
+            .Replace("&quot;", "\"", StringComparison.OrdinalIgnoreCase)
+            .Replace("&#x26;", "&", StringComparison.OrdinalIgnoreCase)
+            .Replace("&#38;", "&", StringComparison.OrdinalIgnoreCase)
+            .Replace("&nbsp;", " ", StringComparison.OrdinalIgnoreCase)
+            .Replace("&#160;", " ", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string Var(QuantumTaskContext ctx, string name)
         => ctx.Variables.TryGetValue(name, out var value) ? value : null;
 
@@ -224,6 +277,10 @@ public class DygangsMonitorTask : IQuantumTask
     private static bool IsHighRes(string title)
         => !string.IsNullOrEmpty(title) && (title.Contains("2160P", StringComparison.OrdinalIgnoreCase)
             || title.Contains("4K", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>超长标题截断（种子名常带大量规格后缀，点选卡片 Label 限 80 字符；参照 btsow 搜索脚本）。</summary>
+    private static string Ellipsis(string text, int max)
+        => string.IsNullOrEmpty(text) || text.Length <= max ? text : text.Substring(0, max) + "…";
 
     private const string QbSidEnv = "qbSID";
 

@@ -1,7 +1,7 @@
 // ============================================================================
 // 每日热歌推送（2026-09-19 新写）：定时抓网易云榜单前 N 首（默认 10）逐曲取链推
-// 音频气泡（点开即听），回执带逐首「保存」点选。定位 = music_search 的定时榜单伴生
-// 脚本：搜索交互（音乐搜索/序号/保存N）仍归 music_search，本脚本只做每日定点推送。
+// 音频气泡（点开即听）。定位 = music_search 的定时榜单伴生脚本：搜索交互（音乐
+// 搜索/序号/保存N）仍归 music_search，本脚本只做每日定点推送。
 //
 // 数据链路（全部复用 music_search 已验证的通道）：
 //   榜单 = 网易云公开歌单接口 music.163.com/api/playlist/detail（免鉴权，实测 2026-09-19
@@ -11,13 +11,12 @@
 //          （tx→kw→mg→kg 同名曲），与 music_search.ResolveSongUrlAsync 同逻辑；
 //   探测 = 推链前 Range 0-1 只看响应头，拦截风控 JSON 错误页/过期直链。
 //
-// 跨任务协作（保存点选怎么落盘）：本脚本推送的「保存」选项 Reply 为「保存<歌曲ID>」，
-//   被 music_search 任务的触发正则（^保存[\d,，\s]+$）接住，走其「直下 ID」路径按 wy 源
-//   取链落盘（保存目录 scripts_music_save_dir 同样由其读取）——刻意不写 music_search_cache
-//   （写共享缓存会覆盖用户搜索结果、制造序号歧义），也刻意不给自己配指令正则（与
-//   music_search 同正则会双触发/落双份）。music_search 任务停用则保存点选无人接住，
-//   试听气泡不受影响。气泡上的「保存」按钮（保存媒体 <url>）：推气泡时已记录「直链→歌名」
-//   映射（music_url_name，7 天过期），media_saver 直存反查即得「歌手 - 歌名.mp3」。
+// 推送形态（2026-09-27 修订，修音频一小时失效）：音源 CDN 直链时效约 1 小时（7 点推的
+//   气泡 8 点点开即 403 失效），不再直推直链。改为逐曲先经 ctx.File 落盘到 music/ 子目录
+//   （下载根目录内，无时效），气泡推服务端地址 api/AppMedia/file?path=<相对路径>
+//   （App 端内播放、随时可重播；同 music_search.NotifyMediaAsync / media_saver 回推链路）。
+//   不推榜单列表文字回执与逐首「保存」点选；仅取链/探测/落盘失败时推失败明细文字。
+//   直链→歌名映射（music_url_name，7 天过期）仍逐首照写，点旧直链气泡「保存」可反查直存。
 //
 // 推荐任务配置：定时 Cron 0 0 8 * * ?（每天 08:00，Quartz 六段式，按服务器本地时区，
 //   Docker 部署确认容器时区 Asia/Shanghai），开启推送即可；无需指令触发。
@@ -27,8 +26,6 @@
 //   scripts_music_daily_rank    榜单：hot=云音乐热歌榜（默认）/ new=新歌榜 / soar=飙升榜 /
 //                               original=原创榜，亦可直填网易数字歌单 ID（如 60198）
 //   scripts_music_daily_count   推送条数（默认 10，1-20）
-//   scripts_music_daily_mode    audio=逐曲音频气泡+保存点选（默认）/ list=仅榜单列表+保存点选
-//                               （音源侧大面积故障时的降级形态）
 //   scripts_music_daily_test    =1 时跳过当日防重检查（手动重推用；防重记录见下）
 //   scripts_music_br            音质 128/192/320/740/999（复用 music_search 同名变量，默认 320）
 //   scripts_music_lx_url        lxserver 基地址（复用同名变量；不配则走 GD 直取，VIP 曲易空链）
@@ -47,6 +44,7 @@ public class MusicDailyTask : IQuantumTask
     private const string PlaylistApi = "https://music.163.com/api/playlist/detail";
     private const string PushLogType = "music_daily_push_log";
     private const string UrlNameType = "music_url_name";
+    private const string SaveDir = "music";
     private const int DefaultCount = 10;
     private const int DefaultBr = 320;
 
@@ -56,7 +54,6 @@ public class MusicDailyTask : IQuantumTask
         var rankId = ResolveRankId(rankRaw);
         var count = ReadInt(ctx, "scripts_music_daily_count", DefaultCount, 1, 20);
         var br = ReadInt(ctx, "scripts_music_br", DefaultBr, 128, 999);
-        var listOnly = (Var(ctx, "scripts_music_daily_mode") ?? "audio").Trim().Equals("list", StringComparison.OrdinalIgnoreCase);
         var today = DateTime.Now.ToString("yyyy-MM-dd");
 
         // 当日防重：music_daily_push_log 已有当日+该榜单记录则跳过（防手动误触/一天连推）；
@@ -94,40 +91,24 @@ public class MusicDailyTask : IQuantumTask
             return;
         }
 
-        // 推送关闭（任务级 EnablePush=false）时只落日志，不发气泡/回执
-        if (!ctx.EnablePush)
-        {
-            ctx.Log($"[推送关闭] 每日热歌 · {chartName}（{songs.Count} 首，音质 {BrLabel(br)}）：");
-            foreach (var line in songs.Select((s, i) => $"{i + 1}. {s.Name} - {s.Artist}《{s.Album}》{s.Interval}"))
-            {
-                ctx.Log(line);
-            }
-            await MarkPushedAsync(ctx, today, rankId, ct);
-            return;
-        }
-
         var header = $"🎵 每日热歌 · {DateTime.Now.Month}月{DateTime.Now.Day}日 {chartName}（{songs.Count} 首 / 音质 {BrLabel(br)}）";
         var listText = string.Join("\r\n", songs.Select((s, i) => $"{i + 1}. {s.Name} - {s.Artist}{(string.IsNullOrWhiteSpace(s.Album) ? "" : $"《{s.Album}》")} {s.Interval}"));
         ctx.Log(header + "\r\n" + listText);
 
-        // list 模式：不取链，仅榜单列表 + 保存点选（保存时由 music_search 直下 ID 路径自行取链）
-        if (listOnly)
+        // 推送关闭（任务级 EnablePush=false）时只落日志
+        if (!ctx.EnablePush)
         {
-            var options = songs.Select((s, i) => new QuantumOption(
-                Key: $"save{i + 1}",
-                Label: $"保存 · {SongLabel(s)}",
-                Reply: $"保存{s.Id}",
-                Color: "green")).ToList();
-            await ctx.Notify.SendOptionsAsync(
-                header + "\r\n" + listText + "\r\n点「保存」落盘；配 scripts_music_daily_mode=audio 可恢复逐曲试听推送。", options, ct);
+            ctx.Log("[推送关闭] 未发音频气泡。");
             await MarkPushedAsync(ctx, today, rankId, ct);
             return;
         }
 
-        // audio 模式：逐曲取链 → 探测 → 音频气泡（点开即听），回执汇总 + 逐首保存点选
+        // 逐曲取链 → 探测 → 落盘 → 服务端地址音频气泡（caption 带「N. 歌名 - 歌手」序号前缀）；
+        // 直链时效约 1 小时不能直推，必须先落盘为无时效文件再推 api/AppMedia 相对地址。
+        // 全部成功即完全静默——不推列表文字回执（音频已落盘随时可重播，无需再保存），
+        // 仅失败/无法推出时推失败明细
         var lxUrl = NormalizeBaseUrl(Var(ctx, "scripts_music_lx_url"));
         var results = new List<string>();
-        var saveOptions = new List<QuantumOption>();
         // 直链→歌曲信息映射（2026-09-20 改逐首「先写映射再推气泡」）：App 气泡「保存」按钮只发 URL、
         // CDN 直链是 hash 无歌名，media_saver 靠 music_url_name 反查得「歌手 - 歌名.mp3」；整轮推完
         // 才写映射的话，用户秒点保存早于映射写入，反查落空只得 hash 文件名——逐首先写彻底消除
@@ -151,30 +132,38 @@ public class MusicDailyTask : IQuantumTask
                 results.Add($"{QuantumText.Color("red", "✗")} {i + 1}. {SongLabel(song)}：直链不可用（{probe.Reason}）");
                 continue;
             }
-            // 先写映射再推气泡：气泡到达手机即可点「保存」，media_saver 反查必须已能命中
-            await TrySaveUrlNameAsync(ctx, url, song, ct);
-            await ctx.Notify.SendAudioAsync(url, $"{i + 1}. {SongLabel(song)}（{song.Interval}）", ct);
-            pushedCount++;
-            saveOptions.Add(new QuantumOption(
-                Key: $"save{i + 1}",
-                Label: $"保存 · {SongLabel(song)}",
-                Reply: $"保存{song.Id}",
-                Color: "green"));
+            // 落盘再推服务端地址：直链约 1 小时过期，下载到 music/ 后文件无时效，
+            // 气泡点开走 App 端内播放（api/AppMedia/file），任何时候点都还能听
+            try
+            {
+                var fileName = BuildFileName(song, url, br);
+                var file = await ctx.File.DownloadAsync(url, fileName, SaveDir, ct);
+                // 先写映射再推气泡：旧直链气泡点「保存」时 media_saver 反查必已能命中
+                await TrySaveUrlNameAsync(ctx, url, song, ct);
+                await NotifyMediaAsync(ctx, file.RelativePath, $"{i + 1}. {SongLabel(song)}", ct);
+                pushedCount++;
+                ctx.Log($"已落盘并推送：{fileName}（{file.Length / 1024.0 / 1024.0:F1}MB）→ {file.RelativePath}。");
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                results.Add($"{QuantumText.Color("red", "✗")} {i + 1}. {SongLabel(song)}：下载落盘失败（{e.Message}）");
+            }
         }
 
-        var footer = pushedCount == songs.Count
-            ? $"点「保存」落盘喜欢的歌；回复「音乐搜索 关键字」随时找歌。"
-            : $"试听 {pushedCount}/{songs.Count} 首（未推出的见下方 ✗ 行）；点「保存」落盘；回复「音乐搜索 关键字」随时找歌。";
-        var text = string.Join("\r\n", new[] { header, listText }.Concat(results.Count > 0
-            ? new[] { QuantumText.Color("orange", "── 未推出 ──") }.Concat(results)
-            : Array.Empty<string>()).Append(footer));
-        if (saveOptions.Count > 0)
+        // 全部成功即完全静默（与 music_search 搜索直推一致）；有失败时推失败明细，
+        // 让用户知道榜单里哪些没出来
+        if (results.Count > 0)
         {
-            await ctx.Notify.SendOptionsAsync(text, saveOptions, ct);
-        }
-        else
-        {
-            await ctx.Notify.SendAsync("每日热歌推送", text, ct);
+            var title = pushedCount == songs.Count
+                ? "每日热歌推送"
+                : $"每日热歌推送（{pushedCount}/{songs.Count}）";
+            var text = string.Join("\r\n", new[] { header }
+                .Concat(results.Count > 0 ? results : Array.Empty<string>()));
+            await ctx.Notify.SendAsync(title, text, ct);
         }
 
         ctx.Log($"每日热歌推送完成：气泡 {pushedCount}/{songs.Count}，榜单 {chartName}（{rankId}）。");
@@ -285,7 +274,7 @@ public class MusicDailyTask : IQuantumTask
         }
         catch (Exception e)
         {
-            ctx.Log($"直链→歌名映射写入失败（不影响推送）：{e.Message}");
+            ctx.Log($"直链→歌名映射写入失败（不影响本次推送）：{e.Message}");
         }
     }
 
@@ -553,7 +542,7 @@ public class MusicDailyTask : IQuantumTask
     }
 
     /// <summary>lxserver 基地址规范化：去尾部斜杠；非 http(s) 绝对地址视为无效配置（返回 null 走 GD 默认链路）。
-    /// 同名变量多条时平台按多账号语义用 & 合并投递（如新旧两份 lxserver 地址），合并值整段当 URL 会因
+    /// 同名变量多条时平台按多账号语义用 &amp; 合并投递（如新旧两份 lxserver 地址），合并值整段当 URL 会因
     /// authority 含 "端口&amp;http" 被 Uri 解析判死（Invalid URI: Invalid port specified）——按 &amp; 分段
     /// 取第一个能通过绝对 URI 校验的 http(s) 段，全部非法才回落默认链路。</summary>
     private static string NormalizeBaseUrl(string raw)
@@ -572,6 +561,24 @@ public class MusicDailyTask : IQuantumTask
             }
         }
         return null;
+    }
+
+    /// <summary>落盘文件名：歌手 - 歌名.扩展名；扩展名优先取直链尾部（mp3/flac/m4a 等），取不到按音质推断。</summary>
+    private static string BuildFileName(Song song, string url, int br)
+    {
+        var bare = url.Split('?')[0];
+        var dot = bare.LastIndexOf('.');
+        var ext = dot > 0 && bare.Length - dot <= 5 ? bare[(dot + 1)..].ToLowerInvariant() : "";
+        if (ext != "mp3" && ext != "flac" && ext != "m4a" && ext != "aac" && ext != "wav" && ext != "ape")
+        {
+            ext = br >= 740 ? "flac" : "mp3";
+        }
+        var stem = string.IsNullOrWhiteSpace(song.Artist) ? song.Name : $"{song.Artist} - {song.Name}";
+        if (stem.Length > 100)
+        {
+            stem = stem[..100];
+        }
+        return $"{stem}.{ext}";
     }
 
     private static string BrLabel(int br) => br >= 740 ? $"无损{br}" : $"{br}k";
@@ -609,5 +616,16 @@ public class MusicDailyTask : IQuantumTask
         {
             await ctx.Notify.SendAsync(title, content, ct);
         }
+    }
+
+    /// <summary>
+    /// 音频气泡：推服务端可播相对地址（api/AppMedia/file?path=…，App 端内播放、无直链时效）。
+    /// CDN 直链时效约 1 小时，2026-09-27 起不再上气泡，改推落盘文件的服务端地址
+    /// （同 music_search.NotifyMediaAsync / media_saver 回推链路）。仅推送开启时由调用方保证进入。
+    /// </summary>
+    private static async Task NotifyMediaAsync(QuantumTaskContext ctx, string relativePath, string caption, CancellationToken ct)
+    {
+        var serverUrl = "api/AppMedia/file?path=" + Uri.EscapeDataString(relativePath);
+        await ctx.Notify.SendAudioAsync(serverUrl, caption, ct);
     }
 }

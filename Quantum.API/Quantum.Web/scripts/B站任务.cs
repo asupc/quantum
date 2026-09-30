@@ -6,9 +6,17 @@
 // 恢复方式=BILI_TASKS 加 tianxuan，或风控冷却后把 tianxuan 加回下行默认集）——扫全站直播间挂件
 // 504 的天选房自动参与，对齐 BiliBiliToolPro LiveDomainService.TianXuan（含 Wbi 签名与直播域
 // Cookie 预热）；「需关注」奖项由服务端自动关注主播（不做分组整理）；遇 -352 当日中止不重试。
+// 2026-09-21 调整：应要求注释停用「银瓜子兑换 / 直播签到 / 大会员大积分」三段调用（方法体保留，
+// 取消 RunAsync 内对应注释即可恢复）。
+// 2026-09-28 修复：B 站对 web 端 share/add 加了账号/设备级风控，纯脚本请求稳定 -403「账号异常」
+// （观看/漫画不受影响；已实测新 UA / aurora 头 / Wbi 签名 / App 形态均无法绕过）。浏览器能过是
+// 因为持有 JS 换出的 x-bili-ticket，而脚本无法换票（bapis 换票网关会丢弃平台 HttpClient 请求的
+// 参数，GET 返 405、POST 读不到 ts）。缓解：分享失败时自动改用 Cookie 里的 bili_ticket 带票重试
+// （浏览器换好，有 TTL，需定期刷新 Cookie），并在日志/通知中回显真实返回码（此前 -403 不可见）。
 // 环境变量：
 //   BILI_COOKIE       必填。浏览器登录 bilibili.com → F12 → Network → 任一请求 → 复制整串 Cookie
-//                     （须含 DedeUserID / SESSDATA / bili_jct；buvid3 缺失时脚本自动补）
+//                     （须含 DedeUserID / SESSDATA / bili_jct；buvid3 缺失时脚本自动补；
+//                      想修复分享风控 -403，请刷新视频页后复制含 bili_ticket 的最新整串 Cookie）
 //   BILI_TASKS        可选。逗号分隔子集，默认 watch,share,manga,silver2coin,live,bigpoint
 //                     （tianxuan 需显式加入才执行）
 //   BILI_COIN_TARGET  可选。每日投币目标枚数（默认 0 = 不投币；投币消耗真硬币）
@@ -57,6 +65,9 @@ public class BiliDailyTask : IQuantumTask
     private string _buvid = "";
     private readonly List<(string Label, string State, string Detail)> _report = [];
 
+    // 本次执行中分享是否被服务端风控拦截（用于汇总推送附加修复指引）
+    private bool _shareRisk;
+
     private sealed record VideoInfo(string Aid, string Bvid, string Cid, long Duration, string Title);
 
     public async Task RunAsync(QuantumTaskContext ctx, CancellationToken ct)
@@ -94,7 +105,7 @@ public class BiliDailyTask : IQuantumTask
         }
         var level = nav["data"]?["level_info"]?["current_level"];
         var coinBalance = nav["data"]?["money"]?.ToString();
-        var isVip = nav["data"]?["vipStatus"]?.Value<int>() == 1 && nav["data"]?["vipType"]?.Value<int>() != 0;
+        // var isVip = nav["data"]?["vipStatus"]?.Value<int>() == 1 && nav["data"]?["vipType"]?.Value<int>() != 0; // 2026-09-21 随大会员大积分停用而注释
 
         // ------------------------------------------------------------------ 4. 每日任务（观看+分享）
         if (tasks.Contains("watch") || tasks.Contains("share"))
@@ -104,20 +115,20 @@ public class BiliDailyTask : IQuantumTask
         if (tasks.Contains("manga"))
             await MangaCheckInAsync(ctx, ct);
 
-        // ------------------------------------------------------------------ 6. 银瓜子兑硬币
-        if (tasks.Contains("silver2coin"))
-            await Silver2CoinAsync(ctx, ct);
+        // ------------------------------------------------------------------ 6. 银瓜子兑硬币（2026-09-21 应要求停用，取消下行注释即可恢复）
+        // if (tasks.Contains("silver2coin"))
+        //     await Silver2CoinAsync(ctx, ct);
 
-        // ------------------------------------------------------------------ 7. 直播签到（官方已下线，容错保留）
-        if (tasks.Contains("live"))
-            await LiveSignAsync(ctx, ct);
+        // ------------------------------------------------------------------ 7. 直播签到（官方已下线，容错保留；2026-09-21 应要求停用）
+        // if (tasks.Contains("live"))
+        //     await LiveSignAsync(ctx, ct);
 
-        // ------------------------------------------------------------------ 8. 大会员大积分
-        if (tasks.Contains("bigpoint"))
-        {
-            if (isVip) await BigPointAsync(ctx, ct);
-            else _report.Add(("大会员大积分", "skip", "非大会员账号"));
-        }
+        // ------------------------------------------------------------------ 8. 大会员大积分（2026-09-21 应要求停用，取消下行注释即可恢复）
+        // if (tasks.Contains("bigpoint"))
+        // {
+        //     if (isVip) await BigPointAsync(ctx, ct);
+        //     else _report.Add(("大会员大积分", "skip", "非大会员账号"));
+        // }
 
         // ------------------------------------------------------------------ 9. 天选时刻抽奖（默认开）
         if (tasks.Contains("tianxuan"))
@@ -140,6 +151,9 @@ public class BiliDailyTask : IQuantumTask
             sb.Append('\n').Append(tag).Append(' ').Append(label);
             if (!string.IsNullOrEmpty(detail)) sb.Append(' ').Append(detail);
         }
+        if (_shareRisk)
+            sb.Append("\n\n").Append(QuantumText.Tag("orange", "提示"))
+                .Append(" 分享被 B 站服务端风控拦截（-403 账号异常，观看/漫画等不受影响）。修复方式：浏览器打开任一视频页刷新后，F12 复制最新整串 Cookie 更新 BILI_COOKIE（须含 bili_ticket，脚本会用它带票重试分享）");
         await NotifyAsync(ctx, sb.ToString(), ct);
         ctx.Log("B站任务执行完毕。");
     }
@@ -184,7 +198,7 @@ public class BiliDailyTask : IQuantumTask
                 }
                 if (!shared)
                 {
-                    var share = await PostFormAsync(ctx, Api + "/x/web-interface/share/add", new Dictionary<string, string>
+                    var shareForm = new Dictionary<string, string>
                     {
                         ["aid"] = video.Aid,
                         ["csrf"] = _csrf,
@@ -192,13 +206,41 @@ public class BiliDailyTask : IQuantumTask
                         ["ramval"] = Random.Shared.Next(3, 21).ToString(),
                         ["source"] = "web_normal",
                         ["ga"] = "1"
-                    }, ct, origin: "https://www.bilibili.com", referer: $"https://www.bilibili.com/video/{video.Bvid}/");
+                    };
+                    var share = await PostFormAsync(ctx, Api + "/x/web-interface/share/add", shareForm, ct,
+                        origin: "https://www.bilibili.com", referer: $"https://www.bilibili.com/video/{video.Bvid}/");
                     var code = share?["code"]?.Value<int>() ?? int.MinValue;
                     // 71000 = 今日已分享
-                    shareOk = code == 0 || code == 71000;
+                    if (code == 0 || code == 71000)
+                    {
+                        shareOk = true;
+                    }
+                    else
+                    {
+                        // 2026-09-28：B 站对 share/add 加了账号/设备级风控（-403 账号异常），脚本侧参数/
+                        // UA/签名均无法绕过；浏览器可过是因持有 JS 换出的 x-bili-ticket（脚本无法自行换票）。
+                        // 若 Cookie 里带有浏览器换好的 bili_ticket，则带票重试一次。
+                        ctx.Log($"分享请求失败 code={code} {share?["message"]}，准备带票重试");
+                        var biliTicket = GetCookieValue(_cookie, "bili_ticket");
+                        if (!string.IsNullOrEmpty(biliTicket))
+                        {
+                            await Task.Delay(Random.Shared.Next(1500, 3000), ct);
+                            var retry = await PostFormAsync(ctx, Api + "/x/web-interface/share/add", shareForm, ct,
+                                origin: "https://www.bilibili.com", referer: $"https://www.bilibili.com/video/{video.Bvid}/",
+                                extraHeaders: new Dictionary<string, string> { ["x-bili-ticket"] = biliTicket });
+                            var rcode = retry?["code"]?.Value<int>() ?? int.MinValue;
+                            shareOk = rcode == 0 || rcode == 71000;
+                            ctx.Log(shareOk ? "分享带票重试成功" : $"分享带票重试仍失败 code={rcode} {retry?["message"]}");
+                        }
+                        else
+                        {
+                            ctx.Log("Cookie 中无 bili_ticket（该票由浏览器访问视频页时自动换出），无法带票重试");
+                        }
+                    }
                 }
             }
 
+            _shareRisk = wantShare && !shareOk;
             var parts = new List<string>();
             if (wantWatch) parts.Add(watchOk ? "观看+5经验" : "观看未成功");
             if (wantShare) parts.Add(shareOk ? "分享+5经验" : "分享未成功");
@@ -887,7 +929,8 @@ public class BiliDailyTask : IQuantumTask
 
     private async Task<JObject?> PostFormAsync(QuantumTaskContext ctx, string url, IDictionary<string, string> form,
         CancellationToken ct, string? referer = null, string? origin = null, string ua = WebUa,
-        IDictionary<string, string>? query = null, string? cookie = null)
+        IDictionary<string, string>? query = null, string? cookie = null,
+        IDictionary<string, string>? extraHeaders = null)
     {
         await Task.Delay(Random.Shared.Next(1500, 3000), ct);
         if (query is { Count: > 0 }) url += (url.Contains('?') ? "&" : "?") + BuildQuery(query);
@@ -896,6 +939,10 @@ public class BiliDailyTask : IQuantumTask
             Content = new FormUrlEncodedContent(form)
         };
         ApplyHeaders(request, referer, origin, ua, cookie);
+        // 附加请求头（如分享风控重试用的 x-bili-ticket）
+        if (extraHeaders != null)
+            foreach (var kv in extraHeaders)
+                request.Headers.TryAddWithoutValidation(kv.Key, kv.Value);
         using var response = await ctx.Http.SendAsync(request, ct);
         return TryParse(await response.Content.ReadAsStringAsync(ct));
     }
@@ -993,8 +1040,8 @@ public class BiliDailyTask : IQuantumTask
             ? []
             : [.. conf.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
-    private static int ParseInt(string? value, int fallback) =>
-        int.TryParse((value ?? "").Trim(), out var v) ? v : fallback;
+    private static int ParseInt(string? conf, int fallback) =>
+        int.TryParse(conf, out var v) ? v : fallback;
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
