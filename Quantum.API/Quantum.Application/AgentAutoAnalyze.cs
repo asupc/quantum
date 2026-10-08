@@ -1,4 +1,5 @@
 ﻿using log4net;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Quantum.Data;
 using Quantum.Entities.Model;
@@ -47,6 +48,13 @@ public static class AgentAutoAnalyze
                 }
                 var agent = scope.ServiceProvider.GetRequiredService<AgentService>();
                 var conversation = await agent.EnsureDefaultConversationAsync();
+                var skipReason = await SkipReasonAsync(
+                    scope.ServiceProvider.GetRequiredService<IQuantumDbContext>(), conversation.Id, fileName);
+                if (skipReason != null)
+                {
+                    _log.Info($"跳过任务「{taskName}」失败自动分析：{skipReason}");
+                    return;
+                }
                 var content = $"""
                     任务「{taskName}」执行失败，脚本是 {fileName}。
                     报错信息：{error}
@@ -63,6 +71,25 @@ public static class AgentAutoAnalyze
                 _log.Error($"任务失败自动分析发起失败（{taskName}）", e);
             }
         });
+    }
+
+    /// <summary>
+    /// 防重判定（2026-10-08 修复）：修复提案是「等用户应用」的挂起态——没应用前任务每次执行仍会失败，
+    /// 若不拦截，每次失败都会再起一轮自动分析，重复烧模型调用、堆重复提案。
+    /// 目标脚本存在待确认提案（Pending），或默认会话已有运行中的 run（手动/自动均占）时跳过；
+    /// 提案被应用/忽略/判过期后即不再拦截，下一次失败可恢复正常触发。
+    /// </summary>
+    internal static async Task<string> SkipReasonAsync(IQuantumDbContext db, string conversationId, string fileName)
+    {
+        if (await db.AiProposals.AsNoTracking().AnyAsync(n => n.FileName == fileName && n.Status == AiProposalStatus.Pending))
+        {
+            return $"脚本 {fileName} 已有待确认的 AI 修复提案（应用/忽略前不重复分析）";
+        }
+        if (await db.AiRuns.AsNoTracking().AnyAsync(n => n.ConversationId == conversationId && n.Status == AiRunStatus.Running))
+        {
+            return "默认会话已有运行中的 AI run";
+        }
+        return null;
     }
 
     /// <summary>
