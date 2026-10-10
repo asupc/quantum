@@ -25,17 +25,27 @@ const REVOKE_GRACE_MS = 30000;
 
 /** 判断内容是否为站内鉴权地址 */
 export function needsAuth(url) {
-  return AUTH_PREFIXES.some((prefix) => url.startsWith(prefix));
+  if (typeof url !== 'string') {
+    return false; // 非字符串（脏帧）不得判为鉴权地址，避免下游 startsWith 崩溃
+  }
+  const raw = url.trim();
+  return AUTH_PREFIXES.some((prefix) => raw.startsWith(prefix));
 }
 
 /**
  * content → 可直接使用的地址（尚未鉴权加载，只是拼装）
+ * 协议白名单：只放行 http(s) 外链与站内相对地址；javascript:/data:/file:/blob:/
+ * 协议相对（//evil）等一律返回空串（不原样透传成可执行/可导航地址，也不按裸 FileId 拼站内下载）。
  * @param {string} content 消息内容（外链 / 相对 api 地址 / FileId）
  * @param {string} contentType text/image/video/audio/file
  */
 export function resolveMediaUrl(content, contentType) {
-  const raw = (content || '').trim();
+  const raw = (typeof content === 'string' ? content : '').trim();
   if (!raw) {
+    return '';
+  }
+  // 危险协议：直接拒绝（既不原样透传，也不当裸 FileId 落入站内下载分支）
+  if (/^(javascript|data|file|blob|vbscript)\s*:/i.test(raw) || raw.startsWith('//')) {
     return '';
   }
   if (/^https?:\/\//i.test(raw)) {
@@ -53,6 +63,9 @@ export function resolveMediaUrl(content, contentType) {
 
 /** 是否自家服务器地址（自家内容不显示「保存到服务器」，与 App isOwnServerUrl 同义） */
 export function isOwnServerUrl(url) {
+  if (typeof url !== 'string' || !url) {
+    return false;
+  }
   return needsAuth(url) || url.startsWith(window.location.origin);
 }
 
@@ -147,7 +160,11 @@ const AUDIO_EXTS = ['mp3', 'flac', 'm4a', 'aac', 'wav'];
 const VIDEO_EXTS = ['mp4', 'mkv', 'webm', 'm4v'];
 
 function extOf(url) {
-  const clean = (url || '').split('#')[0].split('?')[0];
+  // 危险协议/非字符串不参与可播放判定（javascript:alert(1).mp3 之类的伪装不得进播放分支）
+  if (typeof url !== 'string' || /^(javascript|data|file|blob|vbscript)\s*:/i.test(url)) {
+    return '';
+  }
+  const clean = url.split('#')[0].split('?')[0];
   const name = clean.substring(clean.lastIndexOf('/') + 1);
   const dot = name.lastIndexOf('.');
   return dot > 0 ? name.substring(dot + 1).toLowerCase() : '';

@@ -212,6 +212,7 @@
 
 <script>
 import { h, markRaw } from 'vue'
+import { asArray } from '@/utils/asArray'
 import {
     listContainers,
     startContainer,
@@ -623,8 +624,8 @@ export default {
         async loadContainers() {
             const all = this.tab === 'all'
             const res = await listContainers(all)
-            // 初始化容器的资源使用数据
-            this.containers = res.map(container => {
+            // 初始化容器的资源使用数据（载荷非数组时收敛为空列表，避免整页渲染崩）
+            this.containers = asArray(res).map(container => {
                 return {
                     ...container,
                     CPU: '0.00%',

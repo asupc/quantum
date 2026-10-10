@@ -16,7 +16,7 @@
                 </n-button>
             </div>
         </div>
-        <div class="footer" v-html="Footer"></div>
+        <div class="footer" v-html="SafeFooter"></div>
     </div>
 </template>
 
@@ -26,6 +26,8 @@ import { useUserStore } from '@/stores/user'
 import { GetFooter } from '@/api/setting.js'
 import { QrCreate, QrStatus } from '@/api/user.js'
 import { GetSetupStatus } from '@/api/setup.js'
+// 页脚是匿名端点的管理端可写值：必须净化后才允许 v-html（未认证页面 XSS = 令牌失守）
+import { sanitizeFooterHtml } from '@/utils/footerHtml.js'
 
 export default {
     components: {
@@ -44,6 +46,14 @@ export default {
         }
     },
     computed: {
+        /**
+         * 渲染用页脚：GET /api/SystemConfig/footer 为匿名端点、内容取自管理端可写的 Setting.Footer，
+         * 登录页又是未认证页面——原始值直接 v-html 即存储型 XSS（令牌在 localStorage，等同账号接管）。
+         * 一律经白名单净化（保留有限行内格式，见 src/utils/footerHtml.js），危险载荷输出为惰性文本。
+         */
+        SafeFooter() {
+            return sanitizeFooterHtml(this.Footer)
+        },
         QrStatusText() {
             if (this.QrStatus === 1) return '已授权，正在登录…'
             if (this.QrStatus === 2) return '票据已过期，请重新获取'

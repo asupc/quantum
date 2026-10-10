@@ -303,6 +303,7 @@
 </template>
 <script>
   import { diffLines } from '@/utils/lineDiff'
+  import { asArray } from '@/utils/asArray'
   import { ScriptList as GetScriptList } from '@/api/task'
   import {
     GetConversations,
@@ -656,7 +657,7 @@
       // ---------------------------------------------------------------- 会话
       loadConversations() {
         GetConversations().then((res) => {
-          this.Conversations = res || []
+          this.Conversations = asArray(res)
           if (!this.CurrentId && this.Conversations.length) {
             this.openConversation(this.Conversations[0])
           }
@@ -755,7 +756,7 @@
           if (conversationId !== this.CurrentId) {
             return 0
           }
-          const rows = (list || []).filter((n) => !this.Messages.some((m) => m.Id === n.Id))
+          const rows = asArray(list).filter((n) => !this.Messages.some((m) => m.Id === n.Id))
           if (!rows.length) {
             return 0
           }
@@ -782,7 +783,7 @@
           if (conversationId !== this.CurrentId) {
             return
           }
-          const rows = res || []
+          const rows = asArray(res)
           this.Messages = rows
           this.MaxSeq = rows.length ? Math.max(...rows.map((n) => Number(n.Seq) || 0)) : 0
           this.ensureStepEntries()
@@ -902,7 +903,7 @@
         }
         const entry = this.ensureStepEntry(id)
         return GetAgentSteps(id, entry.maxSeq).then((res) => {
-          const rows = res || []
+          const rows = asArray(res)
           if (!rows.length) {
             return
           }
@@ -918,7 +919,7 @@
         entry.expanded = !entry.expanded
         if (entry.expanded && !entry.loaded) {
           GetAgentSteps(runId, 0).then((res) => {
-            const rows = res || []
+            const rows = asArray(res)
             entry.steps = rows
             entry.maxSeq = rows.length ? Math.max(...rows.map((n) => Number(n.Seq) || 0)) : 0
             entry.loaded = true

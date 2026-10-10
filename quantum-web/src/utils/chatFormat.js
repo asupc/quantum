@@ -94,7 +94,8 @@ export function sessionPreview(message) {
     if (type === 'file') {
         return '[文件]';
     }
-    const firstLine = (message.Content || '').split('\n')[0] || '';
+    // 脏帧防御：Content 非字符串（数字/对象/数组）时不得抛（split is not a function 会连带毒化游标）
+    const firstLine = String(message.Content ?? '').split('\n')[0] || '';
     if (type === 'notify') {
         // 与 App 同：剥掉前导「【」再取「】」前的内容，取不到则回退首行
         const title = firstLine.replace(/^【/, '').split('】')[0].trim();

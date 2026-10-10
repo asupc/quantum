@@ -144,6 +144,7 @@
 <script>
 import { h } from 'vue'
 import { renderOpActions, OpColor } from '@/utils/op-actions'
+import { asArray } from '@/utils/asArray'
 import {
     getBookmarks,
     createBookmark,
@@ -246,7 +247,7 @@ export default {
                 pageSize: 1000, // 获取全部数据
                 search: this.searchKeyword
             })
-            this.bookmarks = response.Data || []
+            this.bookmarks = asArray(response?.Data)
             this.filteredBookmarks = [...this.bookmarks]
         },
 
@@ -319,9 +320,17 @@ export default {
         },
 
         openBookmark(bookmark) {
-            if (bookmark.Url) {
-                window.open(bookmark.Url, '_blank')
+            const url = typeof bookmark?.Url === 'string' ? bookmark.Url.trim() : ''
+            if (!url) {
+                return
             }
+            // 协议白名单：书签可来自导入的浏览器书签 HTML（aElement.href 会保留 javascript: 等），
+            // 非 http(s) 一律拒绝并提示；打开时带 noopener,noreferrer（与聊天页 jump 处置同口径）
+            if (!/^https?:\/\//i.test(url)) {
+                this.$message.warning('仅支持打开 http/https 链接')
+                return
+            }
+            window.open(url, '_blank', 'noopener,noreferrer')
         },
 
         toggleViewMode() {

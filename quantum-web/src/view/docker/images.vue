@@ -28,6 +28,7 @@
 
 <script>
 import { h } from 'vue'
+import { asArray } from '@/utils/asArray'
 import {
     listImages,
     removeImage
@@ -108,7 +109,8 @@ export default {
         },
         async loadImages() {
             const res = await listImages(false)
-            this.images = res;
+            // 载荷非数组时收敛为空列表（异常响应不得写进渲染态）
+            this.images = asArray(res);
         },
 
         refresh() {

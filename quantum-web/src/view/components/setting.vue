@@ -60,6 +60,25 @@
                     </n-form-item>
                 </n-gi>
                 <n-gi :span="12">
+                    <n-form-item label="任务内网白名单">
+                        <n-input-group>
+                            <n-input-group-label>
+                                <n-tooltip trigger="hover" placement="top" style="max-width: 420px">
+                                    <template #trigger>
+                                        <i class="fa-solid fa-circle-exclamation" style="color: crimson"></i>
+                                    </template>
+                                    任务脚本外部请求（ctx.Http / ctx.File）可访问的内网目标（逗号分隔，支持 IP、CIDR、
+                                    主机名，如 192.168.1.50,qb.lan,10.0.0.0/24）。留空 = 只允许公网目标
+                                    （本机/私网/链路本地/云元数据一律拒绝，防脚本被当作 SSRF 跳板）。
+                                    需要访问自建 qBittorrent、NAS 等局域网服务时才在此登记。
+                                </n-tooltip>
+                            </n-input-group-label>
+                            <n-input placeholder="如 192.168.1.50,qb.lan，留空只允许公网"
+                                v-model:value="SystemConfig.TaskNetworkAllowlist" />
+                        </n-input-group>
+                    </n-form-item>
+                </n-gi>
+                <n-gi :span="12">
                     <n-form-item label="Swagger">
                         <n-checkbox v-model:checked="SystemConfig.EnableSwagger">
                             <span class="checkbox-label">生产环境暴露 Swagger</span>
@@ -138,7 +157,7 @@
             <n-divider title-placement="left">站点与数据</n-divider>
             <n-form-item label="自定义页脚">
                 <n-input type="textarea" :rows="3" v-model:value="SystemConfig.Footer"
-                    placeholder="展示在登录页面页脚部分，支持html标签" />
+                    placeholder="展示在登录页面页脚部分，支持有限格式：b/strong/i/em/u/br/p、a（仅 http/https 链接）、span/font（颜色、字号）；其余标签与属性会被登录页净化丢弃" />
             </n-form-item>
 
             <n-form-item :show-feedback="false">

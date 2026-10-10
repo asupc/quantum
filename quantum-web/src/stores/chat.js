@@ -15,6 +15,7 @@ import {
 import { GetTask } from '@/api/task';
 import { parsePayload } from '@/utils/messagePayload';
 import { sessionPreview } from '@/utils/chatFormat';
+import { asArray } from '@/utils/asArray';
 
 /**
  * 会话状态层（Web 端会话页的数据唯一来源）。
@@ -40,6 +41,11 @@ const PAGE_SIZE = 50;
 const CATCH_UP_PAGE = 500;
 const CATCH_UP_MAX_PAGES = 20;
 const READ_THROTTLE_MS = 3000;
+// F3b：MsgId 去重账本容量（每会话保留最近 500 个，FIFO 淘汰——与 moves 的 500 上限同口径）。
+// 后台会话窗口未物化时只有账本可用，有界才不会随运行时长无限涨内存。
+const SEEN_MSGID_LIMIT = 500;
+// 账本会话数上限：会话键虽来自服务端，伪造帧仍可注入任意键造成账本键爆炸（真会话数远小于此）。
+const SEEN_MSGID_SESSIONS_LIMIT = 200;
 // session_read 帧后的权威重算防抖（2026-09-21 双端同步）：多会话连续推进只合并一次 overview
 const SESSION_READ_REFRESH_DEBOUNCE_MS = 500;
 
@@ -57,7 +63,17 @@ let pendingPicks = [];
 // §3-4：列表按 Seq 升序维护（与旧 sort 口径一致：空 Seq 沉底）。实时帧几乎都是最新 Seq，
 // 二分定位插入点即可 O(log n)，取代每次 push 后整表 sort 的 O(n log n)。
 function seqOrder(item) {
-    return item.Seq || Number.MAX_SAFE_INTEGER;
+    return toSeq(item.Seq) || Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * 脏 seq 归一：帧字段可能是字符串/对象（服务端异常或伪造帧），`Math.max(游标, 'abc')` 会得到
+ * NaN 并永久毒化游标（之后每次 Math.max(NaN, x) 仍是 NaN）→ 补拉永远重拉同一页。
+ * 非有限数值一律归 0（= 无序号，沉底且不推进游标）。
+ */
+function toSeq(value) {
+    const num = Number(value);
+    return Number.isFinite(num) && num > 0 ? num : 0;
 }
 
 function insertBySeq(rows, row) {
@@ -134,6 +150,14 @@ export const useChatStore = defineStore('chat', {
          * 乐观气泡。有界（超 500 丢最旧）；仅内存态，刷新页面即清（服务端行已是新键）。
          */
         moves: new Map(),
+        /**
+         * 去重账本（会话键 → 已应用 MsgId 的 Set，F3b）：与消息窗口是否物化无关——
+         * 后台会话（从未在本端打开，messagesBySession 无键）也要能识别重复送达，
+         * 否则 WS 帧 + 补拉页携带同一 MsgId 会把 Total/Unread 双计。
+         * MsgId 是服务端生成的 GUID（永不重用），命中即「同一行又一次送达」。
+         * 有界：每会话保留最近 SEEN_MSGID_LIMIT 个（FIFO 淘汰）；仅内存态，刷新即清。
+         */
+        seenMsgIds: {},
         syncCursor: 0,
         ready: false
     }),
@@ -189,7 +213,7 @@ export const useChatStore = defineStore('chat', {
             try {
                 const res = await NotificationList(1, 200, false);
                 const map = {};
-                (res?.Data || []).forEach((item) => {
+                asArray(res?.Data).forEach((item) => {
                     if (item.MsgId) {
                         map[item.MsgId] = {
                             title: item.Title || '',
@@ -209,7 +233,7 @@ export const useChatStore = defineStore('chat', {
             try {
                 const res = await GetTask({ PageIndex: 1, PageSize: 500 });
                 const map = {};
-                (res?.Data || []).forEach((task) => {
+                asArray(res?.Data).forEach((task) => {
                     map[task.Id] = task.Name;
                 });
                 this.taskMap = map;
@@ -234,15 +258,18 @@ export const useChatStore = defineStore('chat', {
 
         async _refreshSessionsOnce() {
             const res = await SessionsOverview(this.readSeqs);
-            const entries = res?.Sessions || [];
+            const entries = asArray(res?.Sessions);
             // 吸收服务端权威水位（2026-09-21 双端同步：对端在离线期间的已读进度追赶）——
             // 只进合并本地并持久化，水位回拨（clear 语义）不在本路径处理（clear 已各自本地清零）
             const next = { ...this.readSeqs };
             let changed = false;
             entries.forEach((item) => {
                 const key = item.SessionKey ?? '';
-                if ((next[key] || 0) < (item.ReadSeq || 0)) {
-                    next[key] = item.ReadSeq;
+                // 同 toSeq 口径：ReadSeq 是服务端值，脏值/字符串数一律归一为有限正数，
+                // 否则会以字符串形态混进本地水位并被随写下一次请求体持久化出去
+                const readSeq = toSeq(item.ReadSeq);
+                if ((next[key] || 0) < readSeq) {
+                    next[key] = readSeq;
                     changed = true;
                 }
             });
@@ -257,6 +284,9 @@ export const useChatStore = defineStore('chat', {
             const effectiveRead = changed ? next : this.readSeqs;
             this.sessions = entries.map((item) => {
                 const key = item.SessionKey ?? '';
+                // F3b：快照的最后一条已计入服务端 Total——登记进去重账本，
+                // 该行若再经 WS/补拉重复送达不得二次计数（窗口未加载时这是唯一判据）
+                this.rememberMsgIds(key, item.Last ? [item.Last] : []);
                 if ((effectiveRead[key] || 0) > (item.ReadSeq || 0)) {
                     const existing = this.sessions.find((s) => s.SessionKey === key);
                     return withPreview({ ...item, Unread: existing ? existing.Unread : item.Unread });
@@ -265,23 +295,31 @@ export const useChatStore = defineStore('chat', {
             });
             // 首次对齐游标：首屏不拉全量历史，游标直接推到服务端最新
             // （当前会话的消息由 session/messages 单独取，早于游标的消息不会漏）
-            this.syncCursor = Math.max(this.syncCursor, res?.MaxSeq || 0);
+            this.syncCursor = Math.max(this.syncCursor, toSeq(res?.MaxSeq));
         },
 
         /** 打开会话：首屏拉最近一页（仅当未加载过），随后推水位 + 上报已读 */
         async openSession(sessionKey) {
             const key = sessionKey || '';
             this.currentKey = key;
+            // F6 请求代际防御：响应回来时用户可能已切走（并发 openSession 交错），
+            // 旧响应不得替「从未看过的会话」推进水位 / 上报已读（数据照常缓存供切回使用）。
+            const generation = (this._openGeneration || 0) + 1;
+            this._openGeneration = generation;
             if (!this.messagesBySession[key]) {
                 this.loadingSession = true;
                 try {
                     const res = await SessionMessages(key, 0, PAGE_SIZE);
-                    const rows = (res?.Messages || []).map((row) => this.decorate(row));
+                    const rows = asArray(res?.Messages).map((row) => this.decorate(row));
                     this.messagesBySession = { ...this.messagesBySession, [key]: rows };
                     this.hasMoreBySession = { ...this.hasMoreBySession, [key]: !!res?.HasMore };
+                    this.rememberMsgIds(key, rows);
                 } finally {
                     this.loadingSession = false;
                 }
+            }
+            if (this.currentKey !== key || this._openGeneration !== generation) {
+                return;
             }
             this.advanceWatermark(key);
         },
@@ -297,12 +335,13 @@ export const useChatStore = defineStore('chat', {
             try {
                 const firstSeq = list[0]?.Seq || 0;
                 const res = await SessionMessages(key, firstSeq, PAGE_SIZE);
-                const rows = (res?.Messages || []).map((row) => this.decorate(row));
+                const rows = asArray(res?.Messages).map((row) => this.decorate(row));
                 const existing = this.messagesBySession[key] || [];
                 const seen = new Set(existing.map((item) => item.MsgId));
                 const merged = [...rows.filter((row) => !seen.has(row.MsgId)), ...existing];
                 this.messagesBySession = { ...this.messagesBySession, [key]: merged };
                 this.hasMoreBySession = { ...this.hasMoreBySession, [key]: !!res?.HasMore };
+                this.rememberMsgIds(key, rows);
             } finally {
                 this.loadingEarlier = false;
             }
@@ -328,12 +367,20 @@ export const useChatStore = defineStore('chat', {
                 } catch (e) {
                     return;
                 }
-                const rows = res?.Data || [];
-                rows.forEach((row) => this.applyMessage(row));
+                const rows = asArray(res?.Data);
+                // F2 循环级防御：单行脏数据（形态异常/取值即抛）只跳过该行，不得中断整页、
+                // 更不得阻断下方游标推进（否则 catchUp 每轮重拉同一页 → 无限重试 + 后续消息永久不可见）
+                rows.forEach((row) => {
+                    try {
+                        this.applyMessage(row);
+                    } catch (e) {
+                        // 脏行静默跳过，其余行与游标推进照常
+                    }
+                });
                 if (rows.length < CATCH_UP_PAGE) {
                     return;
                 }
-                this.syncCursor = Math.max(this.syncCursor, res?.MaxSeq || 0);
+                this.syncCursor = Math.max(this.syncCursor, toSeq(res?.MaxSeq));
             }
         },
 
@@ -493,8 +540,14 @@ export const useChatStore = defineStore('chat', {
             const nextReadSeqs = { ...this.readSeqs, [key]: 0 };
             this.readSeqs = nextReadSeqs;
             writeJson(`${originKey()}.readSeqs`, nextReadSeqs);
-            // 游标回拨保留（消息不再删除后 MaxSeq 恒为当前最大，min 退化为 no-op，防御性兼容）
-            this.syncCursor = Math.min(this.syncCursor, res?.MaxSeq || 0);
+            // 游标回拨保留（消息不再删除后 MaxSeq 恒为当前最大，min 退化为 no-op，防御性兼容）；
+            // MaxSeq 是服务端值，域外值（对象/字符串）经 Math.min 会把游标染成 NaN 并永久停摆
+            // （之后每次 Math.min(NaN, x) 仍是 NaN → 补拉恒重拉同一页）。统一走 toSeq 归一：
+            // 0 = 无语义 → 不调整游标（按「无序号不推进」的既有口径，而不是把游标清零重拉全量）
+            const maxSeq = toSeq(res?.MaxSeq);
+            if (maxSeq) {
+                this.syncCursor = Math.min(this.syncCursor, maxSeq);
+            }
             message.success('会话已删除（消息记录保留，任务再推送时自动重建）');
             return res;
         },
@@ -512,7 +565,7 @@ export const useChatStore = defineStore('chat', {
             this.sessions = this.sessions.map((item) =>
                 item.SessionKey === key ? withPreview({ ...item, Total: 0, Unread: 0, Last: null }) : item
             );
-            const nextReadSeqs = { ...this.readSeqs, [key]: Math.max(this.readSeqs[key] || 0, res?.MaxSeq || 0) };
+            const nextReadSeqs = { ...this.readSeqs, [key]: Math.max(this.readSeqs[key] || 0, toSeq(res?.MaxSeq)) };
             this.readSeqs = nextReadSeqs;
             writeJson(`${originKey()}.readSeqs`, nextReadSeqs);
             message.success('会话已清空（聊天记录已删除，会话保留）');
@@ -522,7 +575,7 @@ export const useChatStore = defineStore('chat', {
         /** 本地水位推进（进入会话/收到新消息时），并节流上报服务端已读 */
         advanceWatermark(key) {
             const list = this.messagesBySession[key] || [];
-            const lastSeq = list.length ? list[list.length - 1].Seq || 0 : 0;
+            const lastSeq = list.length ? toSeq(list[list.length - 1].Seq) : 0;
             if (!lastSeq) {
                 return;
             }
@@ -594,7 +647,10 @@ export const useChatStore = defineStore('chat', {
             this.messagesBySession = {};
             this.notifyMap = {};
             this.moves = new Map();
+            this.seenMsgIds = {};
             this.syncCursor = 0;
+            // 作废所有在途 openSession（登出/退出后旧响应不得再推进水位或上报已读）
+            this._openGeneration = (this._openGeneration || 0) + 1;
             if (this._readTimer) {
                 clearTimeout(this._readTimer);
                 this._readTimer = null;
@@ -649,7 +705,7 @@ export const useChatStore = defineStore('chat', {
                     // 本地水位只进对齐（幂等），该会话未读快路径置 0（列表/侧栏角标即时消），
                     // 再防抖合并一次 overview 权威重算（顺带吸收响应 ReadSeq 完成离线追赶）
                     const readKey = frame.session || '';
-                    const readSeq = frame.seq || 0;
+                    const readSeq = toSeq(frame.seq);
                     if (!readSeq || (this.readSeqs[readKey] || 0) >= readSeq) {
                         break;
                     }
@@ -699,7 +755,8 @@ export const useChatStore = defineStore('chat', {
         /** WS 帧（camelCase）→ 消息行（PascalCase，与 REST 行统一） */
         fromFrame(frame) {
             return {
-                Seq: frame.seq || 0,
+                // 脏 seq（字符串/对象）一律归 0：域外值进入 store 会毒化游标与二分插入
+                Seq: toSeq(frame.seq),
                 MsgId: frame.msgId,
                 Direction: frame.direction || 1,
                 Content: frame.content,
@@ -714,14 +771,17 @@ export const useChatStore = defineStore('chat', {
         /** 归一化一行消息：解析载荷 + 通知元数据 + 已选态（多值）+ 点选行标记 */
         decorate(row) {
             const payload = parsePayload(row.Payload);
+            // 脏 seq 统一在此收敛（REST 行与帧行都经这里），下游游标/二分插入/已选态查表不再各自判型
+            const seq = toSeq(row.Seq);
             return {
                 ...row,
+                Seq: seq,
                 options: payload?.options || [],
                 poster: payload?.poster || '',
                 notifyMeta: row.ContentType === 'notify'
                     ? { ...(this.notifyMap[row.MsgId] || {}), body: row.Content }
                     : null,
-                chosenKeys: row.Seq ? this.chosen[row.Seq] || [] : [],
+                chosenKeys: seq ? this.chosen[seq] || [] : [],
                 pickLabel: row.MsgId ? (this.pickRows[row.MsgId] || {}).label || null : null
             };
         },
@@ -758,10 +818,18 @@ export const useChatStore = defineStore('chat', {
             const row = this.decorate(raw);
             const key = row.SessionKey || '';
             const list = this.messagesBySession[key];
+            // F3b：去重账本独立于窗口加载状态——重复 MsgId 无论窗口是否物化都只计一次
+            // （窗口未加载时账本是唯一记录）。判定与登记在落行前完成，故第二次同 MsgId 必被拦下；
+            // 乐观气泡回显（MsgId 不在账本、命中同内容 pending 行）照旧计入。
+            const backed = row.MsgId ? this.rememberMsgIds(key, [row]).has(row.MsgId) : false;
+            // 窗口内同日重复（迁移帧把行搬到新键后、仍以旧键送达的重复帧）：账本按会话记账，
+            // 迁移目标键的账本没有该 MsgId，窗口内命中仍是权威的重复判据（与账本取并集）
+            const dup = list && row.MsgId ? list.findIndex((item) => item.MsgId && item.MsgId === row.MsgId) : -1;
+            // F3：是否应计入 Total/Unread = 「非 MsgId 重复送达」。乐观气泡被回显替换算新计入
+            // （pending 乐观行此前不计，回显正是它的实体化）；窗口未加载也计（列表条目独立于窗口）。
+            const countable = !backed && dup < 0;
             if (list) {
                 const rows = [...list];
-                // 幂等：msgId 去重（WS 直推与 REST 补拉可能重复送达）
-                const dup = rows.findIndex((item) => item.MsgId && item.MsgId === row.MsgId);
                 // 乐观气泡被服务端接收行替换：同会话同内容且带 seq 的回显
                 const optimistic = rows.findIndex(
                     (item) => item.pending && item.Content === row.Content && item.ContentType === row.ContentType
@@ -779,14 +847,19 @@ export const useChatStore = defineStore('chat', {
                     this.advanceWatermark(key);
                 }
             }
-            this.mergeSessionEntry(row, key);
-            if (row.Seq) {
-                this.syncCursor = Math.max(this.syncCursor, row.Seq);
+            this.mergeSessionEntry(row, key, countable);
+            const cursorSeq = toSeq(row.Seq);
+            if (cursorSeq) {
+                this.syncCursor = Math.max(this.syncCursor, cursorSeq);
             }
         },
 
-        /** 会话列表条目增量更新（新会话/预览/未读） */
-        mergeSessionEntry(row, key) {
+        /**
+         * 会话列表条目增量更新（新会话/预览/未读）。
+         * @param countable 该行是否应计入 Total/Unread（applyMessage 幂等判定结果）：
+         *                  false = MsgId 重复送达（WS 帧 + 补拉页重复），不得再计一次（F3 双计修复）。
+         */
+        mergeSessionEntry(row, key, countable = true) {
             const index = this.sessions.findIndex((item) => item.SessionKey === key);
             if (index < 0) {
                 // 新会话（例如脚本首次推送）：拉一次快照补齐标题与未读
@@ -794,17 +867,19 @@ export const useChatStore = defineStore('chat', {
                 return;
             }
             const entry = this.sessions[index];
-            const isUnread = row.Direction === 1 && key !== this.currentKey && !row.pending;
-            const lastSeq = entry.Last?.Seq || 0;
+            // pending 乐观行不计入（回显到达时以实体化行计入，见 applyMessage 的 dup/optimistic 分支）
+            const counts = countable && !row.pending;
+            const isUnread = counts && row.Direction === 1 && key !== this.currentKey;
+            const lastSeq = toSeq(entry.Last?.Seq);
             // §3-9：仅当新行不早于当前预览时才回写 Last（补拉/echo 乱序不倒退预览），
             // 并以 ...entry.Last 合并、透传 CreateTime（预览时间列读 Last.CreateTime）
             const nextLast =
-                row.Seq >= lastSeq
-                    ? { ...entry.Last, Seq: row.Seq, Direction: row.Direction, Content: row.Content, ContentType: row.ContentType, ContentText: row.ContentText, CreateTime: row.CreateTime ?? entry.Last?.CreateTime }
+                toSeq(row.Seq) >= lastSeq
+                    ? { ...entry.Last, Seq: toSeq(row.Seq), Direction: row.Direction, Content: row.Content, ContentType: row.ContentType, ContentText: row.ContentText, CreateTime: row.CreateTime ?? entry.Last?.CreateTime }
                     : entry.Last;
             const next = withPreview({
                 ...entry,
-                Total: (entry.Total || 0) + (row.pending ? 0 : 1),
+                Total: (entry.Total || 0) + (counts ? 1 : 0),
                 Unread: key === this.currentKey ? 0 : (entry.Unread || 0) + (isUnread ? 1 : 0),
                 Last: nextLast
             });
@@ -817,6 +892,39 @@ export const useChatStore = defineStore('chat', {
         pushMessage(key, row) {
             const list = this.messagesBySession[key] || [];
             this.messagesBySession = { ...this.messagesBySession, [key]: [...list, row] };
+        },
+
+        /**
+         * 去重账本批量登记（F3b）：不经 applyMessage 直接物化进窗口的行（首屏页 / 上翻页 /
+         * overview 的 Last 行）同样要记进账本——它们的「总数」已在服务端口径里算过，
+         * 之后同 MsgId 再经 WS 重复送达时不得二次计数。FIFO 有界，与 applyMessage 同口径。
+         * @returns 命中的「已在账本」的 MsgId 集合（调用方据此判定重复计数）
+         */
+        rememberMsgIds(key, rows) {
+            const ids = (rows || []).map((item) => item?.MsgId).filter(Boolean);
+            const hit = new Set();
+            if (!ids.length) {
+                return hit;
+            }
+            const ledger = this.seenMsgIds[key] || new Set();
+            ids.forEach((id) => {
+                if (ledger.has(id)) {
+                    hit.add(id);
+                }
+                ledger.add(id);
+                // FIFO 有界：Set 保序，超限丢最旧（仅影响久远行——其重复送达窗口也已过去）
+                if (ledger.size > SEEN_MSGID_LIMIT) {
+                    ledger.delete(ledger.values().next().value);
+                }
+            });
+            const next = { ...this.seenMsgIds, [key]: ledger };
+            // 会话数有界：超出丢最旧（Object 保插入序，重建条目即为最近使用）
+            const keys = Object.keys(next);
+            if (keys.length > SEEN_MSGID_SESSIONS_LIMIT) {
+                delete next[keys[0]];
+            }
+            this.seenMsgIds = next;
+            return hit;
         },
 
         /**
