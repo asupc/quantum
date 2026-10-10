@@ -20,4 +20,9 @@
     <ProjectReference Include="..\Quantum.Entities\Quantum.Entities.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- SSRF 边界用例需注入 NetworkGuard 的 DNS 解析接缝（确定性结果，不依赖真实网络） -->
+    <InternalsVisibleTo Include="Quantum.API.Tests" />
+  </ItemGroup>
+
 </Project>

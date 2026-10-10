@@ -118,6 +118,15 @@ public class Setting
     public long ManagerTokenNotBefore { get; set; }
 
     /// <summary>
+    /// 任务脚本外部请求（ctx.Http / ctx.File）可访问的内网目标白名单（逗号/分号分隔，支持 IP、CIDR
+    /// 与主机名，如 "192.168.1.50,qb.lan,10.0.0.0/24"）。
+    /// 默认留空 = 只允许公网目标（本机/私网/链路本地/云元数据一律拒绝，防脚本成为 SSRF 跳板）；
+    /// 需要访问自建内网服务（qBittorrent、NAS、局域网 API）时必须在此显式登记——运维动作，
+    /// 与 KnownProxies/AllowedOrigins 同款「默认安全、按需放开」口径。
+    /// </summary>
+    public string TaskNetworkAllowlist { get; set; }
+
+    /// <summary>
     /// 任务脚本产物下载根目录（ctx.File 门面可写范围的根）：绝对路径或相对运行目录的相对路径，
     /// 留空 = downloads。脚本侧子目录（如音乐脚本 scripts_music_save_dir）只能落在此根内，
     /// 脚本门禁仍禁 System.IO，产物落盘只有该门面一条受控通道。

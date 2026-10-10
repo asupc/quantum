@@ -46,7 +46,7 @@ public static class SystemConfigHelper
             {
                 throw new InvalidOperationException("登录账号不能使用 Open 凭据的保留名称");
             }
-            var root = LoadRoot(path) ?? NewSkeleton(config);
+            var root = LoadRoot(path, ReadConfigText(path)) ?? NewSkeleton(config);
             var persisted = root[SectionName]?.Deserialize<Setting>(ReadOptions);
             var notBefore = Math.Max(
                 Math.Max(config.UserTokenNotBefore, config.ManagerTokenNotBefore),
@@ -134,7 +134,9 @@ public static class SystemConfigHelper
             return memo.Setting.Clone();
         }
 
-        var config = LoadRoot(path)?[SectionName]?.Deserialize<Setting>(ReadOptions);
+        // 单源一致性（2026-10-11）：解析的就是本次读到的 currentText，不在 helper 内二次读取——
+        // 二次读取会在「两次读取之间恰有写者换文本」时把新文本与旧解析结果配成一组。
+        var config = LoadRoot(path, currentText)?[SectionName]?.Deserialize<Setting>(ReadOptions);
         if (config == null)
         {
             // 首次部署（无配置文件/无 Quantum 节）：只生成机器侧密钥与默认 SQLite 库，
@@ -235,11 +237,16 @@ public static class SystemConfigHelper
 
         #endregion
 
+        // 只在「文本仍是本轮解析的那一份」时发布 memo：Text 与 Setting 必须出自同一快照，
+        // 否则快速路径的 ReferenceEquals(memo.Text, currentText) 会把新文本判成命中、长期返回旧解析结果
+        // （该结果喂给 Consts.SetJwtSecrets，即改密钥后旧签名密钥一直生效）。
+        // TestHookBeforeMemoPublish：单测在「解析完成、发布之前」插入写者换文本的确定性交错点（生产 null）。
+        TestHookBeforeMemoPublish?.Invoke();
         lock (ConfigTextLock)
         {
-            if (_cachedPath == path)
+            if (_cachedPath == path && ReferenceEquals(_cachedText, currentText))
             {
-                _memo = new ParsedConfig { Path = path, Text = _cachedText, Setting = config };
+                _memo = new ParsedConfig { Path = path, Text = currentText, Setting = config };
             }
         }
         return config.Clone();
@@ -279,6 +286,16 @@ public static class SystemConfigHelper
     /// 引用相等即文本未变，直接复用上轮解析+容错结果，跳过 JsonNode.Parse/Deserialize（消息泵每 100ms 读一次）。
     /// </summary>
     private static volatile ParsedConfig _memo;
+
+    /// <summary>
+    /// 观察点（单测专用）：memo 发布前的缝隙回调，用于确定性构造「解析完成、发布之前文本被换掉」的并发交错；
+    /// 默认 null，生产路径零开销、行为不变。
+    /// </summary>
+    internal static Action TestHookBeforeMemoPublish;
+
+    /// <summary>观察点（单测专用）：当前 memo 的文本引用与设置快照（断言 Text 与 Setting 同源）。默认 null 时不变。</summary>
+    internal static (string Text, Setting Setting)? InspectMemoForTest()
+        => _memo is { } memo ? (memo.Text, memo.Setting) : null;
 
     private sealed class ParsedConfig
     {
@@ -338,10 +355,11 @@ public static class SystemConfigHelper
     /// <summary>
     /// 读取配置文件根节点；文件缺失返回 null（由调用方走自动生成），
     /// 内容不是 JSON 对象则 fail-fast（带病配置不自动覆盖）。
+    /// text 为调用方已读到的文本（null = 文件不存在）：解析的就是这一份，不再二次读取，
+    /// 杜绝「两次读取之间文本被换掉」导致的解析结果与文本错配。
     /// </summary>
-    private static JsonObject LoadRoot(string path)
+    private static JsonObject LoadRoot(string path, string text)
     {
-        var text = ReadConfigText(path);
         if (text == null)
         {
             return null;
