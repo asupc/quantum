@@ -31,9 +31,9 @@ public class LoginService
         }
 
         var config = SystemConfigHelper.GetSetting();
-        if (config == null)
+        if (SystemConfigHelper.NeedSetup(config))
         {
-            throw new BusinessException("用户数据库未初始化，请初始化后重启容器登录！");
+            throw new BusinessException("系统尚未完成初始化，请先在 Web 管理端完成初始化向导（创建登录账号）！");
         }
 
         // 常数时间比较口令（防时序旁路）；用户名等值比较

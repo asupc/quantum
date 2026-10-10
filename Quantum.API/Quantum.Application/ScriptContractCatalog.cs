@@ -78,6 +78,7 @@ public static class ScriptContractCatalog
         sb.AppendLine("- 脚本存放根目录：`./scripts/quantum`；任务的 FileName 就是该根下的相对路径（如 `B站任务.cs`、`open-trigger-task/x.cs`）。");
         sb.AppendLine("- 执行日志：`./logs/{脚本名首段}/yyyyMMddHHmmssfff.log`，按次落盘（内容含脚本 ctx.Log 输出与异常堆栈）。");
         sb.AppendLine("- 任务可配置：触发指令/定时 Cron/会话名（通知落哪个 App 会话）/是否推送；环境变量是**全局**注入的（不是按任务绑定）。");
+        sb.AppendLine("- 指令触发：App/Web 在该任务会话内发消息可省略指令词（如会话里直接发「西游记」=「电影港搜索 西游记」），平台把拼回的完整指令文本注入指令变量，脚本仍按「剥离指令词取关键字」解析即可；显式带指令词/回复资源ID 等命中行为不变。");
         return sb.ToString().TrimEnd();
     }
 

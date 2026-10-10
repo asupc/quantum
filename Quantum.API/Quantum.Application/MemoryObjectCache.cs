@@ -52,6 +52,33 @@ public static class MemoryObjectCache
     public static ConcurrentDictionary<string, TaskCommandStep> TaskCommandSteps { get; set; }
 
     /// <summary>
+    /// 初始化向导数据库试连限流：每 IP 每分钟 5 次（固定窗口；SetupService.TestDatabase 专用）。
+    /// 向导端点仅未初始化期开放，仍按 IP 限额——防止被当成内网探测跳板反复握手。
+    /// </summary>
+    public const int SetupProbeLimitPerMinute = 5;
+
+    private static readonly ConcurrentDictionary<string, (DateTime WindowStart, int Count)> SetupProbeWindows = new();
+
+    /// <summary>申请一次初始化向导数据库试连配额：该 IP 本分钟内未超上限返回 true。</summary>
+    public static bool TryAcquireSetupProbeSlot(string ip)
+    {
+        var key = string.IsNullOrEmpty(ip) ? "unknown" : ip;
+        var now = DateTime.Now;
+        var windowStart = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0);
+        var (_, count) = SetupProbeWindows.AddOrUpdate(key,
+            _ => (windowStart, 1),
+            (_, window) =>
+            {
+                if (window.WindowStart != windowStart)
+                {
+                    return (windowStart, 1);
+                }
+                return (window.WindowStart, window.Count + 1);
+            });
+        return count <= SetupProbeLimitPerMinute;
+    }
+
+    /// <summary>
     /// 清扫过期会话步骤（§1-5）：按 ForceEndTime 判定，不再依赖「更新时间 + 固定窗口」——
     /// ForceEndTime 已随步骤配置的 WaitTime 计算，语义准确。由消息内联清理与定时巡检共用，返回清理条数。
     /// </summary>

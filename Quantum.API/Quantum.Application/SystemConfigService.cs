@@ -147,27 +147,6 @@ public class SystemConfigService
     }
 
     /// <summary>
-    /// 初始化系统
-    /// </summary>
-    /// <param name="setting"></param>
-    /// <returns></returns>
-    public bool Install(Setting setting)
-    {
-        if (SystemConfigHelper.GetSetting() != null)
-        {
-            throw new BusinessException("系统已经初始化过了，如需重新初始化请删除 appsettings.json 中的 Quantum 配置节");
-        }
-
-        if (string.IsNullOrEmpty(setting.PassWord) || string.IsNullOrEmpty(setting.UserName))
-        {
-            throw new BusinessException("用户名密码不能为空！");
-        }
-
-        SystemConfigHelper.SetSetting(setting);
-        return true;
-    }
-
-    /// <summary>
     /// 收缩数据库（SQLite VACUUM；MySQL 优化高写入表）
     /// </summary>
     public async Task<bool> DatabaseShrink()

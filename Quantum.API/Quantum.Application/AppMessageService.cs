@@ -13,6 +13,9 @@ namespace Quantum.Application;
 /// 会话生命周期（2026-09-18 会话分组归并批次）：t_chat_session 让会话具备独立存在性——
 /// 消息落库同事务 upsert 会话行（删除会话只删会话行、消息行保留——2026-09-21 日志删除逻辑调整）、
 /// 改名时消息行与会话行一并迁移。
+/// 默认会话（空会话键）恒在（2026-10-10）：首次拉会话列表即建行（<see cref="EnsureDefaultSessionRowAsync"/>，
+/// 新库另有 DbInitializer 种子），不可删除（<see cref="DeleteSessionAsync"/> 拒绝）；
+/// 清理内容走「清空」（<see cref="ClearSessionAsync"/> 删消息记录、会话框保留）。
 /// </summary>
 public class AppMessageService
 {
@@ -89,15 +92,15 @@ public class AppMessageService
     }
 
     /// <summary>
-    /// 构造并挂入一条会话消息（只 Add 进 DbContext，不 SaveChanges、不管理事务），Seq 取当前 MAX+1。
+    /// 构造并挂入一条会话消息（只 Add 进 DbContext，不 SaveChanges、不管理事务），Seq 取全局高水位 +1
+    /// （<see cref="GetHighWaterSeqAsync"/>——消息行可被「清空」删除，号段仍不复用）。
     /// 事务边界交给调用方：需要「通知行 + 会话镜像」同事务提交时，由 AppPushService 在同一事务内调用。
     /// </summary>
     public async Task<ChatMessageModel> AppendNoSaveAsync(ChatMessageDirection direction, string content,
         string contentType = "text", ChatMessageStatus status = ChatMessageStatus.发送中, string msgId = null,
         string contentText = null, string sessionKey = null, string payload = null, string sessionTitle = null)
     {
-        var max = await _dbContext.ChatMessages.AsNoTracking()
-            .MaxAsync(n => (long?)n.Seq) ?? 0;
+        var max = await GetHighWaterSeqAsync();
         var message = new ChatMessageModel
         {
             Id = Guid.NewGuid().ToString().Replace("-", ""),
@@ -207,9 +210,11 @@ public class AppMessageService
     /// <summary>
     /// 删除会话（2026-09-18 会话分组归并批次；2026-09-21 日志删除逻辑调整）：只删除会话行
     /// （t_chat_session，会话数据），**不删除消息行**——t_chat_message 是业务真实产生的记录，
-    /// 消息记录的删除入口只有日志中心（Logs/delete|clear），会话侧删除不再连带清理。
+    /// 会话侧删除不再连带清理（消息记录删除入口：会话「清空」<see cref="ClearSessionAsync"/>，2026-10-10 起）。
     /// 返回 (会话行是否存在并删除, 当前全局最大 Seq)。会话删除后，归属任务再推送消息时会话
     /// 自动重建（出站落库驱动，重建行预置已读水位，见 <see cref="AppendNoSaveAsync"/>）。
+    /// **默认会话（空会话键）不可删除**（2026-10-10）：它恒在会话列表里，清理内容请用
+    /// <see cref="ClearSessionAsync"/>「清空」。
     /// </summary>
     /// <remarks>
     /// 消息行不再删除 → Seq 号段不复用，响应 MaxSeq 恒为当前全局最大值；客户端既有的
@@ -218,6 +223,10 @@ public class AppMessageService
     public async Task<(bool Deleted, long MaxSeq)> DeleteSessionAsync(string sessionKey)
     {
         var key = NormalizeSessionKey(sessionKey);
+        if (key.Length == 0)
+        {
+            throw new BusinessException("默认会话不可删除，如需清理聊天记录请使用「清空」！");
+        }
         var deleted = await _dbContext.ChatSessions
             .Where(n => n.SessionKey == key)
             .ExecuteDeleteAsync() > 0;
@@ -228,9 +237,53 @@ public class AppMessageService
         {
             entry.State = EntityState.Detached;
         }
-        var maxSeq = await _dbContext.ChatMessages.AsNoTracking()
-            .MaxAsync(n => (long?)n.Seq) ?? 0;
+        var maxSeq = await GetHighWaterSeqAsync();
         return (deleted, maxSeq);
+    }
+
+    /// <summary>
+    /// 清空会话（2026-10-10 默认会话改造）：删除该会话的**消息记录**（t_chat_message 行），
+    /// 会话框保留（t_chat_session 行保留/补建）——默认会话不可删除（<see cref="DeleteSessionAsync"/>），
+    /// 「清空」是它唯一的清理入口；其余会话同样可用（清记录、留会话框）。
+    /// Seq 高水位不回拨：删行前先把会话行 LastSeq 抬到被清消息的最大 Seq（无会话行则补建行承接），
+    /// 后续落库消息仍取全局高水位 +1（<see cref="GetHighWaterSeqAsync"/>），客户端游标不漏收新消息。
+    /// 返回 (清空的消息条数, 当前全局最大 Seq)。
+    /// </summary>
+    /// <param name="sessionKey">会话键（空 = 默认会话）</param>
+    public async Task<(long Cleared, long MaxSeq)> ClearSessionAsync(string sessionKey)
+    {
+        var key = NormalizeSessionKey(sessionKey);
+        var existingMax = await _dbContext.ChatMessages.AsNoTracking()
+            .Where(n => key.Length == 0
+                ? (n.SessionKey == null || n.SessionKey == "")
+                : n.SessionKey == key)
+            .MaxAsync(n => (long?)n.Seq) ?? 0;
+        var session = await _dbContext.ChatSessions.FindAsync(key);
+        if (session != null)
+        {
+            session.LastSeq = Math.Max(session.LastSeq, existingMax);
+            // 清空即视为已读到清空点：水位一并抬平，避免清空后旧水位再上报回来空跑推进
+            session.LastReadSeq = Math.Max(session.LastReadSeq, session.LastSeq);
+            await _dbContext.SaveChangesAsync();
+        }
+        else if (existingMax > 0)
+        {
+            // 无会话行但有历史消息（会话行被删除过）：补建行承接 Seq 高水位，再删消息
+            _dbContext.ChatSessions.Add(new ChatSessionModel
+            {
+                SessionKey = key,
+                CreateTime = DateTime.Now,
+                LastSeq = existingMax,
+                LastReadSeq = existingMax
+            });
+            await _dbContext.SaveChangesAsync();
+        }
+        var cleared = await _dbContext.ChatMessages
+            .Where(n => key.Length == 0
+                ? (n.SessionKey == null || n.SessionKey == "")
+                : n.SessionKey == key)
+            .ExecuteDeleteAsync();
+        return (cleared, await GetHighWaterSeqAsync());
     }
 
     /// <summary>
@@ -464,12 +517,12 @@ public class AppMessageService
     }
 
     /// <summary>
-    /// 当前最大 Seq（客户端校准游标用）
+    /// 当前最大 Seq（客户端校准游标用）：取全局高水位——含已被「清空」删除的号段
+    /// （<see cref="GetHighWaterSeqAsync"/>），回拨 min(当前, MaxSeq) 继续是 no-op。
     /// </summary>
     public async Task<long> GetMaxSeqAsync()
     {
-        return await _dbContext.ChatMessages.AsNoTracking()
-            .MaxAsync(n => (long?)n.Seq) ?? 0;
+        return await GetHighWaterSeqAsync();
     }
 
     /// <summary>
@@ -493,9 +546,10 @@ public class AppMessageService
     /// <summary>
     /// 会话列表快照（Web 管理端首屏 / 多端会话列表）：每会话最后一条消息 + 总数 + 未读数。
     /// 主从结构（2026-09-18 会话分组归并批次）：t_chat_session 会话表为主 LEFT JOIN 消息聚合——
-    /// 空会话行（Total=0 / Last=null / Unread=0）同样出现在列表；排序 LastSeq 降序、
-    /// 空会话（LastSeq=0）垫底按 CreateTime 降序。删除会话即删行：该会话不再出现在列表，
-    /// 保留的消息行在新消息重建会话行后重新聚入（Total 含全部保留历史）。
+    /// 空会话行（Total=0 / Last=null / Unread=0）同样出现在列表；排序：有消息的按 LastSeq 降序在前、
+    /// 空会话垫底（对齐 App 端 sessionsWithLast；2026-10-10 清空语义下空会话行 LastSeq 可能非 0——
+    /// 高水位不回拨——不能再按 LastSeq=0 判空，改按消息聚合 Total 判空）。删除会话即删行：该会话
+    /// 不再出现在列表，保留的消息行在新消息重建会话行后重新聚入（Total 含全部保留历史）。
     /// 2026-09-21 双端同步批次起水位**服务端权威化**：先合并钳制（吸收调用方上报、推进落库），
     /// 未读按合并后的 effective 水位计算（对端已读进度即时生效），响应条目带 ReadSeq 供调用方追赶。
     /// </summary>
@@ -511,6 +565,8 @@ public class AppMessageService
     public async Task<(List<ChatSessionOverview> sessions, long maxSeq)> SessionsAsync(Dictionary<string, long> readSeqs)
     {
         readSeqs ??= [];
+        // 默认会话恒在（2026-10-10）：无行即建，首次拉列表就有默认会话（存量库补建；新库另有 DbInitializer 种子）
+        await EnsureDefaultSessionRowAsync();
         var sessions = await _dbContext.ChatSessions.AsNoTracking()
             .OrderByDescending(n => n.LastSeq)
             .ThenByDescending(n => n.CreateTime)
@@ -541,7 +597,15 @@ public class AppMessageService
         // 未读计数单条 SQL（LoadUnreadCountsAsync）：替代循环内逐会话 LongCountAsync 的 N+1；
         // 水位用合并后的 effective（服务端权威）——对端（另一设备/浏览器）的已读进度即时反映
         var unreadMap = await LoadUnreadCountsAsync(sessions, effective);
-        foreach (var session in sessions)
+        // 排序（对齐 App 端 sessionsWithLast）：有消息的按 LastSeq 降序在前，空会话垫底——
+        // 清空后保留的会话框 LastSeq 不回拨（高水位），判空只看消息聚合 Total，不看 LastSeq
+        var ordered = sessions
+            .Select(n => (Row: n, Total: headMap.TryGetValue(NormalizeSessionKey(n.SessionKey), out var h) ? h.Total : 0))
+            .OrderByDescending(x => x.Total > 0)
+            .ThenByDescending(x => x.Row.LastSeq)
+            .ThenByDescending(x => x.Row.CreateTime)
+            .Select(x => x.Row);
+        foreach (var session in ordered)
         {
             var key = session.SessionKey ?? "";
             headMap.TryGetValue(key, out var head);
@@ -559,7 +623,8 @@ public class AppMessageService
                 SessionTitle = session.DisplayTitle
             });
         }
-        var maxSeq = heads.Count > 0 ? heads.Max(n => n.LastSeq) : 0;
+        // MaxSeq 取全局高水位（含已清空号段）：首屏游标对齐取它才不会把游标回拨到被清消息的号段之下
+        var maxSeq = await GetHighWaterSeqAsync();
         return (result, maxSeq);
     }
 
@@ -643,5 +708,45 @@ public class AppMessageService
     private static string NormalizeSessionKey(string sessionKey)
     {
         return string.IsNullOrWhiteSpace(sessionKey) ? "" : sessionKey.Trim();
+    }
+
+    /// <summary>
+    /// 全局 Seq 高水位 = MAX(消息行 Seq, 会话行 LastSeq)：历史上分配过的最大 Seq。
+    /// 消息行可被「清空」删除，但会话行 LastSeq 只进不退（清空删行前提抬、迁移/合并取大），
+    /// 两者取大即号段高水位——新消息恒取高水位 +1，号段不复用，客户端游标不会漏收新消息。
+    /// </summary>
+    private async Task<long> GetHighWaterSeqAsync()
+    {
+        var maxMessage = await _dbContext.ChatMessages.AsNoTracking()
+            .MaxAsync(n => (long?)n.Seq) ?? 0;
+        var maxSession = await _dbContext.ChatSessions.AsNoTracking()
+            .MaxAsync(n => (long?)n.LastSeq) ?? 0;
+        return Math.Max(maxMessage, maxSession);
+    }
+
+    /// <summary>
+    /// 确保默认会话行（空会话键）存在：首次拉会话列表即建行（幂等，无行不推进任何水位）。
+    /// 并发首建撞主键时视同已建（脱离跟踪即可），不影响调用方。
+    /// </summary>
+    private async Task EnsureDefaultSessionRowAsync()
+    {
+        if (await _dbContext.ChatSessions.AsNoTracking().AnyAsync(n => n.SessionKey == ""))
+        {
+            return;
+        }
+        var row = new ChatSessionModel
+        {
+            SessionKey = "",
+            CreateTime = DateTime.Now
+        };
+        _dbContext.ChatSessions.Add(row);
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            _dbContext.Entry(row).State = EntityState.Detached;
+        }
     }
 }

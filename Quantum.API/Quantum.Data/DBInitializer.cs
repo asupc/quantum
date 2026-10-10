@@ -16,22 +16,20 @@ namespace Quantum.Data;
 /// </summary>
 public static class DbInitializer
 {
-    public static void Initialize(IServiceProvider serviceProvider, Action<IQuantumDbContext> seedAdditional = null)
+    /// <summary>建库/迁移/种子数据；返回「库为本次新建」（任务脚本播种按初始化向导状态据此决定范围）。</summary>
+    public static bool Initialize(IServiceProvider serviceProvider, Action<IQuantumDbContext> seedAdditional = null)
     {
         var setting = SystemConfigHelper.GetSetting();
         if (setting.DBType.ToLower() == "sqlite")
         {
-            Initialize(serviceProvider.GetRequiredService<DbContextOptions<QuantumSqliteDbContext>>(),
+            return Initialize(serviceProvider.GetRequiredService<DbContextOptions<QuantumSqliteDbContext>>(),
                 () => new QuantumSqliteDbContext(), seedAdditional);
         }
-        else
-        {
-            Initialize(serviceProvider.GetRequiredService<DbContextOptions<QuantumMySqlDbContext>>(),
-                () => new QuantumMySqlDbContext(), seedAdditional);
-        }
+        return Initialize(serviceProvider.GetRequiredService<DbContextOptions<QuantumMySqlDbContext>>(),
+            () => new QuantumMySqlDbContext(), seedAdditional);
     }
 
-    private static void Initialize<TContext>(DbContextOptions<TContext> options, Func<TContext> create,
+    private static bool Initialize<TContext>(DbContextOptions<TContext> options, Func<TContext> create,
         Action<IQuantumDbContext> seedAdditional)
         where TContext : DbContext, IQuantumDbContext
     {
@@ -55,7 +53,7 @@ public static class DbInitializer
             // 否则未来新增迁移时 GetPendingMigrations 返回全部、Migrate 对已存在表报错被兜底吞掉，
             // 新装库从此永远无法增量演进且无任何告警
             MarkAllMigrationsAsApplied(db);
-            return;
+            return true;
         }
 
         // 已有库：应用挂起的迁移
@@ -72,7 +70,7 @@ public static class DbInitializer
                     RemoveLegacyRoleColumns(db);
                     MarkAllMigrationsAsApplied(db);
                     Console.WriteLine("检测到 EnsureCreated 存量库（无迁移历史），已回填全部迁移为已应用。");
-                    return;
+                    return false;
                 }
                 NormalizeLegacyConstraints(db);
                 ApplyMigrationsResilient(db, pending);
@@ -93,6 +91,7 @@ public static class DbInitializer
                 Console.WriteLine("[ERROR] 请人工核对数据库与 __EFMigrationsHistory（可先备份后重试启动，或用 dotnet ef database update 排查）。");
             }
         }
+        return false;
     }
 
     /// <summary>是否“库无迁移历史表”类错误（EnsureCreated 老库的预期形态）。</summary>
@@ -452,6 +451,13 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_task_sub' AND INDEX_NAME = '
             Enable = true,
             Key = "你好",
             Message = "你好，欢迎使用量子助手。",
+        });
+        // 默认会话（空会话键）种子：首次部署即存在会话框（不可删除、可清空）；
+        // 存量库由 AppMessageService.SessionsAsync 首次拉会话列表时补建（EnsureDefaultSessionRowAsync）
+        db.ChatSessions.Add(new ChatSessionModel
+        {
+            SessionKey = "",
+            CreateTime = DateTime.Now
         });
         seedAdditional?.Invoke(db);
         db.SaveChanges();

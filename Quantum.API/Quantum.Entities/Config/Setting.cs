@@ -131,6 +131,19 @@ public class Setting
     public int RefreshTokenDays { get; set; }
 
     /// <summary>
+    /// 首次部署初始化向导完成标记：false = 等待向导（Web 端引导创建登录账号/选库/建任务），
+    /// true = 已完成；**缺省 null = 存量部署，按已完成处理**（老实例升级不得被向导劫持）。
+    /// </summary>
+    public bool? SetupCompleted { get; set; }
+
+    /// <summary>
+    /// 初始化向导已勾选、待下次启动落到新库的脚本任务清单（文件名分号分隔）：
+    /// null = 无待办；非 null（含空串）= 待补种（空串 = 明确不建任何任务）。
+    /// 仅「向导里切换数据库」时写入——换库需重启生效，勾选结果经此跨重启带到新库。
+    /// </summary>
+    public string SetupPendingScripts { get; set; }
+
+    /// <summary>
     /// 浅拷贝：全部属性为标量或不可变 string，MemberwiseClone 即完全隔离。
     /// 供 SystemConfigHelper.GetSetting 在 memoize 后向调用方返回独立副本——若干调用方
     /// （脱敏展示、改密/改设置）会就地修改返回对象，不能污染缓存中的权威实例。

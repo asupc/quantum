@@ -157,7 +157,13 @@ public class MessageProcess
             {
                 foreach (var task in SelectTaskCandidates(tasks, message, commandReg))
                 {
-                    if (!commandReg(task.Command, message.message, task.EnableRegex))
+                    // 命中口径与 SelectTaskCandidates 对齐：裸消息直接命中走原文；
+                    // 未命中的是⑤「会话内省略指令词」候选，指令环境变量收到拼回的完整指令文本
+                    // （与手打「指令词 消息」等价，脚本既有「剥离指令词取关键字」口径不变）。
+                    var commandText = commandReg(task.Command, message.message, task.EnableRegex)
+                        ? message.message
+                        : TryBuildImplicitCommandText(task.Command, task.EnableRegex, message.message);
+                    if (commandText == null)
                     {
                         continue;
                     }
@@ -180,7 +186,7 @@ public class MessageProcess
                     commonEnvs.Add(new EnvModel
                     {
                         Name = string.IsNullOrEmpty(task.CommandEnv) ? "command" : task.CommandEnv,
-                        Value = message.message
+                        Value = commandText
                     });
                     commonEnvs.Add(new EnvModel
                     {
@@ -334,7 +340,13 @@ public class MessageProcess
     ///    组内指令匹配唯一命中 → 只返回它；多命中 → 仅返回组内命中集、不外溢全局
     ///    （P4 决策：合并会话内手打只在组内多触发，不再误触会话外任务，纯数字双触发不回归）；
     ///    零命中或组不存在（含已删任务的会话键）→ 回落全局；
-    /// ④ 无会话键或组内零命中 → 全局匹配集。
+    /// ④ 无会话键或组内零命中 → 全局匹配集；
+    /// ⑤ 会话内省略指令词（2026-10-10）——裸消息全局零命中时的兜底：App/Web 手打（非点选代发、非机器人来源）
+    ///    在任务会话内直接发内容（如会话「电影港」里发「西游记」），视为省略了指令词的「电影港搜索 西游记」：
+    ///    组内（口径同③）**恰一个**带触发指令的任务 → 拼回完整指令文本再验一次 matcher（与手打全指令严格等价，
+    ///    指令是精确形态如 ^电影港搜索$ 时拼回后不匹配、维持不触发），命中则返回该任务；
+    ///    组内多个带指令任务（无法判定指哪个）/ 组内无带指令任务（如纯定时脚本）→ 不触发，维持现状。
+    ///    指令环境变量由 MessageAsync 注入拼回后的完整指令文本（脚本按既有「剥离指令词取关键字」口径解析不变）。
     /// </summary>
     internal static List<TaskModel> SelectTaskCandidates(
         IReadOnlyList<TaskModel> enabledTasks, MessageProccessDTO message, Func<string, string, bool, bool> matcher)
@@ -380,7 +392,98 @@ public class MessageProcess
             // 组不存在（含已删任务的会话键）→ 回落全局
         }
 
+        // ⑤ 会话内省略指令词：仅裸消息（TargetTaskId 空）且 App/Web 主动发送（机器人单线程会话
+        // 没有「指定会话」语义，任意闲聊都会误触）时兜底，显式命中（globalHits 非空）永远优先。
+        if (globalHits.Count == 0
+            && string.IsNullOrWhiteSpace(message.TargetTaskId)
+            && string.IsNullOrWhiteSpace(message.ChannelReplyRouteId)
+            && !string.IsNullOrWhiteSpace(message.SessionKey))
+        {
+            var sessionKey = message.SessionKey.Trim();
+            var commandTasks = commTasks
+                .Where(n => !string.IsNullOrWhiteSpace(n.Command)
+                    && (n.Id == sessionKey || TaskExcuteService.ResolveSessionKey(n.Id, n.SessionName) == sessionKey))
+                .ToList();
+            if (commandTasks.Count == 1)
+            {
+                var task = commandTasks[0];
+                var fullText = TryBuildImplicitCommandText(task.Command, task.EnableRegex, message.message);
+                if (fullText != null && matcher(task.Command, fullText, task.EnableRegex))
+                {
+                    return [task];
+                }
+            }
+        }
+
         return globalHits;
+    }
+
+    /// <summary>
+    /// 会话内省略指令词的拼回（⑤ 与 MessageAsync 指令环境变量注入共用同一口径）：
+    /// 提取触发指令的指令词，拼出「指令词 + 空格 + 裸消息」，即与手打完整指令同一文本。
+    /// 提不出指令词（纯元字符正则）或消息为空 → null（该任务不支持省略指令词）。
+    /// </summary>
+    internal static string TryBuildImplicitCommandText(string command, bool enableRegex, string message)
+    {
+        if (string.IsNullOrWhiteSpace(message) || !TryExtractCommandWord(command, enableRegex, out var word))
+        {
+            return null;
+        }
+        return word + " " + message.Trim();
+    }
+
+    /// <summary>
+    /// 指令词提取：非正则指令整条就是字面量；正则指令取首个分支（顶层 | 切分）的前导字面量——
+    /// 剥掉 ^ 与 (?i)/(?: 等内联组前缀，遇正则元字符即停。启发式提取，误提只会让拼回文本过不了
+    /// matcher 复验而安全降级为不触发，不会误放行。
+    /// </summary>
+    internal static bool TryExtractCommandWord(string command, bool enableRegex, out string word)
+    {
+        word = null;
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return false;
+        }
+        var text = command.Trim();
+        if (!enableRegex)
+        {
+            word = text;
+            return true;
+        }
+
+        var alt = text.Split('|')[0];
+        var i = 0;
+        while (i < alt.Length)
+        {
+            if (alt[i] == '^')
+            {
+                i++;
+                continue;
+            }
+            if (alt[i] == '(' && i + 1 < alt.Length && alt[i + 1] == '?')
+            {
+                var close = alt.IndexOf(')', i + 2);
+                if (close < 0)
+                {
+                    break;
+                }
+                i = close + 1;
+                continue;
+            }
+            break;
+        }
+        var sb = new StringBuilder();
+        for (; i < alt.Length; i++)
+        {
+            var c = alt[i];
+            if (c == '\\' || ".*+?[](){}|^$".Contains(c))
+            {
+                break;
+            }
+            sb.Append(c);
+        }
+        word = sb.ToString().Trim();
+        return word.Length > 0;
     }
 
     /// <summary>

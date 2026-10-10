@@ -75,7 +75,9 @@ public static class SystemConfigHelper
                     }
                     break;
                 }
-                catch (IOException) when (attempt < 2)
+                // Windows 下替换撞上共享占用按错误码可能落到 UnauthorizedAccessException 而非 IOException，
+                // 两者都按瞬时占用重试，不让文件锁竞态冒泡成配置保存失败
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < 2)
                 {
                     // 并发读/杀软扫描的瞬时占用：短暂重试（消息泵每百毫秒读一次配置，写侧偶发撞车）
                     try { File.Delete(tempPath); } catch { /* 清理失败不影响重试 */ }
@@ -96,7 +98,30 @@ public static class SystemConfigHelper
         }
     }
 
+    /// <summary>
+    /// 是否需要走首次部署初始化向导：显式标记未完成（SetupCompleted=false），
+    /// 或登录凭据为空（appsettings.example.json 留空账号密码 = 主动走向导）。
+    /// SetupCompleted 缺省（null）按已完成处理——存量部署升级不得被向导劫持。
+    /// </summary>
+    public static bool NeedSetup(Setting config)
+        => config == null
+           || config.SetupCompleted == false
+           || string.IsNullOrEmpty(config.UserName)
+           || string.IsNullOrEmpty(config.PassWord);
+
     public static Setting GetSetting()
+    {
+        // 读-改-写全程持写锁（2026-10-10 并发加固）：自动回填走的 SetSetting 与并发写者互斥，
+        // 杜绝「锁外读到旧快照 → 回填写回」把并发写者刚落盘的更新（如登录凭据）覆盖掉的丢更新；
+        // 同时所有配置文件读访问（ReadConfigText/LoadRoot）都收进锁内，File.Move 替换不再撞上并发读者。
+        // 锁可重入（内部 SetSetting 同锁），固定 ConfigWriteLock → ConfigTextLock 加锁顺序，无死锁环。
+        lock (ConfigWriteLock)
+        {
+            return GetSettingCore();
+        }
+    }
+
+    private static Setting GetSettingCore()
     {
         // §1-7：文本未变（ReadConfigText 命中缓存返回同一 string 引用）→ 复用解析结果，跳过 JsonNode.Parse/Deserialize。
         // 返回克隆而非缓存实例本身：调用方会就地修改返回对象（脱敏/改密），共享会污染权威缓存。
@@ -112,20 +137,22 @@ public static class SystemConfigHelper
         var config = LoadRoot(path)?[SectionName]?.Deserialize<Setting>(ReadOptions);
         if (config == null)
         {
+            // 首次部署（无配置文件/无 Quantum 节）：只生成机器侧密钥与默认 SQLite 库，
+            // 登录账号密码留给 Web 初始化向导由用户自建（SetupCompleted=false 期间登录口明确报「未初始化」）
             config = new Setting
             {
                 AppKey = null,
                 DBAddress = $"Quantum-{RandomStringBuilder.Create(10)}.db",
                 DBType = "SQLite",
-                PassWord = RandomStringBuilder.Create(),
-                UserName = "Quantum" + RandomStringBuilder.Create(6),
+                PassWord = "",
+                UserName = "",
+                SetupCompleted = false,
                 Port = 5088,
                 Host = "http://*"
             };
-            Console.WriteLine($"系统基础配置自动生成完成。");
-            Console.WriteLine($"您的用户名：{config.UserName}");
-            Console.WriteLine($"您的密码：{config.PassWord}");
-            Console.WriteLine($"数据库类型：{config.DBType}");
+            Console.WriteLine($"系统基础配置自动生成完成（首次部署未初始化）。");
+            Console.WriteLine($"请打开 Web 管理端完成初始化向导：创建登录账号、选择数据库、勾选自带脚本建任务。");
+            Console.WriteLine($"数据库类型：{config.DBType}（向导中可切换为 MySQL）");
             Console.WriteLine($"数据库文件：{config.DBAddress}");
             Console.WriteLine($"访问地址：{config.Host}:{config.Port}，请手动替换localhost为您的IP地址。");
             SetSetting(config, path);
@@ -171,16 +198,8 @@ public static class SystemConfigHelper
             config.DBType = "SQLite";
             SetSetting(config, path);
         }
-        if (string.IsNullOrEmpty(config.PassWord))
-        {
-            config.PassWord = RandomStringBuilder.Create();
-            SetSetting(config, path);
-        }
-        if (string.IsNullOrEmpty(config.UserName))
-        {
-            config.UserName = "Quantum" + RandomStringBuilder.Create(6);
-            SetSetting(config, path);
-        }
+        // 登录凭据不做自动回填（2026-10-10 初始化向导）：留空 = 交由 Web 初始化向导引导用户自建。
+        // 此前空凭据会静默生成随机账号密码落盘，用户无从知晓（只能翻配置文件找回），反而挡住向导。
         if (string.IsNullOrEmpty(config.SymmetricSecurityKey))
         {
             config.SymmetricSecurityKey = RandomStringBuilder.Create(64);
@@ -307,9 +326,9 @@ public static class SystemConfigHelper
                     _cachedText = null;
                     return null;
                 }
-                catch (IOException) when (attempt < 2)
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < 2)
                 {
-                    // 并发写/杀软扫描的瞬时占用：短暂重试
+                    // 并发写/杀软扫描的瞬时占用（含 Windows 共享冲突落成的 UnauthorizedAccessException）：短暂重试
                     Thread.Sleep(50);
                 }
             }
