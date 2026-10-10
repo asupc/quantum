@@ -207,6 +207,87 @@ public sealed class FeishuRichTextTests
     }
 
     [Fact]
+    public void LiteralFallback_CannotForgeMarkdownLink()
+    {
+        // 未识别标记走字面回退：不转义 markdown 元字符时，正文里能自己拼出链接，
+        // 绕过 {{link:…}} 的 https 主机白名单（lark_md 会把 [文字](地址) 渲染成可点链接）
+        var rendered = FeishuRichText.ToLarkMd("{{unknown|[点我](https://evil.example)}}");
+
+        Assert.DoesNotContain("](https://evil.example)", rendered);
+        Assert.DoesNotContain("[点我]", rendered);
+    }
+
+    [Fact]
+    public void EmphasisBody_CannotEscapeIntoLinkSyntax()
+    {
+        // 强调标记正文里夹带 ]( 会提前闭合 {{link:…}} 的链接语法，把剩余部分变成用户可控地址
+        var rendered = FeishuRichText.ToLarkMd("{{link:x|https://ok.example}} {{red|a](https://evil.example)}}");
+
+        // 合法链接保留，用户正文里的括号被实体化、无法再构成链接
+        Assert.Contains("(https://ok.example)", rendered);
+        Assert.DoesNotContain("a](https://evil.example)", rendered);
+    }
+
+    [Fact]
+    public void PlainTextOutsideMarks_CannotForgeLinkOrFormatting()
+    {
+        // 只转义标记正文是不够的：标记之外的裸文本同样进入 lark_md，能自己拼出链接与 <font>/<at> 构造
+        var rendered = FeishuRichText.ToLarkMd("plain [x](https://evil.example) plain");
+
+        Assert.DoesNotContain("](https://evil.example)", rendered);
+        Assert.DoesNotContain("[x]", rendered);
+        Assert.Contains("plain", rendered);
+
+        var raw = FeishuRichText.ToLarkMd("plain <font color='red'>red</font> <at id=all></at> plain");
+
+        Assert.DoesNotContain("<font", raw);
+        Assert.DoesNotContain("<at ", raw);
+    }
+
+    [Theory]
+    [InlineData("https://a.b/<script>")]
+    [InlineData("https://a.b/x]y[")]
+    [InlineData("https://a.b/a b")]
+    [InlineData("https://a.b/x)y")]
+    [InlineData("https://a.b/x`y")]
+    [InlineData("https://a.b/x\"y")]
+    public void MarkerUrlWithMarkdownMetachars_IsRejected(string url)
+    {
+        // 地址被拼进 [文字](地址)：含 )/空格/尖括号/引号等可提前闭合或改写链接语法
+        Assert.False(FeishuRichText.IsSafeHttps(url));
+        Assert.DoesNotContain("](", FeishuRichText.ToLarkMd($"{{{{link:t|{url}}}}}"));
+    }
+
+    [Fact]
+    public void MarkerUrl_OrdinaryUrl_StillRenders()
+    {
+        // 收紧不得误伤普通地址：~ 是合法 URL 字符，query 与百分号编码同样常见
+        Assert.True(FeishuRichText.IsSafeHttps("https://a.b/c~d?e=1&f=%20"));
+        Assert.Contains("](https://a.b/c~d?e=1&f=%20)",
+            FeishuRichText.ToLarkMd("{{link:详情|https://a.b/c~d?e=1&f=%20}}"));
+    }
+
+    [Theory]
+    [InlineData("https://a.b/&#41;&#91;evil&#93;&#40;https://evil.example&#41;")]
+    [InlineData("https://a.b/&amp;#41;x")]
+    [InlineData("https://a.b/&lt;script&gt;")]
+    [InlineData("https://a.b/&quot;x")]
+    public void MarkerUrl_EntityEncodedMetachars_AreRejected(string url)
+    {
+        // 地址原样拼进 [文字](地址)：若渲染方先做 HTML 实体解码，实体形态的括号即可再拼出链接
+        Assert.False(FeishuRichText.IsSafeHttps(url));
+    }
+
+    [Fact]
+    public void PlainText_KeepsOrdinaryPunctuationReadable()
+    {
+        // 转义只针对 markdown 元字符，普通标点与中文不应被改动
+        var rendered = FeishuRichText.ToLarkMd("任务完成，用时 1.5 秒；详见 https://example.com/a?b=1");
+
+        Assert.Contains("任务完成，用时 1.5 秒；详见 https://example.com/a?b=1", rendered);
+    }
+
+    [Fact]
     public void Card_IsValidJson20WithEscapedContent()
     {
         var card = FeishuRichText.BuildCard("任务失败", FeishuRichText.ToLarkMd("{{tag:red|紧急}} {{red|温度过高}}"), "red");

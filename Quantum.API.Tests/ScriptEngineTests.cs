@@ -907,6 +907,81 @@ public class ScriptEngineTests : IDisposable
         Assert.Empty(result.Errors);
     }
 
+    // ---------- 脚本源码长度硬上限（对抗性审计 FIX-4）----------
+
+    [Fact]
+    public async Task UpdateScript_OversizeSource_IsRejectedBeforeCompile()
+    {
+        // 超大源码会在保存时同步走门禁+Roslyn 编译（无超时），且每个不同哈希都进编译缓存：
+        // 必须在进门禁前按长度硬拒，绝不进入编译链路
+        var path = Path.Combine("scripts", "quantum", "engine_oversize.cs");
+        Directory.CreateDirectory("scripts/quantum");
+        await File.WriteAllTextAsync(path, ValidTaskSource);
+        var service = new TaskService(_db, new AppMessageService(_db, NullLogger<AppMessageService>.Instance), new ScriptVersionService(_db));
+
+        var oversize = ValidTaskSource + "\n// " + new string('x', TaskService.MaxScriptSourceLength);
+        var error = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.UpdateScriptAsync(new SaveQLFile { path = "engine_oversize.cs", content = oversize }));
+
+        Assert.Contains("过长", error.Message);
+        // 拒绝 = 磁盘保持原内容、无版本留痕
+        Assert.Equal(ValidTaskSource, await File.ReadAllTextAsync(path));
+        Assert.Equal(0, await _db.ScriptVersions.CountAsync(n => n.FileName == "engine_oversize.cs"));
+    }
+
+    [Fact]
+    public async Task UpdateScript_AtExactCap_IsStillAccepted()
+    {
+        // 边界值本身合法（恰好等于上限必须放行，防 cap 口径写成 `>=`）
+        var path = Path.Combine("scripts", "quantum", "engine_cap_edge.cs");
+        Directory.CreateDirectory("scripts/quantum");
+        var service = new TaskService(_db, new AppMessageService(_db, NullLogger<AppMessageService>.Instance), new ScriptVersionService(_db));
+
+        var content = ValidTaskSource + "\n// " + new string('x', TaskService.MaxScriptSourceLength - ValidTaskSource.Length - 4);
+        Assert.Equal(TaskService.MaxScriptSourceLength, content.Length);
+
+        var result = await service.UpdateScriptAsync(new SaveQLFile { path = "engine_cap_edge.cs", content = content });
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task UpdateScript_NormalSource_StillSaves()
+    {
+        // 上限不得误伤正常脚本（回归基线）
+        var service = new TaskService(_db, new AppMessageService(_db, NullLogger<AppMessageService>.Instance), new ScriptVersionService(_db));
+        var result = await service.UpdateScriptAsync(new SaveQLFile { path = "engine_cap_normal.cs", content = ValidTaskSource });
+
+        Assert.True(result.Success);
+        // 落盘经 StreamWriter.WriteLine 收尾（文件比源码多一个换行，与既有保存语义一致，非本次改动）
+        var saved = await File.ReadAllTextAsync(Path.Combine("scripts", "quantum", "engine_cap_normal.cs"));
+        Assert.Equal(ValidTaskSource, saved.TrimEnd('\r', '\n'));
+    }
+
+    [Fact]
+    public async Task UploadScripts_OversizeSource_IsRejectedBeforeCompile()
+    {
+        var service = new UploadService(new ScriptVersionService(_db));
+        var oversize = ValidTaskSource + "\n// " + new string('x', TaskService.MaxScriptSourceLength);
+        // 清掉上一轮可能留下的同名产物，再断言「拒绝 = 没写盘」
+        var target = Path.Combine("scripts", "engine_upload", "engine_oversize_upload.cs");
+        try { File.Delete(target); } catch { /* 不存在即无需清理 */ }
+
+        var error = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.UploadScripts(Files("engine_oversize_upload.cs", oversize), "engine_upload"));
+
+        Assert.Contains("过长", error.Message);
+        Assert.False(File.Exists(target));
+    }
+
+    [Fact]
+    public async Task UploadScripts_NormalSource_StillSaves()
+    {
+        var service = new UploadService(new ScriptVersionService(_db));
+        await service.UploadScripts(Files("engine_cap_normal_upload.cs", ValidTaskSource), "engine_upload");
+
+        Assert.True(File.Exists(Path.Combine("scripts", "engine_upload", "engine_cap_normal_upload.cs")));
+    }
+
     // ==================================================================== 测试工具
 
     private const string ValidTaskSource = """

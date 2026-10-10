@@ -9,20 +9,26 @@ namespace Quantum.API.Tests;
 /// ctx.File 受控文件落盘门面（QuantumFileFacade）安全基线：
 /// 根目录 confinement（拒绝绝对路径 / .. 穿越）、文件名清洗、重名不覆盖、失败清理残片。
 /// 落盘成功会清 AppMediaService 静态扫描缓存，须与 AppMediaServiceTests 串行，见 AppMediaScanStateCollection。
+/// 2026-10-11 起下载前有 SSRF 公网校验：此处注入确定性 DNS 结果，用例不依赖真实网络
+/// （两个集合都是 DisableParallelization，与 TaskHttpSsrfTests 的接缝不会交叠）。
 /// </summary>
 [Collection("AppMediaScanState")]
 public class QuantumFileFacadeTests : IDisposable
 {
     private readonly string _root;
+    private readonly Func<string, CancellationToken, Task<IPAddress[]>> _originalResolver;
 
     public QuantumFileFacadeTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "quantum-file-facade-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
+        _originalResolver = NetworkGuard.ResolveHostAddressesAsync;
+        NetworkGuard.ResolveHostAddressesAsync = (_, _) => Task.FromResult(new[] { IPAddress.Parse("93.184.216.34") });
     }
 
     public void Dispose()
     {
+        NetworkGuard.ResolveHostAddressesAsync = _originalResolver;
         try { Directory.Delete(_root, true); } catch { /* 临时目录清理失败不影响用例 */ }
     }
 

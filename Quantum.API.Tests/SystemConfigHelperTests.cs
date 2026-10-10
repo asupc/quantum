@@ -366,4 +366,118 @@ public class SystemConfigHelperTests : IDisposable
         Assert.StartsWith("f-", footerOnDisk);
         Assert.Equal(footerOnDisk, SystemConfigHelper.GetSetting().Footer);
     }
+
+    // ---------- memo 单源一致性（§1-7 快速路径不得钉住错配解析结果） ----------
+
+    [Fact]
+    public async Task ConcurrentReadersAndWriters_NeverObserveMixedKeyUserNamePairing()
+    {
+        // 并发读写下的不变量：返回的配置必须始终是「某一次真实写入」的完整快照——
+        // 密钥与账号不得来自不同版本（错配会让改钥后旧签名密钥继续生效）。
+        SystemConfigHelper.SetSetting(FullyPopulated(0));
+        var written = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+        for (var i = 0; i <= 30; i++)
+        {
+            written[Key(i)] = User(i);
+        }
+        var mismatches = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var stop = false;
+        var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
+        {
+            while (!Volatile.Read(ref stop))
+            {
+                var snapshot = SystemConfigHelper.GetSetting();
+                if (!written.TryGetValue(snapshot.SymmetricSecurityKey ?? "", out var expectedUser)
+                    || snapshot.UserName != expectedUser)
+                {
+                    mismatches.Add($"key={snapshot.SymmetricSecurityKey} user={snapshot.UserName}");
+                }
+            }
+        })).ToArray();
+        var writers = Enumerable.Range(0, 3).Select(w => Task.Run(() =>
+        {
+            for (var i = 1; i <= 30; i++)
+            {
+                SystemConfigHelper.UpdateSetting(current =>
+                {
+                    current.SymmetricSecurityKey = Key(i);
+                    current.UserName = User(i);
+                });
+            }
+        })).ToArray();
+        await Task.WhenAll(writers);
+        Volatile.Write(ref stop, true);
+        await Task.WhenAll(readers);
+
+        Assert.Empty(mismatches);
+        // 最终写入后读到最终值（写后即新，快速路径不得停留在旧快照）
+        SystemConfigHelper.UpdateSetting(current => { current.SymmetricSecurityKey = "FINAL-KEY"; current.UserName = "FINAL-USER"; });
+        var final = SystemConfigHelper.GetSetting();
+        Assert.Equal("FINAL-KEY", final.SymmetricSecurityKey);
+        Assert.Equal("FINAL-USER", final.UserName);
+    }
+
+    [Fact]
+    public void GetSetting_ParsesTheTextReadOnce_AndNeverPublishesMismatchedMemo()
+    {
+        // memo 单源一致性：memo.Text 必须与 memo.Setting 出自同一份文本。
+        // 修复前发布路径取 _cachedText（发布时刻的缓存文本），解析取的是更早读到的 currentText——
+        // 两者之间若有写者换文本，就会把新文本与旧解析结果配成一组，而快速路径按 Text 引用判断命中，
+        // 此后每次 GetSetting 都返回那份旧解析结果（喂给 Consts.SetJwtSecrets = 改密钥后旧密钥继续生效）。
+        SystemConfigHelper.SetSetting(FullyPopulated(1));
+        SystemConfigHelper.GetSetting();
+        // 再写一次使文本缓存失效：下一次 GetSetting 必走「解析 + 发布」路径（否则命中快速路径，交错点不触发）
+        SystemConfigHelper.SetSetting(FullyPopulated(1));
+        var swapped = false;
+        SystemConfigHelper.TestHookBeforeMemoPublish = () =>
+        {
+            if (swapped) return;
+            swapped = true;
+            // 解析已完成、memo 尚未发布：写者此刻落盘新文本（等价于并发改密/改钥的窗口）
+            SystemConfigHelper.SetSetting(FullyPopulated(2));
+        };
+        try
+        {
+            var loaded = SystemConfigHelper.GetSetting();
+
+            Assert.True(swapped, "交错点未被触发");
+            // memo 的不变量：memo.Text 与 memo.Setting 必须描述同一份文本（同源），
+            // 不得出现「文本 = 新版、设置 = 旧解析结果」的错配。
+            var memo = SystemConfigHelper.InspectMemoForTest();
+            if (memo != null)
+            {
+                var expectedKey = memo.Value.Setting.SymmetricSecurityKey;
+                Assert.Contains(expectedKey, memo.Value.Text);
+            }
+            // 关键断言：后续读取必须看到最后写入的密钥（旧解析结果不得被钉住）
+            Assert.Equal(Key(2), SystemConfigHelper.GetSetting().SymmetricSecurityKey);
+            Assert.Equal(User(2), SystemConfigHelper.GetSetting().UserName);
+        }
+        finally
+        {
+            SystemConfigHelper.TestHookBeforeMemoPublish = null;
+        }
+    }
+
+    private static string Key(int i) => $"memo-key-{i}";
+
+    private static string User(int i) => $"memo-user-{i}";
+
+    /// <summary>全部字段齐备的配置：避免容错回填在用例中途改钥（回填会替换 SymmetricSecurityKey/Issuer 等）。</summary>
+    private static Setting FullyPopulated(int i) => new()
+    {
+        UserName = User(i),
+        PassWord = "p",
+        DBType = "SQLite",
+        DBAddress = "memo.db",
+        Port = 5088,
+        Host = "http://*",
+        SymmetricSecurityKey = Key(i),
+        SecurityIssuer = "Issuer.Memo",
+        SecurityAudience = "Audience.Memo",
+        ChannelMasterKey = "bWVtby1tYXN0ZXIta2V5",
+        MaxConcurrentTasks = 8,
+        MessageQueueInterval = 100,
+        CommandTimeInterval = 3
+    };
 }
