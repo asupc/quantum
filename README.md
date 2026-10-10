@@ -72,7 +72,7 @@ Kotlin 2.1 + Jetpack Compose (M3) 多模块工程：
 docker pull asupc/quantum:latest
 ```
 
-**快速试用（自动生成随机凭据）**：编辑 `docker-compose.yml`，注释掉
+**快速试用（初始化向导）**：编辑 `docker-compose.yml`，注释掉
 
 ```yaml
 - ./app/appsettings.json:/app/appsettings.json
@@ -82,15 +82,18 @@ docker pull asupc/quantum:latest
 
 ```bash
 docker compose up -d
-docker logs quantum   # 首启自动初始化配置，控制台输出随机登录账号/密码，请立即保存
 ```
+
+浏览器访问 `http://<服务器IP>:5088`，会自动进入**首次部署初始化向导**：
+① 创建登录账号密码 → ② 选择数据库（SQLite 零配置 / MySQL 连接串，可先「测试连接」）
+→ ③ 勾选平台自带脚本创建任务。全程无需看容器日志、无需手改配置文件。
 
 **正式部署（自带配置）**：
 
 ```bash
 mkdir -p app
 cp Quantum.API/Quantum.Web/appsettings.example.json app/appsettings.json
-# 编辑 app/appsettings.json（必改项见下节）
+# 编辑 app/appsettings.json（必改项见下节；账号密码留空 = 同样走初始化向导）
 docker compose up -d
 ```
 
@@ -103,8 +106,8 @@ docker compose up -d
 ```bash
 # 1. 后端（仓库根目录）
 dotnet run --project Quantum.API/Quantum.Web
-# 首次启动若无 appsettings.json，会自动生成随机登录账号/密码与 SQLite 库，
-# 账号密码打印在控制台，请立即保存。
+# 首次启动若无 appsettings.json，自动生成基础配置与 SQLite 库（不含登录账号），
+# 打开 Web 管理端会进入初始化向导，引导创建账号、选择数据库、勾选自带脚本建任务。
 
 # 2. Web 管理端（另开一个终端）
 cd quantum-web
@@ -112,7 +115,7 @@ npm install
 npm run dev        # http://localhost:8080，/api 与 /ws 代理到 127.0.0.1:5088
 ```
 
-浏览器打开 `http://localhost:8080`，用控制台输出的账号（或你配置的账号）登录。
+浏览器打开 `http://localhost:8080`：首次部署按向导完成初始化后，用你创建的账号登录。
 
 ### 配置说明（appsettings.json）
 
@@ -120,7 +123,7 @@ npm run dev        # http://localhost:8080，/api 与 /ws 代理到 127.0.0.1:50
 
 | 键 | 说明 |
 |---|---|
-| `UserName` / `PassWord` | 唯一登录账号口令。**不带配置首启时随机生成并打印到控制台**；用模板则必须改掉占位值 |
+| `UserName` / `PassWord` | 唯一登录账号口令。**留空 = 首次访问 Web 时走初始化向导自建账号**；预填即为预先配置好账号（跳过向导） |
 | `DBType` | `SQLite`（零依赖，默认）或 `MySql` |
 | `DBAddress` | SQLite 填库文件名（如 `quantum.db`）；MySQL 填连接串 `server=...;port=...;database=...;Uid=...;Pwd=...;` |
 | `Port` | 监听端口，默认 `5088` |

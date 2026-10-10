@@ -39,8 +39,10 @@ build-apk.bat                     # App release APK（keystore 注入）
 
 - **HTTP 恒 200 信封**：所有接口经 ResultFilter/ExceptionFilter 包装为 `ResultModel`，`Code=200` 成功 / `401` 认证或权限 / `500` 业务失败（抛 `BusinessException`）。新增端点不要直接返回裸对象或非 200 状态码表达业务错误。
 - **单用户登录**：Web/App 共用唯一账号；新令牌须有 `TokenPurpose=User`、当前配置账号名与有效 `LoginTime`。旧令牌只在原有效期内按主体兼容，不依赖角色 claim。受保护端点走登录用途校验，Open AppKey、PushKey、外触 Secret 不得获取登录能力；详见 `docs/单用户登录与外部凭据契约.md`。
+- **首次部署初始化向导（2026-10-10）**：无配置首启或账号密码留空 = 未初始化（`Setting.SetupCompleted=false`），Web 端自动进入 `/setup` 向导：创建登录账号 → 选择数据库（SQLite/MySQL，可试连）→ 勾选自带脚本建任务；`/api/Setup/*` 匿名仅未初始化期有效，完成即关闭（防未授权接管账号）。换库需重启，勾选清单经 `SetupPendingScripts` 跨重启补种（`ScriptTaskSeeder.RunAfterInit` 按「向导未完成不播 / 勾选补种 / 存量新库全量」执行）。首次启动不再自动生成随机账号密码（详见 `docs/首次部署初始化向导实施计划.md`）。
 - **双数据库**：`DBType`（appsettings.json，MySql/Sqlite）决定 `QuantumSqliteDbContext` / `QuantumMySqlDbContext` 哪个生效。实体或模型改动必须两侧各加迁移并核对 Up/Down 一致。
 - **任务执行引擎（2026-09-16 改造，.cs 源码任务进程内执行）**：脚本唯一形态 `.cs`（实现 `Quantum.Plugins.IQuantumTask`，示例见 `Quantum.Web/scripts/quantum/demo/`）。保存/上传走「门禁三级扫描（语法粗筛+语义黑名单+启发式警告）→ Roslyn 编译 → SHA256 哈希缓存」，任一不过拒绝落盘（PUT /task/scripts 返回 blocked/warnings/errors 三类诊断）；执行经 collectible ALC 加载产物、独立 DI scope 组装 ctx（`ctx.Env`/`ctx.Notify`/`ctx.CustomData` 门面进程内直调 EnvService/NotifyService/CustomDataService，免环回 HTTP/免令牌；`ctx.Http` 仅外部请求）。**已移除**：node/python 执行、`Extends.TemporaryToken`、`Dockerfile-no-python`/`build-no-python.bat`；根 Dockerfile 已删 node/python/build-essential 安装段。
+- **指令触发路由（2026-10-10 增会话内省略指令词）**：`MessageProcess.SelectTaskCandidates` 五级路由——①点选精确（TargetTaskId）/ ②全局唯一命中 / ③会话任务集（P4：组内多命中不外溢全局）/ ④全局 / ⑤会话内省略指令词。⑤：App/Web 在任务会话里手打裸消息（如会话「电影港」发「西游记」）且未命中任何触发指令时，若会话组内**恰一个**带触发指令的任务，把消息拼回「指令词 消息」按手打全指令等价触发（指令环境变量收到拼回文本，脚本「剥离指令词取关键字」口径不变）；显式命中恒优先，点选代发 / 机器人来源 / 默认会话 / 组内多个带指令任务均不走⑤。
 - **任务脚本数据脱敏（2026-09-19 定，存量已全量改造）**：脚本内不允许保留私有服务地址、账号、密码、Cookie/令牌等敏感数据——一律改为**环境变量必填**读取，缺失即抛「缺少环境变量 X，请先在环境变量页配置」，不写内置缺省值；公网第三方 API 端点（bilibili、SMZDM、财经/晨报数据源等任务固有公开地址）可保留为常量。变量名须匹配 `^[a-zA-Z][a-zA-Z0-9_]{1,64}$`（字母开头、可含下划线、不能带连字符）；多账号配同名多条变量，执行时平台按 `&` 合并投递、脚本自行拆分；注释与帮助文案中的真实内网 IP 一律写 `192.168.x.x` 占位。同步脚本到新实例前，先在目标环境变量页补齐脚本头部声明的全部变量（缺失首跑即报错）。
 - **内置 AI 助手**：`AgentService`/`LlmClient`/`AgentToolbox` + `AiProviderService`（Quantum.Application），端点 `AiAgentController`/`AiProviderController` 要求登录身份；Web 侧「AI供应商」「AI设置」（全局设置+AI 写权限高危项）挂系统管理、会话分组有「AI助手」页，App 侧 `feature:ai` 为底部 tab；限值上限 最大轮数 100 / 单次时限 3000，保存与运行时双重 clamp；「失败自动分析」带防重（2026-10-08）：同一脚本有待确认提案（Pending）或默认会话有运行中 run 时不重复发起，提案应用/忽略/过期后自动恢复。
 - **App 通道**：WebSocket 走 `Middleware/AppWebSocketManager`，应用层 25s 心跳；消息同步 REST 分页 + msgId 幂等（原契约文档已清理，以后端代码与测试为准）。
@@ -79,5 +81,6 @@ build-apk.bat                     # App release APK（keystore 注入）
 - `单用户模型与角色机制移除计划.md` — 角色机制移除的决策记录（现行单用户设计的来由）。
 - `功能增强分期实施计划.md`、`一期功能增强运维手册.md` — 功能增强的分期计划与一期运维手册。
 - `UI功能测试记录-qoder-ui-2026-09-27.md` — Web 端 UI 功能测试记录。
+- `首次部署初始化向导实施计划.md` — 首次部署初始化向导（建账号/选库/勾选自带脚本建任务）的设计取舍与实施记录。
 
 > 工作方式：大型改动（升级、跨模块重构）先出详细计划文档（放 docs/）经确认后再动手，是本仓库所有者的既定要求。
