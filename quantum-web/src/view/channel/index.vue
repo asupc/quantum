@@ -6,21 +6,22 @@
     </n-alert>
     <n-space class="toolbar" align="center">
       <n-button :loading="loading" @click="load">刷新状态</n-button>
-      <span class="hint">服务端首次启动会自动生成通道主密钥并写入 appsettings.json（丢失将无法解密已保存登录态，请随配置一起备份）；如需更高隔离可用环境变量 QUANTUM_CHANNEL_KEY_FILE 覆盖。QQ 机器人须先在开放平台提交审核并<strong>手动上线</strong>，否则客户端里搜不到；无公网 IP 请使用沙箱环境。「发送测试消息」只能按最近一条你发给机器人的消息原路回（三家平台都不支持凭据主动外发）；若提示没有可回复对象，先在手机上给机器人发一条纯文本再点。</span>
+      <span class="hint">网络中断将自动重连，无需再次扫码；仅平台明确提示登录失效时才需重新扫码。服务端首次启动会自动生成通道主密钥并写入 appsettings.json（丢失将无法解密已保存登录态，请随配置一起备份）；如需更高隔离可用环境变量 QUANTUM_CHANNEL_KEY_FILE 覆盖。QQ 机器人须先在开放平台提交审核并<strong>手动上线</strong>，否则客户端里搜不到；无公网 IP 请使用沙箱环境。「发送测试消息」只能按最近一条你发给机器人的消息原路回（三家平台都不支持凭据主动外发）；若提示没有可回复对象，先在手机上给机器人发一条纯文本再点。</span>
     </n-space>
 
     <n-grid cols="1 m:2" responsive="screen" :x-gap="16" :y-gap="16">
       <n-gi v-for="row in statuses" :key="row.Platform">
         <n-card :title="platformName(row.Platform) + ' · 私聊'" size="small">
           <template #header-extra>
-            <n-tag :type="row.LastErrorCode ? 'error' : row.Enabled ? 'success' : 'default'">
-              {{ row.LastErrorCode ? '连接异常' : row.Enabled ? '已接入' : '未接入' }}
+            <n-tag :type="channelConnectionState(row).type">
+              {{ channelConnectionState(row).label }}
             </n-tag>
           </template>
           <n-space vertical :size="10">
             <div class="row"><span>机器人</span><strong>{{ row.BotIdMasked || '未配置' }}</strong></div>
             <div class="row"><span>待发条数</span><strong>{{ row.PendingOutboxCount || 0 }}</strong></div>
-            <div v-if="row.LastErrorCode" class="row error"><span>平台错误码</span><code>{{ row.LastErrorCode }}</code></div>
+            <div v-if="row.LastErrorCode" class="row error"><span>连接错误码</span><code>{{ row.LastErrorCode }}</code></div>
+            <p v-if="channelConnectionState(row).hint" class="hint">{{ channelConnectionState(row).hint }}</p>
             <div v-if="row.Environment" class="row"><span>接口环境</span><strong>{{ row.Environment === 'Sandbox' ? '沙箱' : '正式' }}</strong></div>
             <n-space>
               <template v-if="row.Platform === 'QQBot'">
@@ -134,8 +135,9 @@
 
 <script setup>
 defineOptions({ name: 'ChannelIndex' })
-import { computed, h, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, h, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { NButton, useDialog, useMessage } from 'naive-ui'
+import { channelConnectionState } from '@/utils/channelConnection'
 import {
   getChannelStatus, getChannelDelivery, configureQq, startWeixinQr, pollWeixinQr,
   unbindChannel, retryChannelDelivery, configureFeishu, startFeishuQr, pollFeishuQr, sendChannelTest
@@ -208,6 +210,7 @@ const anyModalOpen = computed(() =>
 watch(anyModalOpen, (open) => { if (!open) document.activeElement?.blur?.() })
 
 async function load() {
+  if (loading.value) return
   loading.value = true
   try { statuses.value = await getChannelStatus() || [] } catch { /* 统一拦截器显示错误 */ }
   finally { loading.value = false }
@@ -358,10 +361,23 @@ async function showDelivery(row) {
   } catch { /* 统一拦截器显示错误 */ }
 }
 let firstLoad = true
-onMounted(load)
-// 页签被 keep-alive 缓存，切回时刷新机器人接入状态
-onActivated(() => { if (firstLoad) { firstLoad = false; return } load() })
-onUnmounted(() => { stopQr(); stopFsQr() })
+let statusTimer
+function startStatusRefresh() {
+  if (!statusTimer) statusTimer = setInterval(load, 10000)
+}
+function stopStatusRefresh() {
+  clearInterval(statusTimer)
+  statusTimer = undefined
+}
+onMounted(() => { load(); startStatusRefresh() })
+// 自动重连恢复后刷新状态；keep-alive 页签离开时不继续轮询。
+onActivated(() => {
+  startStatusRefresh()
+  if (firstLoad) { firstLoad = false; return }
+  load()
+})
+onDeactivated(stopStatusRefresh)
+onUnmounted(() => { stopStatusRefresh(); stopQr(); stopFsQr() })
 </script>
 
 <style scoped>
