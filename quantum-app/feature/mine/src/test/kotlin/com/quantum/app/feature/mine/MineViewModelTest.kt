@@ -210,6 +210,90 @@ class MineViewModelTest {
         assertNull(vm.toast.value)
     }
 
+    // ==================================================================== F8 扫码确认门（防扫码钓鱼）
+
+    @Test
+    fun `onQrDecoded registers pending ticket WITHOUT authorizing`() = runTest(dispatcher) {
+        // 审计 F8：摄像头对准任意二维码即自动授权 = 钓鱼向量。
+        // 识别到票据只登记待确认，绝不发起 scan-login。
+        val vm = viewModel()
+
+        vm.onQrDecoded("ticket-evil")
+        advanceUntilIdle()
+
+        assertEquals("票据应进入待确认态", "ticket-evil", vm.pendingScanTicket.value)
+        coVerify(exactly = 0) { appApi.scanLogin(any()) }
+    }
+
+    @Test
+    fun `onQrDecoded trims and ignores blank`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        vm.onQrDecoded("   ")
+        assertNull("空白票据不得进入待确认态", vm.pendingScanTicket.value)
+
+        vm.onQrDecoded("  ticket-1  ")
+        assertEquals("ticket-1", vm.pendingScanTicket.value)
+        coVerify(exactly = 0) { appApi.scanLogin(any()) }
+    }
+
+    @Test
+    fun `onQrDecoded keeps first pending ticket, not overwritten`() = runTest(dispatcher) {
+        // 确认框展示期间的后续帧不得顶掉用户正在看的票据
+        val vm = viewModel()
+
+        vm.onQrDecoded("first")
+        vm.onQrDecoded("second")
+
+        assertEquals("first", vm.pendingScanTicket.value)
+    }
+
+    @Test
+    fun `dismissScanConfirm cancels without authorizing`() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.onQrDecoded("ticket-1")
+        advanceUntilIdle()
+
+        vm.dismissScanConfirm()
+
+        assertNull(vm.pendingScanTicket.value)
+        coVerify(exactly = 0) { appApi.scanLogin(any()) }
+    }
+
+    @Test
+    fun `confirmScanAuthorization authorizes the pending ticket and clears it`() = runTest(dispatcher) {
+        coEvery { appApi.scanLogin(any()) } returns EnvelopeDto(code = 200, data = ScanLoginResult(true))
+        val vm = viewModel()
+        vm.onQrDecoded("ticket-1")
+        advanceUntilIdle()
+
+        assertTrue("确认后应授权成功", vm.confirmScanAuthorization())
+        coVerify { appApi.scanLogin(ScanLoginRequest("ticket-1")) }
+        assertNull("授权后待确认票据清空", vm.pendingScanTicket.value)
+    }
+
+    @Test
+    fun `confirmScanAuthorization without pending ticket does nothing`() = runTest(dispatcher) {
+        val vm = viewModel()
+
+        assertFalse("无待确认票据不得授权", vm.confirmScanAuthorization())
+
+        coVerify(exactly = 0) { appApi.scanLogin(any()) }
+    }
+
+    @Test
+    fun `confirmScanAuthorization failure clears pending and toasts`() = runTest(dispatcher) {
+        coEvery { appApi.scanLogin(any()) } returns EnvelopeDto(code = 500, message = "票据已过期")
+        val vm = viewModel()
+        vm.onQrDecoded("stale")
+        advanceUntilIdle()
+
+        assertFalse(vm.confirmScanAuthorization())
+
+        assertEquals("票据已过期", vm.toast.value)
+        assertNull("失败也要清待确认票据（可重新扫码），不做自动重试", vm.pendingScanTicket.value)
+    }
+
     @Test
     fun `setBiometricLock persists to prefsStore`() = runTest(dispatcher) {
         val vm = viewModel()

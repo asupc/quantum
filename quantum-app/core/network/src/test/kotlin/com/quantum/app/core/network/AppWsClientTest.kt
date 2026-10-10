@@ -60,8 +60,11 @@ class AppWsClientTest {
         val tokenStore = FakeTokenStore()
         tokenStore.accessTokenValue = "fake-token"
         val session = SessionManager(tokenStore, RawAuthHttp(json))
-        runBlocking { session.load() }
-        session.updateBaseUrl(server.url("/").toString())
+        runBlocking {
+            session.load()
+            // 首启配置地址（原地址为空）：不清令牌（F6 清令牌只在换 host/port 时发生）
+            session.updateBaseUrl(server.url("/").toString())
+        }
         client = AppWsClient(session, json)
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }

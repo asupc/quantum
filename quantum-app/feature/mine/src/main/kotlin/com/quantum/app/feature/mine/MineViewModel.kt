@@ -135,6 +135,45 @@ class MineViewModel @Inject constructor(
         )
     }
 
+    // ---- 扫码授权确认门（F8）：识别到票据只登记，必须用户显式确认才调 scan-login
+
+    private val _pendingScanTicket = MutableStateFlow<String?>(null)
+
+    /**
+     * 待确认票据（非空 = 扫码页弹「确认授权此扫码登录？」确认框）。
+     * 摄像头对准的二维码可能来自任意来源（钓鱼向量），识别即授权等于把账号登录态
+     * 交给未知 Web 会话——必须经由用户确认才真正提交。
+     */
+    val pendingScanTicket: StateFlow<String?> = _pendingScanTicket.asStateFlow()
+
+    /**
+     * 摄像头解码到票据：只登记待确认，**绝不在此处发起授权**。
+     * 已有待确认票据时不覆盖（等用户确认或取消），重复解码不重复入队。
+     */
+    fun onQrDecoded(ticket: String) {
+        val trimmed = ticket.trim()
+        if (trimmed.isEmpty() || _pendingScanTicket.value != null) {
+            return
+        }
+        _pendingScanTicket.value = trimmed
+    }
+
+    /** 取消确认：丢弃票据、恢复扫码（不发任何请求）。 */
+    fun dismissScanConfirm() {
+        _pendingScanTicket.value = null
+    }
+
+    /**
+     * 用户确认授权：此刻才调 scan-login。成功/失败都清空待确认票据
+     * （失败文案经 [toast] 展示，用户可重新扫码）。
+     */
+    suspend fun confirmScanAuthorization(): Boolean {
+        val ticket = _pendingScanTicket.value ?: return false
+        val authorized = authorizeScan(ticket)
+        _pendingScanTicket.value = null
+        return authorized
+    }
+
     fun consumeToast() {
         _toast.value = null
     }

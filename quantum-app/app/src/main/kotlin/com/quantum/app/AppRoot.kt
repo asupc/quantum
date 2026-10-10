@@ -193,6 +193,7 @@ class ShellViewModel @Inject constructor(
             return "服务器地址需以 http:// 或 https:// 开头"
         }
         tokenStore.saveBaseUrl(normalized)
+        // 换服务器（host/port 变化）会作废旧登录态：清令牌 + 广播登出，防跨服务器令牌混淆（F-审计）
         sessionManager.updateBaseUrl(normalized)
         // 探活成功也返回文案（徽标与绿色状态行要用），这里必须折叠成 null：
         // 否则调用方按「非 null=错误」把「连接成功」渲染成红色的登录错误提示

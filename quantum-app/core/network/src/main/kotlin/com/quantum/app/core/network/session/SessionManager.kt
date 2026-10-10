@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
@@ -77,9 +78,31 @@ class SessionManager @Inject constructor(
 
     override fun accessToken(): String? = cachedAccessToken
 
-    /** 「服务器地址」页保存后同步刷新拦截器缓存。 */
-    fun updateBaseUrl(url: String) {
-        currentBaseUrl = url.trimEnd('/')
+    /**
+     * 「服务器地址」页保存后同步刷新拦截器缓存，**换服务器（host/port 变化）即作废旧服务器的登录态**：
+     * AuthInterceptor 只看「请求 host/port == 当前 baseUrl」就附 Bearer，若不清令牌，改地址后
+     * 旧服务器的 JWT 会被原样发给新服务器（令牌混淆/跨服务器泄露登录态，F-审计）。
+     * 同 host+port 的路径/协议微调不算换服务器（不误清）；首次配置（原地址为空）不清也不广播登出。
+     */
+    suspend fun updateBaseUrl(url: String) {
+        val normalized = url.trimEnd('/')
+        val previous = currentBaseUrl
+        currentBaseUrl = normalized
+        if (previous.isEmpty() || normalized.isEmpty() || originOf(previous) == originOf(normalized)) {
+            return
+        }
+        // 先清内存缓存（拦截器可能在任意线程同步读），再清落盘（防重启后旧令牌复活）
+        cachedAccessToken = null
+        cachedAccessExpiresAt = 0L
+        tokenStore.clear()
+        // 广播登出：UI 跳登录页、AppPushHandler 断开指向旧服务器的 WS（新地址下无令牌不可建连）
+        _events.emit(Event.LoggedOut)
+    }
+
+    /** URL 的 host:port 原点（解析失败回退原文——宁可判定为「不同服务器」也不漏清）。 */
+    private fun originOf(url: String): String {
+        val parsed = url.toHttpUrlOrNull() ?: return url
+        return "${parsed.host}:${parsed.port}"
     }
 
     suspend fun onLoginSuccess(

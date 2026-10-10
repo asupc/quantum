@@ -111,6 +111,13 @@ class ChatViewModel @Inject constructor(
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
+    /**
+     * 最近一次发送是否留有可重发的失败指令（F4）：`resendFailed()` 此前无任何 UI 入口，
+     * 失败指令既看不见也重发不了。发送失败时置位，Snackbar 据此给出「重发」动作。
+     */
+    private val _sendFailed = MutableStateFlow(false)
+    val sendFailed: StateFlow<Boolean> = _sendFailed.asStateFlow()
+
     private val _quickCommands = MutableStateFlow<List<CommandDto>>(emptyList())
     val quickCommands: StateFlow<List<CommandDto>> = _quickCommands.asStateFlow()
 
@@ -229,11 +236,14 @@ class ChatViewModel @Inject constructor(
                 )
                 if (failure == null) {
                     onAccepted?.invoke()
+                    _sendFailed.value = false
                 } else {
                     _toast.value = failure
+                    _sendFailed.value = true
                 }
             } catch (e: Exception) {
                 _toast.value = (e as? ApiException)?.message ?: "发送失败，请重试"
+                _sendFailed.value = true
             } finally {
                 // 点选未占用发送互斥，也不释放（防止连点中提前解锁手打的 in-flight）
                 if (!pick) {
@@ -330,6 +340,24 @@ class ChatViewModel @Inject constructor(
 
     fun consumeToast() {
         _toast.value = null
+    }
+
+    /**
+     * 重发失败指令（F4：此前 `ChatRepository.resendFailed` 无 UI 调用方）。
+     * 复用统一发送核：成功清除失败标记，失败继续留在可重发态。
+     */
+    fun resendFailed() {
+        viewModelScope.launch {
+            val failure = runCatching { chatRepository.resendFailed(sessionId) }
+                .getOrElse { e -> (e as? ApiException)?.message ?: "重发失败，请重试" }
+            if (failure == null) {
+                _sendFailed.value = false
+            } else {
+                _toast.value = failure
+                // 本轮重发失败：失败行已重新入 outbox，保持可重发（Snackbar 动作不收起）
+                _sendFailed.value = true
+            }
+        }
     }
 
     fun loadMore() {

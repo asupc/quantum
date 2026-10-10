@@ -204,6 +204,12 @@ class ChatRepository @Inject constructor(
                     break
                 }
                 persistMessages(messages.map { it.toEntity() })
+                // 死循环止损（F-审计）：满页但 MaxSeq 不前进（恶意/故障服务端恒回同值）时，
+                // 若只按「本页条数 < limit」终止就会永远重复同一页——游标不前进即立即结束本轮。
+                // 不把停滞值当新游标（current 未变），下轮同步从头再来，靠 msgId 幂等兜底。
+                if (page.maxSeq <= current) {
+                    break
+                }
                 current = page.maxSeq
                 syncCursorDao.set(SyncCursorEntity(maxSeq = current))
                 if (messages.size < SYNC_PAGE_SIZE) {
@@ -535,10 +541,16 @@ class ChatRepository @Inject constructor(
         syncCursorDao.set(SyncCursorEntity(maxSeq = minOf(cursor, result.maxSeq)))
     }
 
-    /** 重发失败的 outbox 指令。 */
-    suspend fun resendFailed(): String? {
-        val failed = outboxDao.firstPending() ?: return null
-        return sendCommand(failed.content)
+    /**
+     * 重发最早的失败指令（F-审计修复）：此前取 `firstPending()`（`failed = 0` 的在途项），
+     * 而失败项被标记为 `failed = 1` 后永远查不到——重发入口形同虚设。
+     * 旧失败行先删除再走 [sendCommand] 重投（成功即新行被清理，失败则重新标记）。
+     * sessionId：outbox 行不记会话，由调用方（会话页）传入当前会话，避免重发落到默认会话。
+     */
+    suspend fun resendFailed(sessionId: String = ""): String? {
+        val failed = outboxDao.firstFailed() ?: return null
+        outboxDao.remove(failed.id)
+        return sendCommand(failed.content, sessionId = sessionId)
     }
 
     /**

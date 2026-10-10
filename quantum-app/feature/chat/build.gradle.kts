@@ -57,6 +57,9 @@ dependencies {
     testImplementation(libs.kotlinx.serialization.json)
     testImplementation(libs.retrofit.kotlinx.serialization)
     testImplementation(libs.kotlinx.coroutines.test)
+    // ChatViewModel 单测（JVM，无设备/Robolectric）：PrefsStore/ImageLoader/PlayerManager 均需 Context，
+    // 只能经 mockk 注入假实现（与 feature:mine 的 ViewModel 测试同款）
+    testImplementation(libs.mockk)
     // FakeChatDao 需实现 ChatMessageDao.unreadCountsRaw（@RawQuery 承载，参数为 androidx.sqlite 类型）
     testImplementation(libs.room.runtime)
 }

@@ -57,6 +57,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -128,6 +132,23 @@ fun ChatScreen(
     val sessionTitle by viewModel.title.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val notifyMeta by viewModel.notifyMeta.collectAsState()
+    // 操作反馈（F4）：发送失败/限流/删除失败此前无任何展示面，必须经 Snackbar 让用户看见
+    val toast by viewModel.toast.collectAsState()
+    val sendFailed by viewModel.sendFailed.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    // 失败/限流文案：带「重发」动作（failed outbox 行由此可达）；4s 后自动消费
+    LaunchedEffect(toast) {
+        val text = toast ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = text,
+            actionLabel = if (sendFailed) "重发" else null,
+            duration = SnackbarDuration.Short
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            viewModel.resendFailed()
+        }
+        viewModel.consumeToast()
+    }
     var showPanel by remember { mutableStateOf(false) }
     var showQuickCommands by remember { mutableStateOf(false) }
     var cameraFile by remember { mutableStateOf<File?>(null) }
@@ -201,7 +222,9 @@ fun ChatScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().imePadding()) {
+    // Box 承载 SnackbarHost（F4）：错误/限流文案可见且可重发；其余布局与原先一致
+    Box(modifier = Modifier.fillMaxSize().imePadding()) {
+    Column(modifier = Modifier.fillMaxSize()) {
         // 会话详情头：从会话列表进入时展示（底部导航已隐藏，返回靠此头）；null = 旧嵌入形态
         if (onBack != null) {
             Row(
@@ -444,6 +467,11 @@ fun ChatScreen(
             imageLoader = imageLoader,
             onDismiss = { playingMedia = null }
         )
+    }
+    }
+    // 操作反馈条（F4）：置于最上层，会话页任何状态都能看见失败/限流文案与「重发」动作
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        SnackbarHost(hostState = snackbarHostState)
     }
 }
 

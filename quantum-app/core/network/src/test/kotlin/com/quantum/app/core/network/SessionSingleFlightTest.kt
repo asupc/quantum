@@ -58,6 +58,8 @@ open class FakeTokenStore : TokenStoreApi {
 
     override suspend fun clear() {
         cleared = true
+        // 对齐真实 TokenStore.clear()：access/refresh 一并清除（仅 baseUrl/deviceId 保留）
+        accessTokenValue = null
         refreshTokenValue = null
     }
 }

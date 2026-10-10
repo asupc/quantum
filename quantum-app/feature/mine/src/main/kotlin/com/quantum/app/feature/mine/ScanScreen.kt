@@ -95,11 +95,13 @@ fun ScanScreen(
     }
     var showManualInput by remember { mutableStateOf(false) }
     var manualTicket by remember { mutableStateOf("") }
-    // 已识别待授权：防止同一帧/后续帧重复解码与重复提交
+    // 已识别待确认：防止同一帧/后续帧重复解码与重复提交（F8 起仅登记，确认后才授权）
     var recognized by remember { mutableStateOf<String?>(null) }
     var authorized by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val toast by viewModel.toast.collectAsState()
+    // 待确认票据（ViewModel 持有）：非空 = 弹「确认授权此扫码登录？」确认框（防扫码钓鱼自动授权）
+    val pendingTicket by viewModel.pendingScanTicket.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         granted = it
@@ -138,6 +140,8 @@ fun ScanScreen(
             image.close()
             if (ticket != null) {
                 recognized = ticket
+                // F8：只登记待确认票据（ViewModel 弹确认框），绝不在此自动授权
+                viewModel.onQrDecoded(ticket)
             }
         }
         runCatching {
@@ -200,7 +204,7 @@ fun ScanScreen(
                         .padding(top = frame + QuantumSpacing.Xl)
                 )
                 !authorized -> Text(
-                    text = "已识别，正在授权…",
+                    text = "已识别，请确认授权",
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.align(Alignment.Center)
@@ -262,18 +266,52 @@ fun ScanScreen(
         }
     }
 
-    // 识别到票据 → 授权 → 成功提示后返回
-    LaunchedEffect(recognized) {
-        val ticket = recognized ?: return@LaunchedEffect
-        authorized = viewModel.authorizeScan(ticket)
-        if (authorized) {
-            delay(1_400)
-            onBack()
-        } else {
-            // 失败（过期/已用）允许重新扫：复位识别状态
-            delay(1_600)
+    // 识别到票据 → **弹确认框**（F8）：授权是账号登录态转移，必须用户显式确认；
+    // 确认成功后提示并返回，取消则复位识别状态、恢复扫码（与手动输入同款 UX）
+    LaunchedEffect(pendingTicket) {
+        if (pendingTicket == null) {
+            // 取消/授权完成：复位识别标记，允许重新扫码
             recognized = null
+            return@LaunchedEffect
         }
+    }
+
+    pendingTicket?.let { ticket ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissScanConfirm() },
+            title = { Text("确认授权此扫码登录？") },
+            text = {
+                Text(
+                    "将把本账号的登录态授权给该二维码对应的 Web 会话（有效期以服务端为准）。" +
+                        "仅在你本人主动发起 Web 扫码登录时确认。\n\n票据：$ticket"
+                )
+            },
+            confirmButton = {
+                QuantumButton(
+                    text = "确认授权",
+                    onClick = {
+                        scope.launch {
+                            if (viewModel.confirmScanAuthorization()) {
+                                authorized = true
+                                delay(1_400)
+                                onBack()
+                            }
+                            // 失败：票据已由 ViewModel 清空，等待重新扫码（toast 已展示原因）
+                        }
+                    },
+                    variant = QuantumButtonVariant.Primary,
+                    size = QuantumButtonSize.Sm
+                )
+            },
+            dismissButton = {
+                QuantumButton(
+                    text = "取消",
+                    onClick = { viewModel.dismissScanConfirm() },
+                    variant = QuantumButtonVariant.Ghost,
+                    size = QuantumButtonSize.Sm
+                )
+            }
+        )
     }
 
     if (showManualInput) {

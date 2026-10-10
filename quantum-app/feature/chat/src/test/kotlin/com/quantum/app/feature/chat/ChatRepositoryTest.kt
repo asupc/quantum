@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.mockwebserver.Dispatcher
@@ -40,11 +41,21 @@ import kotlin.test.assertTrue
 /** 内存 DAO（对齐 Room IGNORE/upsert 语义）。 */
 class FakeChatDao : ChatMessageDao {
     val rows = LinkedHashMap<String, ChatMessageEntity>()
+
+    /**
+     * 镜像 Room 主键语义：`chat_message` 以 **seq 为主键**，upsert 会替换同 seq 的既有行
+     * （哪怕 msgId 不同）。用 msgId 建索引只是便于用例断言，落库前先摘除同 seq 的他行。
+     */
+    private fun put(message: ChatMessageEntity) {
+        rows.entries.removeAll { it.key != message.msgId && it.value.seq == message.seq }
+        rows[message.msgId] = message
+    }
+
     override suspend fun upsertAll(messages: List<ChatMessageEntity>) {
-        messages.forEach { rows[it.msgId] = it }
+        messages.forEach { put(it) }
     }
     override suspend fun upsert(message: ChatMessageEntity) {
-        rows[message.msgId] = message
+        put(message)
     }
     override fun page(limit: Int, offset: Int): Flow<List<ChatMessageEntity>> = flowOf(emptyList())
     override fun sessionPage(sessionId: String, limit: Int, offset: Int): Flow<List<ChatMessageEntity>> =
@@ -122,6 +133,7 @@ class FakeOutboxDao : OutboxDao {
         return id
     }
     override suspend fun firstPending(): OutboxEntity? = items.firstOrNull { !it.failed }
+    override suspend fun firstFailed(): OutboxEntity? = items.firstOrNull { it.failed }
     override suspend fun markFailed(id: Long) {
         items.replaceAll { if (it.id == id) it.copy(failed = true) else it }
     }
@@ -313,6 +325,41 @@ class ChatRepositoryTest {
         assertEquals(42L, cursor)
         assertEquals(42L, cursorDao.value)
         assertEquals(1, requestCount.get(), "空页应立即结束翻页，不做多余同步请求（水位交换不计入）")
+    }
+
+    /**
+     * F-审计：恶意/故障服务端返回**满页**但 `MaxSeq` 不前进（恒回同值）时，翻页循环不得无限打转。
+     * 终止条件只有「本页条数 < SYNC_PAGE_SIZE」时，满页 + maxSeq 停滞 = 死循环（每轮重复同一页）。
+     * 要求：能终止，且不把停滞的 maxSeq 当成新游标。
+     */
+    @Test
+    fun syncAll_FullPageWithNonAdvancingMaxSeq_TerminatesInsteadOfLoopingForever() = runBlocking {
+        val fullPage = (1..ChatRepository.SYNC_PAGE_SIZE).joinToString(",") { i -> messageJson(i, "st$i") }
+        val requests = AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.path!!.startsWith("/api/App/messages")) {
+                    requests.incrementAndGet()
+                    // 恶意/故障：每页都满、MaxSeq 恒为 500（永不前进）
+                    return MockResponse().setHeader("Content-Type", "application/json")
+                        .setBody("""{"Code":200,"Data":{"MaxSeq":500,"Data":[$fullPage]}}""")
+                }
+                return MockResponse().setHeader("Content-Type", "application/json")
+                    .setBody("""{"Code":200,"Data":{"MaxSeq":500,"Sessions":[]}}""")
+            }
+        }
+
+        // 在有限步数内必须返回（无限循环会让 withTimeout 抛 TimeoutCancellationException 使用例失败）
+        val cursor = withTimeout(20_000) { repository.syncAll() }
+
+        assertEquals(500L, cursor, "游标停在停滞值（服务端声称的水位）")
+        assertEquals(500L, cursorDao.value)
+        assertTrue(
+            requests.get() <= 3,
+            "满页但 maxSeq 不前进时应立即止损（防死循环），实际请求数：${requests.get()}"
+        )
+        // 满页内容仍只入库一次（msgId 幂等），不因重复翻页产生重复行
+        assertEquals(ChatRepository.SYNC_PAGE_SIZE, chatDao.rows.size)
     }
 
     @Test
@@ -571,6 +618,53 @@ class ChatRepositoryTest {
         assertTrue(outboxDao.items[0].failed, "失败指令应标记 outbox 可重发")
     }
 
+    /**
+     * F4 回归（对抗审计）：失败的指令必须真的能重发。
+     * 旧实现 `resendFailed()` 取 `firstPending()`（`failed = 0` 的在途项），失败项标记为
+     * `failed = 1` 后永远查不到——失败指令既看不见也重发不了。
+     */
+    @Test
+    fun resendFailed_RetriesTheFailedRow_AndClearsItOnSuccess() = runBlocking {
+        // 第一次：限流失败 → outbox 留下 failed 行
+        ws.commandAccepted = false
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                MockResponse().setHeader("Content-Type", "application/json")
+                    .setBody("""{"Code":500,"Message":"请求频繁，请稍后重试！"}""")
+        }
+        assertNotNull(repository.sendCommand("待重发指令", sessionId = "task-9"))
+        assertEquals(1, outboxDao.items.size)
+        assertTrue(outboxDao.items[0].failed)
+
+        // 第二次：服务端恢复 → 重发必须命中失败行并清理 outbox
+        val commands = mutableListOf<String>()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.path!!.startsWith("/api/App/command")) {
+                    commands += request.body.readUtf8()
+                }
+                return MockResponse().setHeader("Content-Type", "application/json")
+                    .setBody("""{"Code":200,"Data":{"Accepted":true,"Message":"ok"}}""")
+            }
+        }
+        ws.commandAccepted = true
+
+        val failure = repository.resendFailed(sessionId = "task-9")
+
+        assertNull(failure, "服务端恢复后重发应成功")
+        assertTrue(outboxDao.items.isEmpty(), "重发成功后 outbox 清理（不残留失败行）")
+        assertEquals("待重发指令", ws.commands.last(), "重发的必须是那条失败指令")
+        assertEquals("task-9", ws.commandSessions.last(), "重发应保留原会话（不落默认会话）")
+    }
+
+    @Test
+    fun resendFailed_NoFailedRow_ReturnsNullAndSendsNothing() = runBlocking {
+        val failure = repository.resendFailed(sessionId = "task-9")
+
+        assertNull(failure, "无失败项时静默")
+        assertTrue(ws.commands.isEmpty(), "不得发出任何指令")
+    }
+
     @Test
     fun sendCommand_PassesTargetTask_OnWsPath() = runBlocking {
         // 点选代发透传来源任务 Id：WS command 帧带 targetTask（合并会话内点选精确路由）
@@ -746,6 +840,38 @@ class ChatRepositoryTest {
         // §4-4：帧缺 seq → REST 补拉取回真实行后必须 ack，否则服务端按未确认一直重投同一条
         repository.onWsMessage(WsFrame(type = "message", msgId = "ns1", content = "无 seq 帧", createTime = "t"))
         assertTrue(ws.acks.contains("ns1"), "缺 seq 帧补拉后应 ack（防服务端重投）")
+    }
+
+    // ==================================================================== seq 主键碰撞行为（审计清单：只断言现状）
+
+    /**
+     * `chat_message` 以 **seq 为主键**（`Entities.kt:36 @PrimaryKey val seq`），落库走 `@Upsert`。
+     * 若服务端把一条**不同 msgId** 的新消息投成已存在的 seq（号段复用/上游串行错误），
+     * upsert 会按主键覆盖那行——旧 msgId 的行被删除。本用例锁定这一既有语义
+     * （覆盖而非并存），以便号段误用成为可观察行为而不是隐形数据丢失。
+     */
+    @Test
+    fun seqCollision_differentMsgId_overwritesExistingRow_documentsPrimaryKeySemantics() = runBlocking {
+        // 先落一条 seq=100 的正常消息
+        repository.onWsMessage(
+            WsFrame(type = "message", msgId = "old-100", seq = 100, content = "原有消息", session = "task-a",
+                createTime = "2026-09-18 10:00:00")
+        )
+        assertEquals("原有消息", chatDao.rows["old-100"]?.content)
+
+        // 服务端投来同 seq、不同 msgId 的另一条消息（号段复用）
+        repository.onWsMessage(
+            WsFrame(type = "message", msgId = "new-100", seq = 100, content = "复用号段的新消息", session = "task-b",
+                createTime = "2026-09-18 11:00:00")
+        )
+
+        // 现状：seq 主键 upsert → 旧行被整体覆盖（FakeChatDao 按 msgId 建索引，故 rows 里两条 msgId 并存，
+        // 但按 seq 查询只会命中一条）——用 bySeq 断言真实主键语义
+        val rowAtSeq = chatDao.bySeq(100)
+        assertEquals("new-100", rowAtSeq?.msgId, "seq 主键语义：同 seq 后到者覆盖先到者")
+        assertEquals("复用号段的新消息", rowAtSeq?.content)
+        assertEquals("task-b", rowAtSeq?.sessionId)
+        assertNull(chatDao.byMsgId("old-100"), "旧 msgId 行已不存在（Room @Upsert 按主键替换）")
     }
 
     @Test

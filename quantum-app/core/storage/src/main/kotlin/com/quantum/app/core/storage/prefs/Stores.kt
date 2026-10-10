@@ -256,32 +256,117 @@ class PrefsStore(private val context: Context) : SessionReadStore {
  * 会话已读水位的编解码器（DataStore Preferences 无映射类型，以 "id:seq,id:seq" 串存储）。
  * 默认会话的 sessionId 是空串，**落盘一律用 "_" 占位、读出再还原**——两侧必须对称，
  * 否则空键条目（":seq"）会在下轮解码被当作畸形丢弃，对应会话的未读数全部失效。
+ *
+ * 分隔符碰撞（F11）：会话键来自用户可编辑的会话名（服务端 NormalizeSessionName 只 Trim，
+ * 含 `,`/`:`/`%` 的会话名合法），裸拼串会被 `,`/`:` 拆成伪条目、污染别的会话水位——
+ * 写路径对键内 `%`/`,`/`:` 做百分号转义（`%` 先转，避免二次解码），读路径还原。
+ *
+ * 向后兼容（F11b）：**转义只对新格式生效**。旧版本写出的串未做转义，若读路径对任何合法
+ * `%XX` 都还原，键内本含 `%20`/`%2C` 的旧会话（如会话名「50%20」）会被静默改名为「50 」，
+ * 水位错挂到不存在的会话上（原会话未读数虚高、并可能生成幽灵条目）——旧串必须逐字节读回。
+ * 因此新格式串统一带尾部标记 [V2_MARK]（`;esc`），读出时先按标记分流：
+ *  - 无标记 = 旧格式：键原样使用，不做任何还原（存量语义冻结，只有裸 `_` 字段还原为空键）；
+ *  - 有标记 = 新格式：剥标记后按转义还原。
+ * 标记按构造即无歧义：旧格式的 seq 恒为十进制数字，故旧串必以数字结尾，以 `;esc` 结尾的
+ * 串不可能是旧格式产物。新格式仅在「旧格式无法无损表达」时启用（见 [encode]），
+ * 键内无分隔符的存量串因此保持原样不 churn，磁盘上也不会因一次读改写就整体换代。
  */
 object SessionWaterlineCodec {
 
     /** 默认会话（空串 sessionId）的落盘占位键。 */
     const val DEFAULT_SESSION_KEY = "_"
 
-    /** sessionId → 落盘键（空串归一为占位键；任务 Id 为 GUID，不含分隔符）。 */
-    fun storageKey(sessionId: String): String = sessionId.ifEmpty { DEFAULT_SESSION_KEY }
+    /** 新格式（转义）串的尾部标记：旧格式串必以数字结尾，故本标记不与旧格式歧义。 */
+    private const val V2_MARK = ";esc"
 
-    /** 落盘键 → sessionId（占位键还原为空串，消费方直接以 sessionId 查表）。 */
-    fun decode(raw: String?): Map<String, Long> =
-        raw?.split(',')?.mapNotNull { entry ->
+    /**
+     * sessionId → 落盘键（空串归一为占位键；键内分隔符转义——会话名可由用户输入）。
+     * `_` 一并转义（%5F）：否则字面会话名「_」会与默认会话占位键撞车。
+     * 注意顺序：占位键本身**不参与转义**（先判空再转义），否则空会话会落成 "%5F"。
+     */
+    fun storageKey(sessionId: String): String =
+        if (sessionId.isEmpty()) DEFAULT_SESSION_KEY else escapeKey(sessionId)
+
+    /** 键内分隔符转义：`%` 必须最先替换，否则 `%25` 会被读路径二次解码。 */
+    private fun escapeKey(key: String): String = key
+        .replace("%", "%25")
+        .replace(",", "%2C")
+        .replace(":", "%3A")
+        .replace("_", "%5F")
+
+    /** 转义还原：只还原合法 %XX 序列，其余原样保留（仅新格式路径调用）。 */
+    private fun unescapeKey(stored: String): String {
+        if (!stored.contains('%')) {
+            return stored
+        }
+        val out = StringBuilder(stored.length)
+        var i = 0
+        while (i < stored.length) {
+            val hex = if (i + 2 < stored.length) stored.substring(i + 1, i + 3) else ""
+            val code = if (stored[i] == '%' && hex.length == 2 && hex.all { it.isDigit() || it in "abcdefABCDEF" }) {
+                hex.toIntOrNull(16)
+            } else {
+                null
+            }
+            if (code != null) {
+                out.append(code.toChar())
+                i += 3
+            } else {
+                out.append(stored[i])
+                i++
+            }
+        }
+        return out.toString()
+    }
+
+    /**
+     * 落盘串 → 映射（默认会话占位键还原为空串，消费方直接以 sessionId 查表）。
+     * 标记分流见类型注释：旧格式不做转义还原（存量键逐字节保真），新格式才还原。
+     */
+    private fun parse(raw: String, escaped: Boolean): Map<String, Long> =
+        raw.split(',').mapNotNull { entry ->
             val idx = entry.lastIndexOf(':')
             if (idx <= 0) {
                 return@mapNotNull null
             }
             val seq = entry.substring(idx + 1).toLongOrNull() ?: return@mapNotNull null
             val stored = entry.substring(0, idx)
-            (if (stored == DEFAULT_SESSION_KEY) "" else stored) to seq
-        }?.toMap() ?: emptyMap()
+            // 占位坍缩只认裸 "_" 字段（先于还原）：字面会话名「_」在新格式里落为 %5F，
+            // 与占位键不撞
+            if (stored == DEFAULT_SESSION_KEY) {
+                return@mapNotNull "" to seq
+            }
+            (if (escaped) unescapeKey(stored) else stored) to seq
+        }.toMap()
 
-    /** 映射 → 落盘串（空键对称归一为占位键，保证 decode 往返不丢条目）。 */
-    fun encode(map: Map<String, Long>): String =
-        map.entries.joinToString(",") { entry ->
-            "${storageKey(entry.key)}:${entry.value}"
+    /** 落盘串 → sessionId 水位映射（null/空白 → 空映射）。 */
+    fun decode(raw: String?): Map<String, Long> {
+        if (raw.isNullOrEmpty()) {
+            return emptyMap()
         }
+        return if (raw.endsWith(V2_MARK)) {
+            parse(raw.dropLast(V2_MARK.length), true)
+        } else {
+            parse(raw, false)
+        }
+    }
+
+    /**
+     * 映射 → 落盘串。优先用**旧格式**（不转义）表达：旧格式若能无损往返（键内无 `,`/`:` 等
+     * 分隔符、且键不是字面 `_`），就沿用旧格式——存量串的读写因此逐字节不变，不做无谓换代；
+     * 只有旧格式表达不了的键（含分隔符/字面 `_`）才升级为带标记的转义格式。
+     */
+    fun encode(map: Map<String, Long>): String {
+        val legacy = map.entries.joinToString(",") { entry ->
+            "${entry.key.ifEmpty { DEFAULT_SESSION_KEY }}:${entry.value}"
+        }
+        if (decode(legacy) == map) {
+            return legacy
+        }
+        return map.entries.joinToString(",") { entry ->
+            "${storageKey(entry.key)}:${entry.value}"
+        } + V2_MARK
+    }
 
     /**
      * 单会话水位推进（写路径唯一入口）：把 sessionId 的水位推到 seq（只进不退），

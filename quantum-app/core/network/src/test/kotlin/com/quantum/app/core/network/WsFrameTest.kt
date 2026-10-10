@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** WS 帧解析器（契约 §4.3：小写驼峰、sync 帧多 direction）。 */
 class WsFrameTest {

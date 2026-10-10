@@ -140,16 +140,17 @@ class AppWsClient @Inject constructor(
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
-                    val frame = if (text.isBlank()) {
+                    if (text.isBlank()) {
                         // 分类日志①：空帧（对端异常/中间层截断），不再静默丢弃
                         Log.w(TAG, "WS 收到空帧，已忽略")
                         return
-                    } else {
-                        runCatching { json.decodeFromString<WsFrame>(text) }.getOrElse { e ->
-                            // 分类日志②：解码异常（协议漂移/脏数据），打印原因与原文片段供排查
-                            Log.w(TAG, "WS 帧解码失败: ${e.message}, raw=${text.take(200)}", e)
-                            return
-                        }
+                    }
+                    // 容错解码（F-审计）：标量类型漂移（seq 为字符串等）归一后照常处理，
+                    // 只有真正不可用的帧才丢弃——且必须带帧型 WARN，不能静默
+                    val outcome = WsFrameCodec.decode(json, text)
+                    val frame = outcome.frame ?: run {
+                        Log.w(TAG, "WS 帧不可用，已丢弃：${outcome.reason}, raw=${text.take(200)}")
+                        return
                     }
                     if (frame.type == "error" && frame.content?.contains("token") == true) {
                         // 令牌过期：刷新后重连（不指数退避）。必须先作废当前连接引用，

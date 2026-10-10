@@ -376,6 +376,14 @@ interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE failed = 0 ORDER BY id LIMIT 1")
     suspend fun firstPending(): OutboxEntity?
 
+    /**
+     * 最早一条发送失败（待重发）的指令。
+     * 与 [firstPending] 分开：pending 语义是「尚未得出结果的在途项」，失败项必须由重发链路取回，
+     * 否则失败后 `firstPending` 永远查不到它、重发入口形同虚设（F-审计）。
+     */
+    @Query("SELECT * FROM outbox WHERE failed = 1 ORDER BY id LIMIT 1")
+    suspend fun firstFailed(): OutboxEntity?
+
     @Query("UPDATE outbox SET failed = 1 WHERE id = :id")
     suspend fun markFailed(id: Long)
 
