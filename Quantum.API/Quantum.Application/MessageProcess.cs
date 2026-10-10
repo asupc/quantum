@@ -31,13 +31,18 @@ public class MessageProcess
         {
             return;
         }
+        // 每条消息独占自己的原路回复上下文；App/Web 的 null 必须显式清空，不能继承上一次机器人路由。
+        using var replyContext = Channels.ChannelReplyContext.Use(message.ChannelReplyRouteId);
         _setting = SystemConfigHelper.GetSetting();
         // 原「BlackQQ 黑名单」已删除：Web/App/通道三条链路的 user_id 使用同一账号，
         // 该黑名单只能把唯一操作者静默丢弃（且只打 Console、不落日志、不回复），是个纯粹的自伤开关。
 
         SystemCommands = SystemCommandHelper.Get();
-        // 唯一主体键：登录账号名（脚本侧 user_id 变量、多步骤会话归属均用它）。
+        // 脚本侧 user_id 仍为唯一登录账号；等待步骤另按来源归属，避免 App 与机器人互相接管。
         var accountKey = _setting.UserName ?? string.Empty;
+        var actorKey = ResolveActorKey(message, accountKey);
+        bool OwnsStep(TaskCommandStep step) => step.UserId == accountKey
+            && (step.ActorKey ?? $"app:{step.UserId}") == actorKey;
 
         try
         {
@@ -89,14 +94,14 @@ public class MessageProcess
 
             if (message.message.ToLower() == "q")
             {
-                var count = MemoryObjectCache.TaskCommandSteps.Count(n => n.Value.UserId == accountKey);
+                var count = MemoryObjectCache.TaskCommandSteps.Count(n => OwnsStep(n.Value));
                 if (count > 0)
                 {
-                    foreach (var (key, _) in MemoryObjectCache.TaskCommandSteps.Where(n => n.Value.UserId == accountKey).ToList())
+                    foreach (var (key, _) in MemoryObjectCache.TaskCommandSteps.Where(n => OwnsStep(n.Value)).ToList())
                     {
                         MemoryObjectCache.TaskCommandSteps.TryRemove(key, out _);
                     }
-                    message.SendMessage("已退出所有指令任务。");
+                    message.SendMessage("已退出当前来源的指令任务。");
                 }
                 return;
             }
@@ -105,7 +110,7 @@ public class MessageProcess
 
             var tasks = CacheManager.Get<TaskModel>().Where(n => n.Enable).ToList();
 
-            var currentTask = MemoryObjectCache.TaskCommandSteps.FirstOrDefault(n => n.Value.UserId == accountKey && n.Value.HasChildTask).Value;
+            var currentTask = MemoryObjectCache.TaskCommandSteps.FirstOrDefault(n => OwnsStep(n.Value) && n.Value.HasChildTask).Value;
             List<TaskCommandStep> taskCommandSteps = new();
             if (currentTask != null)
             {
@@ -214,6 +219,7 @@ public class MessageProcess
                         HasChildTask = subTasks.Any(),
                         NextSubTaskId = subTasks.OrderBy(m => m.Sort).FirstOrDefault()?.Id,
                         UserId = accountKey,
+                        ActorKey = actorKey,
                         UpdateTime = DateTime.Now,
                         Envs = commonEnvs.DeepClone(),
                         ThreadId = Guid.NewGuid().ToString().Replace("-", "").ToUpper()
@@ -287,6 +293,14 @@ public class MessageProcess
     /// MessageProcess 经 root provider 以 AddTransient 解析，不能构造注入 scoped 的 AppPushService。
     /// </summary>
     internal static Func<string, string, string, Task> MessageMover = AppPushDispatcher.MoveUserMessageAsync;
+
+    /// <summary>App/Web 保留跨任务会话续接；机器人只使用受信工作器元数据，不用可由客户端指定的会话键判身份。</summary>
+    internal static string ResolveActorKey(MessageProccessDTO message, string accountKey)
+        => string.IsNullOrWhiteSpace(message.ChannelReplyRouteId)
+            ? $"app:{accountKey}"
+            : (string.IsNullOrWhiteSpace(message.ChannelActorKey)
+                ? $"channel-route:{message.ChannelReplyRouteId}"
+                : message.ChannelActorKey);
 
     /// <summary>
     /// 跨会话迁移目标判定（internal static 供单测，与 SelectTaskCandidates 同套路，§4.2）：

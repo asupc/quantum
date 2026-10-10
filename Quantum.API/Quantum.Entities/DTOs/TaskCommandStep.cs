@@ -14,6 +14,9 @@ public class TaskCommandStep
     /// </summary>
     public string UserId { get; set; }
 
+    /// <summary>等待步骤所属的消息来源；UserId 仍为登录账号，不再用它独占所有通道的多步骤会话。</summary>
+    public string ActorKey { get; set; }
+
     /// <summary>
     /// 是否还有子任务
     /// </summary>

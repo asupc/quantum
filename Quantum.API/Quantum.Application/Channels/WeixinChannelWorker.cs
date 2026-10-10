@@ -1,3 +1,4 @@
+using Quantum.Entities.Model;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,7 +7,7 @@ using Quantum.Data;
 
 namespace Quantum.Application.Channels;
 
-/// <summary>微信扫码机器人 HTTPS 长轮询；仅唯一启用且已确认私聊账号入站，停止/换绑可取消轮询。</summary>
+/// <summary>微信扫码机器人 HTTPS 长轮询；临时故障复用凭据和游标重连，停止/重新扫码可取消旧轮询。</summary>
 public sealed class WeixinChannelWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopes;
@@ -23,12 +24,12 @@ public sealed class WeixinChannelWorker : BackgroundService
         var backoff = 2;
         while (!stoppingToken.IsCancellationRequested)
         {
-            string accountId = null;
+            ChannelAccountModel account = null;
             try
             {
                 using var scope = _scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
-                var account = await db.ChannelAccounts.AsNoTracking()
+                account = await db.ChannelAccounts.AsNoTracking()
                     .FirstOrDefaultAsync(x => x.Platform == ChannelManagementService.Weixin &&
                         x.Enabled, stoppingToken);
                 if (account?.CredentialCiphertext is not { Length: > 0 })
@@ -36,9 +37,8 @@ public sealed class WeixinChannelWorker : BackgroundService
                     await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
                     continue;
                 }
-                accountId = account.Id;
                 var protector = scope.ServiceProvider.GetRequiredService<ChannelSecretProtector>();
-                using var credentials = JsonDocument.Parse(protector.Unprotect(account.CredentialCiphertext, account.Id, "weixin-credentials"));
+                using var credentials = JsonDocument.Parse(protector.UnprotectCredential(account.CredentialCiphertext, account.Id, "weixin-credentials"));
                 var botToken = QqChannelClient.Text(credentials.RootElement, "BotToken");
                 var apiRoot = QqChannelClient.Text(credentials.RootElement, "ApiBase");
                 string version, channelVersion;
@@ -54,8 +54,7 @@ public sealed class WeixinChannelWorker : BackgroundService
                     throw new ChannelProtocolException("WEIXIN_CREDENTIAL_INVALID");
                 ChannelNetwork.WeixinUri("", apiRoot); // 启动前校验地址，失败不带令牌请求。
                 await PollAsync(account.Id, account.BotId, account.BindingVersion, account.CredentialCiphertext,
-                    botToken, apiRoot, version, channelVersion, protector, stoppingToken);
-                backoff = 2;
+                    botToken, apiRoot, version, channelVersion, protector, () => backoff = 2, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (OperationCanceledException)
@@ -67,8 +66,9 @@ public sealed class WeixinChannelWorker : BackgroundService
                 var code = error is ChannelProtocolException protocol ? protocol.ErrorCode : "WEIXIN_POLL_ERROR";
                 try
                 {
-                    await SetErrorAsync(accountId, code, stoppingToken);
-                    if (code is "WEIXIN_SESSION_EXPIRED") await DisableAsync(accountId, stoppingToken);
+                    using var scope = _scopes.CreateScope();
+                    await UpdateConnectionErrorAsync(scope.ServiceProvider.GetRequiredService<IQuantumDbContext>(),
+                        account, code, stoppingToken);
                 }
                 catch { /* DB 异常不得影响 App/QQ 通道；下轮重试。 */ }
                 try { await Task.Delay(TimeSpan.FromSeconds(backoff + Random.Shared.Next(0, 3)), stoppingToken); }
@@ -80,7 +80,7 @@ public sealed class WeixinChannelWorker : BackgroundService
 
     private async Task PollAsync(string accountId, string botId, int versionId, string encryptedCredential,
         string token, string apiRoot, string clientVersion, string channelVersion,
-        ChannelSecretProtector protector, CancellationToken ct)
+        ChannelSecretProtector protector, Action healthy, CancellationToken ct)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var guard = WatchAccountAsync(accountId, versionId, encryptedCredential, linked, linked.Token);
@@ -111,7 +111,7 @@ public sealed class WeixinChannelWorker : BackgroundService
                 EnsurePollAccepted(response);
                 if (!errorCleared)
                 {
-                    await ClearErrorAsync(accountId, linked.Token);
+                    await ClearErrorAsync(accountId, versionId, encryptedCredential, linked.Token);
                     errorCleared = true;
                 }
                 var list = QqChannelClient.Field(response, "msgs");
@@ -130,6 +130,7 @@ public sealed class WeixinChannelWorker : BackgroundService
                         .AcceptBatchAsync(accountId, ChannelManagementService.Weixin, batch,
                             cursor: string.IsNullOrEmpty(next) ? null : next, ct: linked.Token);
                 if (!string.IsNullOrEmpty(next)) cursor = next;
+                healthy();
             }
         }
         finally
@@ -214,43 +215,47 @@ public sealed class WeixinChannelWorker : BackgroundService
     private async Task WatchAccountAsync(string accountId, int version, string credential,
         CancellationTokenSource linked, CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        try
         {
-            await Task.Delay(TimeSpan.FromSeconds(3), ct);
-            using var scope = _scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
-            var account = await db.ChannelAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == accountId, ct);
-            if (account is null || !account.Enabled ||
-                account.BindingVersion != version || account.CredentialCiphertext != credential)
+            while (!ct.IsCancellationRequested)
             {
-                linked.Cancel();
-                return;
+                await Task.Delay(TimeSpan.FromSeconds(3), ct);
+                using var scope = _scopes.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
+                var account = await db.ChannelAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == accountId, ct);
+                if (account is null || !account.Enabled ||
+                    account.BindingVersion != version || account.CredentialCiphertext != credential)
+                {
+                    linked.Cancel();
+                    return;
+                }
             }
+        }
+        catch
+        {
+            linked.Cancel(); // 数据库检测任务异常也要唤醒本轮长轮询，而不是留下孤儿任务。
+            throw;
         }
     }
 
-    private async Task ClearErrorAsync(string accountId, CancellationToken ct)
+    private async Task ClearErrorAsync(string accountId, int version, string credential, CancellationToken ct)
     {
         using var scope = _scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
-        await db.ChannelAccounts.Where(x => x.Id == accountId && x.LastErrorCode != null)
+        await db.ChannelAccounts.Where(x => x.Id == accountId && x.BindingVersion == version &&
+            x.CredentialCiphertext == credential && x.Enabled && x.LastErrorCode != null)
             .ExecuteUpdateAsync(x => x.SetProperty(a => a.LastErrorCode, (string)null), ct);
     }
 
-    private async Task SetErrorAsync(string accountId, string code, CancellationToken ct)
+    /// <summary>只有平台明确返回 -14 才停用；瞬断/超时保留凭据。旧会话不能停用刚扫码的新会话。</summary>
+    internal static async Task UpdateConnectionErrorAsync(IQuantumDbContext db, ChannelAccountModel account,
+        string code, CancellationToken ct)
     {
-        if (accountId is null || ct.IsCancellationRequested) return;
-        using var scope = _scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
-        await db.ChannelAccounts.Where(x => x.Id == accountId)
-            .ExecuteUpdateAsync(x => x.SetProperty(a => a.LastErrorCode, code[..Math.Min(code.Length, 128)]), ct);
-    }
-
-    private async Task DisableAsync(string accountId, CancellationToken ct)
-    {
-        if (accountId is null || ct.IsCancellationRequested) return;
-        using var scope = _scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
-        await db.ChannelAccounts.Where(x => x.Id == accountId).ExecuteUpdateAsync(x => x.SetProperty(a => a.Enabled, false), ct);
+        if (account is null || ct.IsCancellationRequested) return;
+        var expired = code == "WEIXIN_SESSION_EXPIRED";
+        await db.ChannelAccounts.Where(x => x.Id == account.Id && x.Enabled &&
+            x.BindingVersion == account.BindingVersion && x.CredentialCiphertext == account.CredentialCiphertext)
+            .ExecuteUpdateAsync(x => x.SetProperty(a => a.LastErrorCode, code[..Math.Min(code.Length, 128)])
+                .SetProperty(a => a.Enabled, a => expired ? false : a.Enabled), ct);
     }
 }

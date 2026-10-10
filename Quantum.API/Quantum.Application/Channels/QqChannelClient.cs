@@ -37,6 +37,16 @@ public sealed class QqChannelClient
         finally { _tokenGate.Release(); }
     }
 
+    internal async Task InvalidateTokenAsync(string access, CancellationToken ct)
+    {
+        await _tokenGate.WaitAsync(ct);
+        try
+        {
+            if (_token == access) _token = null;
+        }
+        finally { _tokenGate.Release(); }
+    }
+
     /// <summary>QQ 官方令牌接口的 expires_in 是十进制字符串；兼容历史数字响应，拒绝无效时长。</summary>
     internal static (string Access, int Ttl) ParseTokenResponse(JsonElement result)
     {

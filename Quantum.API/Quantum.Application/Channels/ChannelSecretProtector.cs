@@ -113,6 +113,16 @@ public sealed class ChannelSecretProtector
         }
     }
 
+    /// <summary>后台连接只上报脱敏错误码，避免将主密钥变化误报为网络故障或平台掉登录。</summary>
+    internal string UnprotectCredential(string ciphertext, string accountId, string purpose)
+    {
+        try { return Unprotect(ciphertext, accountId, purpose); }
+        catch (BusinessException)
+        {
+            throw new ChannelProtocolException(Available ? "CHANNEL_CREDENTIAL_UNREADABLE" : "CHANNEL_KEY_UNAVAILABLE");
+        }
+    }
+
     public string HashChallenge(string accountId, string code)
         => Convert.ToHexString(HMACSHA256.HashData(Key, Encoding.UTF8.GetBytes("challenge:" + accountId + ":" + code)));
 

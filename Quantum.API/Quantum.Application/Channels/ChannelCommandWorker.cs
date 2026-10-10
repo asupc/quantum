@@ -66,10 +66,10 @@ public sealed class ChannelCommandWorker(IServiceScopeFactory scopes, ILogger<Ch
                         message = item.Content,
                         message_id = item.Id,
                         SessionKey = "channel:" + account.Platform.ToLowerInvariant(),
-                        ChannelReplyRouteId = route.Id
+                        ChannelReplyRouteId = route.Id,
+                        ChannelActorKey = ResolveActorKey(account, item.PeerId)
                     };
-                    using (ChannelReplyContext.Use(route.Id))
-                        await scope.ServiceProvider.GetRequiredService<MessageProcess>().MessageAsync(message);
+                    await scope.ServiceProvider.GetRequiredService<MessageProcess>().MessageAsync(message);
                     await FinishAsync(db, item.Id, "Processed", stoppingToken);
                 }
                 catch
@@ -85,6 +85,10 @@ public sealed class ChannelCommandWorker(IServiceScopeFactory scopes, ILogger<Ch
             }
         }
     }
+
+    /// <summary>同一私聊的后续消息复用等待步骤；换平台、换发件人或账户版本变化必须隔离。</summary>
+    internal static string ResolveActorKey(ChannelAccountModel account, string peerId)
+        => $"channel:{account.Platform}:{account.Id}:{account.BindingVersion}:{peerId}";
 
     internal static async Task CleanupLegacyAsync(IQuantumDbContext db, CancellationToken ct)
     {

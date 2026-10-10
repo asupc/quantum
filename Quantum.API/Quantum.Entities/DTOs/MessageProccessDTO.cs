@@ -52,7 +52,14 @@ public class MessageProccessDTO
     public string TargetTaskId { get; set; }
 
     /// <summary>平台私聊本次原路回复 ID，只能由入站工作器赋值，不接受 HTTP 客户端输入。</summary>
+    [System.Runtime.Serialization.IgnoreDataMember]
+    [System.Text.Json.Serialization.JsonIgnore]
     public string ChannelReplyRouteId { get; set; }
+
+    /// <summary>平台账户/版本/私聊发件人的稳定归属键；与每条消息变化的回复路由分离，仅由工作器赋值。</summary>
+    [System.Runtime.Serialization.IgnoreDataMember]
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ChannelActorKey { get; set; }
 
     /// <summary>
     /// 结构化富交互载荷（JSON，可空）：随队列透传到 t_chat_message.Payload（可点选项/视频封面）
@@ -60,8 +67,8 @@ public class MessageProccessDTO
     public string Payload { get; set; }
 
     /// <summary>
-    /// 手写出站克隆：与 JSON 深拷贝语义等价——本 DTO 字段全部为 string/值类型，无可变引用成员。
-    /// 替代 JsonConvert 序列化+反序列化的整体克隆（每条出站消息一次反射双份分配）。
+    /// 手写出站克隆：字段全部为 string/值类型，无可变引用成员；同时保留不参与 JSON 序列化的受信来源元数据。
+    /// 避免每条出站消息经序列化+反序列化产生反射与双份分配。
     /// </summary>
     public MessageProccessDTO Clone()
     {
@@ -79,6 +86,7 @@ public class MessageProccessDTO
             SessionKey = SessionKey,
             TargetTaskId = TargetTaskId,
             ChannelReplyRouteId = ChannelReplyRouteId,
+            ChannelActorKey = ChannelActorKey,
             Payload = Payload
         };
     }

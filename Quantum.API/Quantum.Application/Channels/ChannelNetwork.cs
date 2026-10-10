@@ -11,19 +11,23 @@ namespace Quantum.Application.Channels;
 /// <summary>QQ/微信专用网络边界：固定域名、禁止代理/重定向、公网 DNS 全量校验后按 IP 直连。</summary>
 public sealed class ChannelNetwork : IDisposable
 {
-    private readonly SocketsHttpHandler _handler;
+    private readonly HttpMessageHandler _handler;
+    private readonly TimeSpan _requestTimeout;
     private readonly HttpClient _http;
     public HttpMessageInvoker WebSocketInvoker { get; }
 
-    public ChannelNetwork()
+    public ChannelNetwork() : this(new SocketsHttpHandler
     {
-        _handler = new SocketsHttpHandler
-        {
-            UseProxy = false, UseCookies = false, AllowAutoRedirect = false,
-            MaxConnectionsPerServer = 4, PooledConnectionLifetime = TimeSpan.FromMinutes(2),
-            ConnectCallback = ConnectAsync
-        };
-        _http = new HttpClient(_handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(65) };
+        UseProxy = false, UseCookies = false, AllowAutoRedirect = false,
+        MaxConnectionsPerServer = 4, PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        ConnectTimeout = TimeSpan.FromSeconds(20), ConnectCallback = ConnectAsync
+    }, TimeSpan.FromSeconds(65)) { }
+
+    internal ChannelNetwork(HttpMessageHandler handler, TimeSpan requestTimeout)
+    {
+        _handler = handler;
+        _requestTimeout = requestTimeout;
+        _http = new HttpClient(_handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
         WebSocketInvoker = new HttpMessageInvoker(_handler, disposeHandler: false);
     }
 
@@ -98,24 +102,32 @@ public sealed class ChannelNetwork : IDisposable
     private async Task<JsonElement> SendAsync(HttpRequestMessage request, CancellationToken ct, bool readErrorBody = false)
     {
         if (!AllowedUri(request.RequestUri)) throw new BusinessException("通道目标地址不在平台 HTTPS 白名单内");
+        // ResponseHeadersRead 下 HttpClient.Timeout 不覆盖响应体；必须给完整长轮询设截止时间。
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(_requestTimeout);
+        var requestToken = timeout.Token;
         try
         {
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestToken);
             var status = (int)response.StatusCode;
             // 飞书设备码端点在 authorization_pending 等等待态返回 4xx 但 body 仍是 JSON（error=...），
             // readErrorBody 即为该协议形态准备：错误状态也解析 body，body 不是 JSON 再按状态码上报。
             if (!response.IsSuccessStatusCode && !readErrorBody) throw new ChannelProtocolException("HTTP_" + status);
             try
             {
-                await response.Content.LoadIntoBufferAsync(512 * 1024, ct);
-                await using var stream = await response.Content.ReadAsStreamAsync(ct);
-                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+                await response.Content.LoadIntoBufferAsync(512 * 1024, requestToken);
+                await using var stream = await response.Content.ReadAsStreamAsync(requestToken);
+                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: requestToken);
                 return document.RootElement.Clone();
             }
             catch (JsonException) when (!response.IsSuccessStatusCode)
             {
                 throw new ChannelProtocolException("HTTP_" + status);
             }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new ChannelProtocolException("NETWORK_TIMEOUT");
         }
         catch (HttpRequestException) { throw new ChannelProtocolException("NETWORK_ERROR"); }
         catch (JsonException) { throw new ChannelProtocolException("INVALID_JSON"); }

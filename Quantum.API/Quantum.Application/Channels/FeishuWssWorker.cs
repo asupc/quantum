@@ -24,12 +24,26 @@ public sealed class FeishuWssWorker : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly ChannelNetwork _network;
     private readonly FeishuChannelClient _client;
+    private readonly Func<Uri, CancellationToken, Task<WebSocket>> _connect;
 
     public FeishuWssWorker(IServiceScopeFactory scopes, ChannelNetwork network, FeishuChannelClient client)
+        : this(scopes, network, client, null) { }
+
+    internal FeishuWssWorker(IServiceScopeFactory scopes, ChannelNetwork network, FeishuChannelClient client,
+        Func<Uri, CancellationToken, Task<WebSocket>> connect)
     {
         _scopes = scopes;
         _network = network;
         _client = client;
+        _connect = connect ?? ConnectAsync;
+    }
+
+    private async Task<WebSocket> ConnectAsync(Uri endpoint, CancellationToken ct)
+    {
+        var ws = new ClientWebSocket();
+        ws.Options.KeepAliveInterval = Timeout.InfiniteTimeSpan;
+        try { await ws.ConnectAsync(endpoint, _network.WebSocketInvoker, ct); return ws; }
+        catch { ws.Dispose(); throw; }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -37,34 +51,33 @@ public sealed class FeishuWssWorker : BackgroundService
         var backoff = 2;
         while (!stoppingToken.IsCancellationRequested)
         {
-            string accountId = null;
+            ChannelAccountModel account = null;
             try
             {
                 using var scope = _scopes.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
-                var account = await db.ChannelAccounts.AsNoTracking()
+                account = await db.ChannelAccounts.AsNoTracking()
                     .FirstOrDefaultAsync(x => x.Platform == ChannelManagementService.Feishu && x.Enabled, stoppingToken);
                 if (account?.CredentialCiphertext is not { Length: > 0 })
                 {
                     await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
                     continue;
                 }
-                accountId = account.Id;
                 var protector = scope.ServiceProvider.GetRequiredService<ChannelSecretProtector>();
                 using var credentials = JsonDocument.Parse(
-                    protector.Unprotect(account.CredentialCiphertext, account.Id, "feishu-credentials"));
+                    protector.UnprotectCredential(account.CredentialCiphertext, account.Id, "feishu-credentials"));
                 var appId = FeishuChannelClient.Text(credentials.RootElement, "AppId");
                 var appSecret = FeishuChannelClient.Text(credentials.RootElement, "AppSecret");
                 if (string.IsNullOrWhiteSpace(appId) || string.IsNullOrWhiteSpace(appSecret))
                     throw new ChannelProtocolException("FEISHU_CREDENTIAL_INVALID");
-                await RunSessionAsync(account, appId, appSecret, stoppingToken);
-                backoff = 2;
+                await RunSessionAsync(account, appId, appSecret,
+                    seconds => backoff = Math.Clamp(seconds, 1, 300), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception error)
             {
                 // 不写正文/凭据到日志；保留协议错误码定位到具体环节（取地址/鉴权/建连/帧），下一轮退避后重试
-                await SafeSetErrorAsync(accountId,
+                await SafeSetErrorAsync(account,
                     error is ChannelProtocolException p ? p.ErrorCode : "FEISHU_WSS_ERROR", stoppingToken);
                 try { await Task.Delay(TimeSpan.FromSeconds(backoff + Random.Shared.Next(0, 3)), stoppingToken); }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
@@ -73,37 +86,79 @@ public sealed class FeishuWssWorker : BackgroundService
         }
     }
 
-    private async Task RunSessionAsync(ChannelAccountModel account, string appId, string appSecret, CancellationToken ct)
+    private async Task RunSessionAsync(ChannelAccountModel account, string appId, string appSecret,
+        Action<int> connected, CancellationToken ct)
     {
         var (url, pingSeconds, reconnectSeconds) = await _client.WssEndpointAsync(appId, appSecret, ct);
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var endpoint) || endpoint.Scheme != "wss")
-            throw new ChannelProtocolException("FEISHU_WS_URL_DENIED");
-
-        using var ws = new ClientWebSocket();
-        ws.Options.Proxy = null; // 通道出站固定官方域名，不走代理
+        var endpoint = ValidateEndpoint(url);
+        var serviceId = ServiceId(endpoint);
+        WebSocket socket;
+        using (var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            connectTimeout.CancelAfter(TimeSpan.FromSeconds(20));
+            try { socket = await _connect(endpoint, connectTimeout.Token); }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            { throw new ChannelProtocolException("FEISHU_CONNECT_TIMEOUT"); }
+        }
+        using var ws = socket;
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var guard = WatchAccountAsync(account.Id, account.BindingVersion, account.CredentialCiphertext, ws, linked.Token);
-        var pong = new SemaphoreSlim(0, 1);
+        using var sendGate = new SemaphoreSlim(1, 1);
+        using var pong = new SemaphoreSlim(0, 1);
+        Task guard = null, receive = null, keepAlive = null;
         try
         {
-            await ws.ConnectAsync(endpoint, linked.Token);
-            // 建连即视为恢复正常：错误码只在真正连不上时保留，否则管理页会一直挂着「连接异常」
-            await ClearErrorAsync(account.Id, linked.Token);
-            var keepAlive = KeepAliveAsync(ws, linked.Token, TimeSpan.FromSeconds(pingSeconds));
-            var receive = ReceiveLoopAsync(ws, account.Id, appId, appSecret, linked.Token, reconnectSeconds);
-            await Task.WhenAny(receive, keepAlive);
+            await ClearErrorAsync(account, linked.Token);
+            connected(reconnectSeconds);
+            guard = WatchAccountAsync(account.Id, account.BindingVersion, account.CredentialCiphertext, ws, linked.Token);
+            receive = ReceiveLoopAsync(ws, sendGate, pong, account, appId, linked.Token);
+            keepAlive = KeepAliveAsync(ws, sendGate, pong, serviceId, TimeSpan.FromSeconds(pingSeconds), linked.Token);
+            await AwaitSessionAsync(linked, ws.Abort, receive, keepAlive, guard);
         }
         finally
         {
             linked.Cancel();
-            try { ws.Abort(); } catch { /* 已断开 */ }
-            try { await guard; } catch (OperationCanceledException) { }
+            ws.Abort();
+        }
+    }
+
+    internal static Uri ValidateEndpoint(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var endpoint) || endpoint.Scheme != "wss" ||
+            endpoint.Port != 443 || !ChannelNetwork.IsFeishuHost(endpoint.Host) || !string.IsNullOrEmpty(endpoint.UserInfo))
+            throw new ChannelProtocolException("FEISHU_WS_URL_DENIED");
+        return endpoint;
+    }
+
+    internal static int ServiceId(Uri endpoint)
+    {
+        foreach (var part in endpoint.Query.TrimStart('?').Split('&'))
+        {
+            var pair = part.Split('=', 2);
+            if (pair.Length == 2 && pair[0] == "service_id" &&
+                int.TryParse(Uri.UnescapeDataString(pair[1]), out var id) && id >= 0) return id;
+        }
+        throw new ChannelProtocolException("FEISHU_WS_SERVICE_ID_MISSING");
+    }
+
+    /// <summary>必须观察先结束任务的异常；取消并等待其余任务，避免孤儿收发占住旧连接。</summary>
+    internal static async Task AwaitSessionAsync(CancellationTokenSource linked, Action abort, params Task[] tasks)
+    {
+        try { await await Task.WhenAny(tasks); }
+        finally
+        {
+            linked.Cancel();
+            abort();
+            foreach (var task in tasks)
+            {
+                try { await task; }
+                catch { /* 原始故障由先结束任务传播；清理时仅观察其它任务的异常。 */ }
+            }
         }
     }
 
     /// <summary>接收循环：控制帧回 Pong，数据帧按事件类型分发。响应帧必须尽快回，3 秒是飞书的硬时限。</summary>
-    private async Task ReceiveLoopAsync(ClientWebSocket ws, string accountId, string appId, string appSecret,
-        CancellationToken ct, int reconnectSeconds)
+    private async Task ReceiveLoopAsync(WebSocket ws, SemaphoreSlim sendGate, SemaphoreSlim pong,
+        ChannelAccountModel account, string appId, CancellationToken ct)
     {
         var buffer = new byte[64 * 1024];
         while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
@@ -113,7 +168,8 @@ public sealed class FeishuWssWorker : BackgroundService
             do
             {
                 received = await ws.ReceiveAsync(buffer, ct);
-                if (received.MessageType == WebSocketMessageType.Close) return;
+                if (received.MessageType == WebSocketMessageType.Close)
+                    throw new ChannelProtocolException("FEISHU_CONNECTION_CLOSED");
                 message.Write(buffer, 0, received.Count);
                 // 单条事件上限 8MB：超过即判为异常流并断开，避免被单个畸形帧撑爆内存
                 if (message.Length > 8 * 1024 * 1024) throw new ChannelProtocolException("FEISHU_FRAME_TOO_LARGE");
@@ -126,17 +182,21 @@ public sealed class FeishuWssWorker : BackgroundService
             var type = frame.Header("type");
             if (type == "ping")
             {
-                await SendFrameAsync(ws, Pong(frame), ct);
+                await SendFrameAsync(ws, sendGate, Pong(frame), ct);
                 continue;
             }
-            if (type == "pong" || string.IsNullOrEmpty(frame.PayloadText)) continue;
+            if (type == "pong")
+            {
+                try { pong.Release(); } catch (SemaphoreFullException) { /* 重复 Pong 不累计。 */ }
+                continue;
+            }
+            if (string.IsNullOrEmpty(frame.PayloadText)) continue;
 
             // 事件处理异常一律吞掉并留痕：外抛会让飞书重试，重复投递比丢一条更糟
-            try { await DispatchAsync(accountId, appId, frame, ct); }
+            try { await DispatchAsync(account.Id, appId, frame, ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch { await SafeSetErrorAsync(accountId, "FEISHU_EVENT_FAILED", ct); }
+            catch { await SafeSetErrorAsync(account, "FEISHU_EVENT_FAILED", ct); }
 
-            if (reconnectSeconds > 0) { /* 保留参数：后续可按服务端下发值做差异化重连策略 */ }
         }
     }
 
@@ -162,9 +222,10 @@ public sealed class FeishuWssWorker : BackgroundService
         await inbox.AcceptBatchAsync(accountId, ChannelManagementService.Feishu, [incoming], null, null, null, ct);
     }
 
-    private static FeishuFrame Pong(FeishuFrame ping) => new()
+    internal static FeishuFrame Pong(FeishuFrame ping) => new()
     {
         SeqId = ping.SeqId,
+        Service = ping.Service,
         Method = FeishuFrame.MethodControl,
         Headers = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -173,23 +234,46 @@ public sealed class FeishuWssWorker : BackgroundService
         PayloadType = "ping"
     };
 
-    private static async Task SendFrameAsync(ClientWebSocket ws, FeishuFrame frame, CancellationToken ct)
+    internal static FeishuFrame Ping(int serviceId) => new()
     {
+        Service = serviceId,
+        Method = FeishuFrame.MethodControl,
+        Headers = new Dictionary<string, string>(StringComparer.Ordinal) { ["type"] = "ping" }
+    };
+
+    private static async Task SendFrameAsync(WebSocket ws, SemaphoreSlim gate, FeishuFrame frame, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
         var bytes = FeishuFrameCodec.Encode(frame);
-        await ws.SendAsync(bytes, WebSocketMessageType.Binary, true, ct);
+        await gate.WaitAsync(timeout.Token);
+        try { await ws.SendAsync(bytes, WebSocketMessageType.Binary, true, timeout.Token); }
+        finally { gate.Release(); }
     }
 
-    /// <summary>服务端下发的 PingInterval 用来保活；同时兼作连接存活探测。</summary>
-    private static async Task KeepAliveAsync(ClientWebSocket ws, CancellationToken ct, TimeSpan interval)
+    /// <summary>按官方帧协议主动 Ping 并等待 Pong；黑洞连接即使 State=Open 也必须断开重连。</summary>
+    internal static async Task KeepAliveAsync(WebSocket ws, SemaphoreSlim gate, SemaphoreSlim pong,
+        int serviceId, TimeSpan interval, CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        try
         {
-            await Task.Delay(interval, ct);
-            if (ws.State != WebSocketState.Open) return;
+            while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
+            {
+                while (pong.Wait(0)) { }
+                await SendFrameAsync(ws, gate, Ping(serviceId), ct);
+                if (!await pong.WaitAsync(interval, ct))
+                    throw new ChannelProtocolException("FEISHU_HEARTBEAT_TIMEOUT");
+                await Task.Delay(interval, ct);
+            }
+        }
+        catch
+        {
+            ws.Abort();
+            throw;
         }
     }
 
-    private async Task WatchAccountAsync(string accountId, int version, string credential, ClientWebSocket ws, CancellationToken ct)
+    private async Task WatchAccountAsync(string accountId, int version, string credential, WebSocket ws, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -205,28 +289,31 @@ public sealed class FeishuWssWorker : BackgroundService
         }
     }
 
-    private async Task SafeSetErrorAsync(string accountId, string code, CancellationToken ct)
+    private async Task SafeSetErrorAsync(ChannelAccountModel account, string code, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(accountId)) return;
-        await UpdateErrorAsync(accountId, code[..Math.Min(code.Length, 128)], ct);
+        if (account is null) return;
+        await UpdateErrorAsync(account, code[..Math.Min(code.Length, 128)], ct);
     }
 
-    private async Task ClearErrorAsync(string accountId, CancellationToken ct) =>
-        await UpdateErrorAsync(accountId, null, ct);
+    private async Task ClearErrorAsync(ChannelAccountModel account, CancellationToken ct) =>
+        await UpdateErrorAsync(account, null, ct);
 
     /// <summary>DB 不可用不应影响其它通道与主应用，故状态写失败只留待下一轮。</summary>
-    private async Task UpdateErrorAsync(string accountId, string code, CancellationToken ct)
+    private async Task UpdateErrorAsync(ChannelAccountModel account, string code, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(accountId)) return;
+        if (account is null) return;
         try
         {
             using var scope = _scopes.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
             if (code is null)
-                await db.ChannelAccounts.Where(x => x.Id == accountId && x.LastErrorCode != null)
+                await db.ChannelAccounts.Where(x => x.Id == account.Id && x.Enabled &&
+                    x.BindingVersion == account.BindingVersion && x.CredentialCiphertext == account.CredentialCiphertext &&
+                    x.LastErrorCode != null)
                     .ExecuteUpdateAsync(x => x.SetProperty(a => a.LastErrorCode, (string)null), ct);
             else
-                await db.ChannelAccounts.Where(x => x.Id == accountId)
+                await db.ChannelAccounts.Where(x => x.Id == account.Id && x.Enabled &&
+                    x.BindingVersion == account.BindingVersion && x.CredentialCiphertext == account.CredentialCiphertext)
                     .ExecuteUpdateAsync(x => x.SetProperty(a => a.LastErrorCode, code), ct);
         }
         catch { /* 下轮重试 */ }
