@@ -74,7 +74,7 @@ public class ScriptTaskSeederTests
             File.WriteAllText(Path.Combine(source, "a.cs"), ValidScript);
             File.WriteAllText(Path.Combine(source, "b.cs"), "public class Broken {");
 
-            Assert.Throws<InvalidOperationException>(() => ScriptTaskSeeder.Seed(connectionAndDb.Db, source, runtime));
+            Assert.Throws<Quantum.Utils.BusinessException>(() => ScriptTaskSeeder.Seed(connectionAndDb.Db, source, runtime));
 
             Assert.Empty(connectionAndDb.Db.Tasks.Local);
             Assert.False(Directory.Exists(runtime));

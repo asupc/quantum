@@ -119,11 +119,15 @@ public class AppSessionViewTests : IDisposable
     }
 
     [Fact]
-    public async Task SessionsAsync_EmptyTable_ReturnsEmptyWithZeroCursor()
+    public async Task SessionsAsync_EmptyTable_ReturnsDefaultSessionWithZeroCursor()
     {
+        // 默认会话恒在（2026-10-10）：全新库零消息时列表只有默认会话（空会话形态），游标 0
         var (sessions, maxSeq) = await _service.SessionsAsync(null);
 
-        Assert.Empty(sessions);
+        var defaultSession = Assert.Single(sessions);
+        Assert.Equal("", defaultSession.SessionKey);
+        Assert.Equal(0, defaultSession.Total);
+        Assert.Null(defaultSession.Last);
         Assert.Equal(0, maxSeq);
     }
 

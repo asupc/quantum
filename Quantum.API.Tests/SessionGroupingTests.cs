@@ -190,6 +190,135 @@ public class SessionGroupingTests : IDisposable
         Assert.Equal("t-weather", Assert.Single(candidates).Id);
     }
 
+    // ==================================================================== 会话内省略指令词（⑤级，2026-10-10）
+
+    [Fact]
+    public void SelectTaskCandidates_BareMessage_SessionUniqueCommandTask_TriggersImplicit()
+    {
+        // 会话「电影港」两个脚本：一个带触发指令、一个无指令（纯定时）——
+        // 裸消息「西游记」视为省略指令词的「电影港搜索 西游记」，只落到带指令的那个
+        var search = NewTask("t-search", "^电影港搜索.*|^[0-9,，\\s]+$", sessionName: "电影港");
+        var watch = NewTask("t-watch", null, sessionName: "电影港");
+        var process = new MessageProcess();
+
+        var candidates = MessageProcess.SelectTaskCandidates([search, watch],
+            new MessageProccessDTO { message = "西游记", SessionKey = "电影港", CommunicationType = CommunicationType.App },
+            process.commandReg);
+
+        Assert.Equal("t-search", Assert.Single(candidates).Id);
+        // 等价性：拼回的完整指令文本与手打全指令走同一 matcher 口径
+        var full = MessageProcess.TryBuildImplicitCommandText(search.Command, search.EnableRegex, "西游记");
+        Assert.Equal("电影港搜索 西游记", full);
+        Assert.True(process.commandReg(search.Command, full, search.EnableRegex));
+    }
+
+    [Fact]
+    public void SelectTaskCandidates_BareMessage_NonRegexCommand_UsesLiteralWord()
+    {
+        // 非正则指令：指令词就是指令字面量本身
+        var help = new TaskModel { Id = "t-help", Name = "t-help", Command = "帮助", EnableRegex = false, Enable = true, SessionName = "帮助台" };
+        var process = new MessageProcess();
+
+        var candidates = MessageProcess.SelectTaskCandidates([help],
+            new MessageProccessDTO { message = "怎么用", SessionKey = "帮助台", CommunicationType = CommunicationType.App },
+            process.commandReg);
+
+        Assert.Equal("t-help", Assert.Single(candidates).Id);
+        Assert.Equal("帮助 怎么用", MessageProcess.TryBuildImplicitCommandText(help.Command, help.EnableRegex, "怎么用"));
+    }
+
+    [Fact]
+    public void SelectTaskCandidates_BareMessage_GroupWithTwoCommandTasks_NoImplicit()
+    {
+        // 组内两个带指令任务无法判定指哪个：不触发，维持现状
+        var movie = NewTask("t-movie", "^电影港搜索.*", sessionName: "媒体");
+        var music = NewTask("t-music", "^音乐搜索.*", sessionName: "媒体");
+        var process = new MessageProcess();
+
+        var candidates = MessageProcess.SelectTaskCandidates([movie, music],
+            new MessageProccessDTO { message = "西游记", SessionKey = "媒体", CommunicationType = CommunicationType.App },
+            process.commandReg);
+
+        Assert.Empty(candidates);
+    }
+
+    [Fact]
+    public void SelectTaskCandidates_BareMessage_WithoutSessionKeyOrUnknownGroup_NoImplicit()
+    {
+        // 默认会话（无会话键）/ 会话键不指向任何任务组：任意文本不得误触脚本
+        var search = NewTask("t-search", "^电影港搜索.*", sessionName: "电影港");
+        var process = new MessageProcess();
+        var bare = new MessageProccessDTO { message = "西游记", CommunicationType = CommunicationType.App };
+
+        Assert.Empty(MessageProcess.SelectTaskCandidates([search], bare, process.commandReg));
+
+        bare.SessionKey = "不存在的会话";
+        Assert.Empty(MessageProcess.SelectTaskCandidates([search], bare, process.commandReg));
+    }
+
+    [Fact]
+    public void SelectTaskCandidates_BareMessage_BotSourceOrPickReply_NoImplicit()
+    {
+        // 机器人单线程会话没有「指定会话」语义、点选代发 reply 是任意文本：两者都不走省略指令词
+        var search = NewTask("t-search", "^电影港搜索.*", sessionName: "电影港");
+        var process = new MessageProcess();
+
+        var bot = new MessageProccessDTO
+        {
+            message = "西游记", SessionKey = "电影港", CommunicationType = CommunicationType.App,
+            ChannelReplyRouteId = "bot-route"
+        };
+        Assert.Empty(MessageProcess.SelectTaskCandidates([search], bot, process.commandReg));
+
+        var pick = new MessageProccessDTO
+        {
+            message = "订阅本片", SessionKey = "电影港", CommunicationType = CommunicationType.App, TargetTaskId = "t-search"
+        };
+        Assert.Empty(MessageProcess.SelectTaskCandidates([search], pick, process.commandReg));
+    }
+
+    [Fact]
+    public void SelectTaskCandidates_BareMessage_ExplicitMatchStillWins()
+    {
+        // 显式命中永远优先：会话内回复资源ID「45148」按原正则分支触发，不拼指令词
+        var search = NewTask("t-search", "^电影港搜索.*|^[0-9,，\\s]+$", sessionName: "电影港");
+        var watch = NewTask("t-watch", null, sessionName: "电影港");
+        var process = new MessageProcess();
+
+        var candidates = MessageProcess.SelectTaskCandidates([search, watch],
+            new MessageProccessDTO { message = "45148", SessionKey = "电影港", CommunicationType = CommunicationType.App },
+            process.commandReg);
+
+        Assert.Equal("t-search", Assert.Single(candidates).Id);
+    }
+
+    [Fact]
+    public void SelectTaskCandidates_BareMessage_ImplicitRejectedWhenFullTextFailsPattern()
+    {
+        // 指令是精确形态（^电影港搜索$）：拼回「电影港搜索 西游记」过不了 matcher，等价于手打也不会触发
+        var exact = NewTask("t-exact", "^电影港搜索$", sessionName: "电影港");
+        var process = new MessageProcess();
+
+        var candidates = MessageProcess.SelectTaskCandidates([exact],
+            new MessageProccessDTO { message = "西游记", SessionKey = "电影港", CommunicationType = CommunicationType.App },
+            process.commandReg);
+
+        Assert.Empty(candidates);
+    }
+
+    [Fact]
+    public void TryBuildImplicitCommandText_ExtractsLeadingLiteralOrReturnsNull()
+    {
+        // 正则取首个分支的前导字面量（剥 ^ 与内联组）；提不出字面量 → null（不支持省略指令词）
+        Assert.Equal("音乐搜索 凡人",
+            MessageProcess.TryBuildImplicitCommandText("^音乐搜索.*|^[0-9,，\\s]+$|^保存[\\d,，\\s]+$", true, "凡人"));
+        Assert.Equal("电影港搜索 西游记",
+            MessageProcess.TryBuildImplicitCommandText("(?i)^电影港搜索.*", true, "西游记"));
+        Assert.Null(MessageProcess.TryBuildImplicitCommandText("^[0-9]+$", true, "西游记"));
+        Assert.Null(MessageProcess.TryBuildImplicitCommandText("", true, "西游记"));
+        Assert.Null(MessageProcess.TryBuildImplicitCommandText("^电影港搜索.*", true, "  "));
+    }
+
     // ==================================================================== 会话名校验
 
     [Fact]

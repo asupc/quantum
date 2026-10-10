@@ -164,10 +164,34 @@ public class SystemConfigHelperTests : IDisposable
         Assert.True(root.TryGetProperty("Quantum", out var quantum));
         Assert.True(root.TryGetProperty("Logging", out _));
         Assert.True(root.TryGetProperty("AllowedHosts", out _));
-        // 必填项已回填（Consts 刷新在测试装配内被 ModuleInitializer 关闭，此处不断言全局态）
-        Assert.False(string.IsNullOrEmpty(setting.PassWord));
+        // 首次部署语义（2026-10-10 初始化向导）：登录凭据刻意留空并标记未初始化，
+        // 由 Web 初始化向导引导用户自建；机器侧密钥仍自动生成（Consts 刷新在测试装配内关闭，不断言全局态）
+        Assert.True(SystemConfigHelper.NeedSetup(setting), "缺配置自动生成 = 待初始化向导");
+        Assert.Equal(false, setting.SetupCompleted);
+        Assert.True(string.IsNullOrEmpty(setting.PassWord));
+        Assert.True(string.IsNullOrEmpty(setting.UserName));
         Assert.False(string.IsNullOrEmpty(setting.SymmetricSecurityKey));
         Assert.True(setting.Port > 0);
+    }
+
+    [Fact]
+    public void NeedSetup_LegacyConfigWithoutMarker_IsTreatedAsInitialized()
+    {
+        // 存量部署（配置里已有账号密码、无 SetupCompleted 键）升级后不得被向导劫持
+        SystemConfigHelper.SetSetting(new Setting { UserName = "legacy-admin", PassWord = "legacy-pass", Port = 5088 });
+
+        var loaded = SystemConfigHelper.GetSetting();
+        Assert.Null(loaded.SetupCompleted);
+        Assert.False(SystemConfigHelper.NeedSetup(loaded));
+    }
+
+    [Fact]
+    public void NeedSetup_EmptyCredentials_TriggersWizard_EvenWithoutMarker()
+    {
+        // appsettings.example.json 留空账号密码 = 主动选择走向导
+        SystemConfigHelper.SetSetting(new Setting { UserName = "", PassWord = "", Port = 5088 });
+
+        Assert.True(SystemConfigHelper.NeedSetup(SystemConfigHelper.GetSetting()));
     }
 
     [Fact]
@@ -246,8 +270,10 @@ public class SystemConfigHelperTests : IDisposable
         Assert.Equal(3, setting.CommandTimeInterval);
         Assert.Equal("SQLite", setting.DBType);
         Assert.False(string.IsNullOrEmpty(setting.DBAddress));
-        Assert.False(string.IsNullOrEmpty(setting.UserName));
-        Assert.False(string.IsNullOrEmpty(setting.PassWord));
+        // 登录凭据不再随机回填（2026-10-10 初始化向导）：留空 = 引导用户走 Web 初始化向导自建账号
+        Assert.True(string.IsNullOrEmpty(setting.UserName));
+        Assert.True(string.IsNullOrEmpty(setting.PassWord));
+        Assert.True(SystemConfigHelper.NeedSetup(setting));
         Assert.False(string.IsNullOrEmpty(setting.SymmetricSecurityKey));
         // 容错回填写回原文件
         using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(SystemConfigHelper.configPath));

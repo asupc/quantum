@@ -4,6 +4,7 @@ using Quantum.Application;
 using Xunit;
 using Quantum.Entities.Model;
 using Quantum.Data;
+using Quantum.Utils;
 
 namespace Quantum.API.Tests;
 
@@ -159,17 +160,103 @@ public class AppMessageServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteSessionAsync_EmptyKeyDeletesDefaultSessionRow_KeepsNullKeyRows()
+    public async Task DeleteSessionAsync_DefaultSession_IsRejected()
     {
-        // 默认会话（会话行键空串 / 消息行 SessionKey null）同语义：删行、留消息
+        // 默认会话不可删除（2026-10-10）：空/null 会话键一律业务异常，会话框与消息行原样保留
         await _service.AppendAsync(ChatMessageDirection.发送, "默认1");
         await _service.AppendAsync(ChatMessageDirection.发送, "任务A消息", "text", sessionKey: "task-a");
 
-        var (deleted, _) = await _service.DeleteSessionAsync(null);
+        await Assert.ThrowsAsync<BusinessException>(() => _service.DeleteSessionAsync(null));
+        await Assert.ThrowsAsync<BusinessException>(() => _service.DeleteSessionAsync(""));
 
-        Assert.True(deleted);
         Assert.Equal(2, await _db.ChatMessages.AsNoTracking().CountAsync());
-        Assert.Null(await _db.ChatSessions.AsNoTracking().SingleOrDefaultAsync(n => n.SessionKey == ""));
+        Assert.True(await _db.ChatSessions.AsNoTracking().AnyAsync(n => n.SessionKey == ""));
+    }
+
+    [Fact]
+    public async Task ClearSessionAsync_DeletesMessageRows_KeepsSessionBox_AndSeqNeverReused()
+    {
+        // 「清空」（2026-10-10）：删消息记录、留会话框；Seq 高水位不回拨，新消息号段不复用
+        await _service.AppendAsync(ChatMessageDirection.发送, "默认1");                       // seq1
+        await _service.AppendAsync(ChatMessageDirection.发送, "默认2");                       // seq2
+        await _service.AppendAsync(ChatMessageDirection.发送, "任务A消息", "text", sessionKey: "task-a"); // seq3
+
+        var (cleared, maxSeq) = await _service.ClearSessionAsync(null);
+
+        Assert.Equal(2, cleared);
+        Assert.Equal(3, maxSeq); // 高水位不随删除回拨
+        Assert.Equal(1, await _db.ChatMessages.AsNoTracking().CountAsync()); // 其他会话消息保留
+        Assert.True(await _db.ChatMessages.AsNoTracking().AnyAsync(n => n.SessionKey == "task-a"));
+        Assert.True(await _db.ChatSessions.AsNoTracking().AnyAsync(n => n.SessionKey == "")); // 会话框保留
+        // 会话框在 overview 里成为空会话（Total=0 / Last=null），不是消失
+        var (sessions, _) = await _service.SessionsAsync(null);
+        var defaultSession = sessions.Single(n => n.SessionKey == "");
+        Assert.Equal(0, defaultSession.Total);
+        Assert.Null(defaultSession.Last);
+
+        // 后续消息 Seq 继续递增：客户端游标（已推进到 3）不会漏收
+        var next = await _service.AppendAsync(ChatMessageDirection.发送, "默认3");
+        Assert.Equal(4, next.Seq);
+        var (synced, _) = await _service.SyncAsync(3);
+        Assert.Equal(["默认3"], synced.Select(n => n.Content));
+    }
+
+    [Fact]
+    public async Task ClearSessionAsync_SessionRowMissing_RecreatesRowWithHighWater()
+    {
+        // 会话行被删除过（删会话留消息）后再清空：补建行承接 Seq 高水位，号段仍不复用
+        await _service.AppendAsync(ChatMessageDirection.发送, "a1", "text", sessionKey: "task-a"); // seq1
+        await _service.AppendAsync(ChatMessageDirection.发送, "a2", "text", sessionKey: "task-a"); // seq2
+        await _service.DeleteSessionAsync("task-a");
+
+        var (cleared, maxSeq) = await _service.ClearSessionAsync("task-a");
+
+        Assert.Equal(2, cleared);
+        Assert.Equal(2, maxSeq);
+        var row = await _db.ChatSessions.AsNoTracking().SingleAsync(n => n.SessionKey == "task-a");
+        Assert.Equal(2, row.LastSeq);
+        var next = await _service.AppendAsync(ChatMessageDirection.发送, "a3", "text", sessionKey: "task-a");
+        Assert.Equal(3, next.Seq);
+    }
+
+    [Fact]
+    public async Task ClearSessionAsync_EmptySession_NoopButKeepsHighWater()
+    {
+        await _service.AppendAsync(ChatMessageDirection.发送, "a1", "text", sessionKey: "task-a"); // seq1
+
+        var (cleared, maxSeq) = await _service.ClearSessionAsync("never-seen");
+
+        Assert.Equal(0, cleared);
+        Assert.Equal(1, maxSeq);
+        // 无消息也无会话行的空清空不凭空建会话框
+        Assert.False(await _db.ChatSessions.AsNoTracking().AnyAsync(n => n.SessionKey == "never-seen"));
+    }
+
+    [Fact]
+    public async Task SessionsAsync_EmptySessions_SinkBelowNonEmpty_EvenWithHighLastSeq()
+    {
+        // 清空后保留的会话框 LastSeq 不回拨（高水位），但空会话仍垫底（对齐 App 端列表排序）
+        await _service.AppendAsync(ChatMessageDirection.发送, "a1", "text", sessionKey: "task-a"); // seq1
+        await _service.AppendAsync(ChatMessageDirection.发送, "默认1");                            // seq2
+        await _service.AppendAsync(ChatMessageDirection.发送, "默认2");                            // seq3
+        await _service.ClearSessionAsync(null); // 默认会话清空：LastSeq 保留 3 > task-a 的 1
+
+        var (sessions, _) = await _service.SessionsAsync(null);
+
+        Assert.Equal(["task-a", ""], sessions.Select(n => n.SessionKey));
+    }
+
+    [Fact]
+    public async Task SessionsAsync_AlwaysContainsDefaultSession_EvenWithoutAnyMessage()
+    {
+        // 默认会话恒在（2026-10-10）：全新库零消息时列表也有默认会话（空会话形态）
+        var (sessions, maxSeq) = await _service.SessionsAsync(null);
+
+        var defaultSession = Assert.Single(sessions);
+        Assert.Equal("", defaultSession.SessionKey);
+        Assert.Equal(0, defaultSession.Total);
+        Assert.Null(defaultSession.Last);
+        Assert.Equal(0, maxSeq);
     }
 
     // ==================================================================== 会话生命周期（2026-09-18 会话分组归并批次）
@@ -234,7 +321,8 @@ public class AppMessageServiceTests : IDisposable
     [Fact]
     public async Task SessionsAsync_EmptySessionRows_SortLastByCreateTimeDesc()
     {
-        // LastSeq=0 的空会话行（从未有消息/仅建行）垫底，按 CreateTime 降序
+        // LastSeq=0 的空会话行（从未有消息/仅建行）垫底，按 CreateTime 降序；
+        // 默认会话行由 EnsureDefaultSessionRowAsync 补建（CreateTime 即建行时刻，与本用例无关，断言时剔除）
         _db.ChatSessions.Add(new ChatSessionModel { SessionKey = "旧空会话", CreateTime = DateTime.Now.AddMinutes(-5), LastSeq = 0 });
         _db.ChatSessions.Add(new ChatSessionModel { SessionKey = "新空会话", CreateTime = DateTime.Now, LastSeq = 0 });
         await _db.SaveChangesAsync();
@@ -242,7 +330,8 @@ public class AppMessageServiceTests : IDisposable
 
         var (sessions, _) = await _service.SessionsAsync(null);
 
-        Assert.Equal(["live", "新空会话", "旧空会话"], sessions.Select(n => n.SessionKey));
+        Assert.Equal(["live", "新空会话", "旧空会话"], sessions.Select(n => n.SessionKey).Where(n => n != "").ToList());
+        Assert.Contains("", sessions.Select(n => n.SessionKey)); // 默认会话恒在
         Assert.Equal(0, sessions.Single(n => n.SessionKey == "新空会话").Total);
         Assert.Null(sessions.Single(n => n.SessionKey == "新空会话").Last);
     }
