@@ -58,11 +58,24 @@ export const SessionsRead = (readSeqs = {}) => {
 };
 
 // 删除会话（session 空 = 默认会话）：只删会话实体（会话数据 + 会话窗口），消息记录（业务真实
-// 产生的数据）服务端保留——消息删除入口只有日志中心；该任务再推送消息时会话自动重建。
+// 产生的数据）服务端保留；该任务再推送消息时会话自动重建。
+// 默认会话（session 空）不可删除：服务端拒绝（业务异常），清理内容走 ClearSession「清空」。
 // 返回 { Deleted, MaxSeq }，MaxSeq 为当前全局最大 Seq（消息不删后号段不复用，回拨 min 为 no-op，兼容保留）
 export const DeleteSession = (session = '') => {
     return axios.request({
         url: '/api/App/session/delete',
+        params: { session },
+        method: 'post',
+        noLoading: true
+    });
+};
+
+// 清空会话（2026-10-10）：删除该会话的消息记录、会话框保留——默认会话不可删除，清空是它
+// 唯一的清理入口（其余会话同样可用）。Seq 号段不复用（高水位保留在会话行）。
+// 返回 { Cleared, MaxSeq }，Cleared 为清空条数，MaxSeq 为当前全局最大 Seq
+export const ClearSession = (session = '') => {
+    return axios.request({
+        url: '/api/App/session/clear',
         params: { session },
         method: 'post',
         noLoading: true

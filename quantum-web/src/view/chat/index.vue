@@ -1,12 +1,13 @@
 <template>
     <div class="chat-page" :class="{ narrow, 'show-room': narrowShowRoom }">
         <ConversationList :sessions="sessions" :task-map="taskMap" :current-key="currentKey"
-            @select="switchSession" @delete="onDeleteSession" />
+            @select="switchSession" @delete="onDeleteSession" @clear="onClearSession" />
 
         <section class="chat-room">
             <ChatHeader :session-key="currentKey" :title="title" :total="currentSession?.Total || 0"
                 :ws-state="wsState" :ws-detail="wsDetail" :task-map="taskMap" :show-back="narrow"
-                @refresh="refresh" @delete="onDeleteCurrentSession" @open-session="switchSession" @back="backToList" />
+                @refresh="refresh" @delete="onDeleteCurrentSession" @clear="onClearCurrentSession"
+                @open-session="switchSession" @back="backToList" />
 
             <MessageList :messages="currentMessages" :latest-options-seq="latestOptionsSeq"
                 :has-more="hasMoreEarlier" :loading-earlier="loadingEarlier" :loading="loadingSession"
@@ -147,6 +148,14 @@ export default {
          *  删除当前会话时右侧停留空视图，任务再推送时自动重建 */
         async onDeleteSession(sessionKey) {
             await this.chatStore.deleteSession(sessionKey)
+        },
+        /** 「清空会话」（2026-10-10）：删聊天记录、会话保留——默认会话唯一的清理入口。
+         *  当前会话被清空时右侧窗口随 store 清空即呈空视图，会话框继续留在列表里 */
+        async onClearSession(sessionKey) {
+            await this.chatStore.clearSession(sessionKey)
+        },
+        async onClearCurrentSession() {
+            await this.chatStore.clearSession(this.chatStore.currentKey)
         },
         async onSend({ content, contentType, contentText }) {
             await this.chatStore.send(content, { contentType, contentText })

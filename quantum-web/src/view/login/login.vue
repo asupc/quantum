@@ -25,6 +25,7 @@ import LoginForm from '_c/login-form'
 import { useUserStore } from '@/stores/user'
 import { GetFooter } from '@/api/setting.js'
 import { QrCreate, QrStatus } from '@/api/user.js'
+import { GetSetupStatus } from '@/api/setup.js'
 
 export default {
     components: {
@@ -102,6 +103,15 @@ export default {
     },
     async mounted() {
         await this.getSystemConfig()
+        // 首次部署未初始化 → 引导进入初始化向导（创建登录账号/选择数据库/勾选自带脚本建任务）
+        try {
+            const status = await GetSetupStatus()
+            if (status && status.NeedSetup) {
+                this.$router.replace({ name: 'setup' }).catch(() => {})
+            }
+        } catch (error) {
+            // 状态查询失败不影响登录页自身展示
+        }
     },
     beforeUnmount() {
         clearInterval(this.QrTimer)

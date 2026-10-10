@@ -3,6 +3,8 @@
  *  - pickOption：点选从载荷根部取 taskId，WS 帧 targetTask / REST 回落 TargetTaskId 两路透传；手打不带
  *  - deleteSession：本地移除会话项 + 清窗口 + 水位归零 + 游标回拨 Math.min(当前, 返回 MaxSeq)
  *    （2026-09-21 日志删除逻辑调整：删除只删会话数据，服务端消息记录保留）
+ *  - 默认会话不可删除 + clearSession 清空（2026-10-10）：默认会话恒在，删除请求本地即拦；
+ *    清空删聊天记录、会话项保留（重置为空会话形态）
  *
  * 现有测试基建为 node 环境（无 DOM），store 的 UI/网络依赖全部模块级 mock：
  * naive-discrete（消息弹窗）、ws（长连接，send 记录到 globalThis.__wsFrames）、
@@ -40,12 +42,13 @@ vi.mock('@/api/app', () => ({
     SessionMessages: vi.fn(),
     MarkRead: vi.fn(),
     DeleteSession: vi.fn(),
+    ClearSession: vi.fn(),
     SubmitCommand: vi.fn(),
     NotificationList: vi.fn()
 }))
 
 import { useChatStore } from '@/stores/chat'
-import { DeleteSession, SessionMessages, SessionsOverview, SessionsRead, SubmitCommand, SyncMessages } from '@/api/app'
+import { ClearSession, DeleteSession, SessionMessages, SessionsOverview, SessionsRead, SubmitCommand, SyncMessages } from '@/api/app'
 
 vi.stubGlobal('window', { location: { origin: 'http://test.local' } })
 vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() })
@@ -174,6 +177,61 @@ describe('deleteSession 删除会话（2026-09-21 日志删除逻辑调整：只
         await store.deleteSession('grp')
         expect(store.sessions).toHaveLength(1)
         expect(store.syncCursor).toBe(20)
+    })
+
+    it('默认会话（会话键空）不可删除：本地即拦、不打服务端', async () => {
+        const store = useChatStore()
+        store.sessions = [{ SessionKey: '', Total: 1 }]
+        store.messagesBySession = { '': [{ Seq: 3, MsgId: 'm3' }] }
+        const res = await store.deleteSession('')
+        expect(res).toBeNull()
+        expect(DeleteSession).not.toHaveBeenCalled()
+        expect(store.sessions).toHaveLength(1)
+        expect(store.messagesBySession['']).toHaveLength(1)
+    })
+})
+
+describe('clearSession 清空会话（2026-10-10：删聊天记录、会话框保留）', () => {
+    it('默认会话清空：清消息缓存、会话项保留并重置为空会话形态，水位对齐 MaxSeq', async () => {
+        ClearSession.mockResolvedValue({ Cleared: 2, MaxSeq: 12 })
+        const store = useChatStore()
+        store.sessions = [
+            { SessionKey: '', Total: 2, Unread: 1, Last: { Seq: 12, Content: '默认消息' } },
+            { SessionKey: 'grp', Total: 1, Unread: 0, Last: { Seq: 9 } }
+        ]
+        store.readSeqs = { '': 5 }
+        store.messagesBySession = { '': [{ Seq: 11 }, { Seq: 12 }], grp: [{ Seq: 9 }] }
+        store.hasMoreBySession = { '': true }
+
+        const res = await store.clearSession('')
+
+        expect(ClearSession).toHaveBeenCalledWith('')
+        expect(res.Cleared).toBe(2)
+        // 会话框保留（清空不是删除），内容清空
+        expect(store.sessions.map((item) => item.SessionKey)).toEqual(['', 'grp'])
+        const defaultSession = store.sessions.find((item) => !item.SessionKey)
+        expect(defaultSession.Total).toBe(0)
+        expect(defaultSession.Unread).toBe(0)
+        expect(defaultSession.Last).toBeNull()
+        expect(store.messagesBySession['']).toEqual([])
+        expect(store.hasMoreBySession['']).toBe(false)
+        // 其他会话不动
+        expect(store.messagesBySession.grp).toHaveLength(1)
+        // 水位只进：对齐清空后的高水位 MaxSeq
+        expect(store.readSeqs['']).toBe(12)
+    })
+
+    it('任务会话清空同样保留会话框', async () => {
+        ClearSession.mockResolvedValue({ Cleared: 1, MaxSeq: 9 })
+        const store = useChatStore()
+        store.sessions = [{ SessionKey: 'grp', Total: 1, Unread: 1, Last: { Seq: 9 } }]
+        store.messagesBySession = { grp: [{ Seq: 9 }] }
+
+        await store.clearSession('grp')
+
+        expect(store.sessions).toHaveLength(1)
+        expect(store.sessions[0].Total).toBe(0)
+        expect(store.messagesBySession.grp).toEqual([])
     })
 })
 

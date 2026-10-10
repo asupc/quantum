@@ -13,6 +13,7 @@ const router = createRouter({
 })
 
 const LOGIN_PAGE_NAME = 'login'
+const SETUP_PAGE_NAME = 'setup'
 
 // 动态菜单路由只加载一次：多个导航共享同一份 Promise，避免重复请求与重复 addRoute
 export let dynamicRoutesTask = null
@@ -72,8 +73,8 @@ router.beforeEach(async (to) => {
         }
     }
 
-    if (!token && to.name !== LOGIN_PAGE_NAME) {
-        // 未登录且要跳转的页面不是登录页
+    if (!token && to.name !== LOGIN_PAGE_NAME && to.name !== SETUP_PAGE_NAME) {
+        // 未登录且要跳转的页面不是登录页/初始化向导（首次部署时还没有任何账号）
         return { name: LOGIN_PAGE_NAME }
     } else if (token && to.name === LOGIN_PAGE_NAME) {
         // 已登录且要跳转的页面是登录页 → 回根路径，由主框架按「默认首页」标记解析最终落点

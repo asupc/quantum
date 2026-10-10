@@ -9,6 +9,7 @@ import {
     SyncMessages,
     SubmitCommand,
     DeleteSession as DeleteSessionApi,
+    ClearSession as ClearSessionApi,
     NotificationList
 } from '@/api/app';
 import { GetTask } from '@/api/task';
@@ -477,6 +478,11 @@ export const useChatStore = defineStore('chat', {
          */
         async deleteSession(sessionKey) {
             const key = sessionKey || '';
+            if (!key) {
+                // 默认会话不可删除（2026-10-10）：恒在列表里，清理内容走 clearSession「清空」
+                message.warning('默认会话不可删除，可在会话上使用「清空」清理聊天记录');
+                return null;
+            }
             const res = await DeleteSessionApi(key);
             if (!res?.Deleted) {
                 return res;
@@ -490,6 +496,26 @@ export const useChatStore = defineStore('chat', {
             // 游标回拨保留（消息不再删除后 MaxSeq 恒为当前最大，min 退化为 no-op，防御性兼容）
             this.syncCursor = Math.min(this.syncCursor, res?.MaxSeq || 0);
             message.success('会话已删除（消息记录保留，任务再推送时自动重建）');
+            return res;
+        },
+
+        /**
+         * 清空会话（2026-10-10）：删该会话的消息记录、会话框保留——默认会话不可删除，
+         * 「清空」是它唯一的清理入口（其余会话同样可用）。本地清消息缓存并把会话项重置为空会话
+         * （无预览/无时间/未读 0），水位对齐到清空后的高水位（MaxSeq，号段不复用不回拨）。
+         */
+        async clearSession(sessionKey) {
+            const key = sessionKey || '';
+            const res = await ClearSessionApi(key);
+            this.messagesBySession = { ...this.messagesBySession, [key]: [] };
+            this.hasMoreBySession = { ...this.hasMoreBySession, [key]: false };
+            this.sessions = this.sessions.map((item) =>
+                item.SessionKey === key ? withPreview({ ...item, Total: 0, Unread: 0, Last: null }) : item
+            );
+            const nextReadSeqs = { ...this.readSeqs, [key]: Math.max(this.readSeqs[key] || 0, res?.MaxSeq || 0) };
+            this.readSeqs = nextReadSeqs;
+            writeJson(`${originKey()}.readSeqs`, nextReadSeqs);
+            message.success('会话已清空（聊天记录已删除，会话保留）');
             return res;
         },
 

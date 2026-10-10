@@ -152,6 +152,14 @@ export default [
         component: () => import('@/view/login/login.vue')
     },
     {
+        // 首次部署初始化向导（创建账号 → 选择数据库 → 勾选自带脚本建任务）：
+        // 免登录可达（此时还没有任何账号），登录页检测到未初始化会自动跳转过来
+        path: '/setup',
+        name: 'setup',
+        meta: { title: '初始化向导', hideInMenu: true },
+        component: () => import('@/view/setup/index.vue')
+    },
+    {
         path: '/',
         component: Main,
         children: [

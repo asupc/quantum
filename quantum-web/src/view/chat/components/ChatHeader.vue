@@ -39,8 +39,10 @@
             <button class="icon-btn" type="button" title="刷新会话列表" @click="$emit('refresh')">
                 <i class="fa-solid fa-rotate"></i>
             </button>
-            <button class="icon-btn danger" type="button" title="删除会话（消息记录保留）" @click="confirmDelete">
-                <i class="fa-solid fa-trash-can"></i>
+            <!-- 默认会话不可删除（2026-10-10）：动作换「清空」（删聊天记录、会话保留） -->
+            <button class="icon-btn danger" type="button"
+                :title="isDefault ? '清空会话（会话保留）' : '删除会话（消息记录保留）'" @click="confirmAction">
+                <i :class="isDefault ? 'fa-solid fa-eraser' : 'fa-solid fa-trash-can'"></i>
             </button>
         </div>
     </header>
@@ -48,9 +50,10 @@
 
 <script>
 /**
- * 会话顶栏：标题（任务名/会话名映射）、实时连接状态、消息搜索、刷新、删除会话。
+ * 会话顶栏：标题（任务名/会话名映射）、实时连接状态、消息搜索、刷新、删除/清空会话。
  * 2026-09-21 日志删除逻辑调整：删除会话只删会话数据与会话窗口（与列表项删除同语义），
  * 消息记录（业务真实产生的数据）服务端保留——消息删除入口只有日志中心；
+ * 2026-10-10：默认会话不可删除，动作换「清空」（emit clear，删聊天记录、会话保留）；
  * 搜索走 api/App/history（App 侧该接口未接线，Web 补齐）。
  */
 import { History } from '@/api/app'
@@ -88,7 +91,7 @@ export default {
             default: () => ({})
         }
     },
-    emits: ['refresh', 'delete', 'back', 'open-session'],
+    emits: ['refresh', 'delete', 'clear', 'back', 'open-session'],
     data() {
         return {
             searching: false,
@@ -101,10 +104,24 @@ export default {
     computed: {
         wsLabel() {
             return { open: '实时已连接', connecting: '连接中…', closed: '离线（仅补拉）' }[this.wsState] || '离线'
+        },
+        /** 默认会话（会话键空）：不可删除，只可清空 */
+        isDefault() {
+            return !this.sessionKey
         }
     },
     methods: {
-        confirmDelete() {
+        confirmAction() {
+            if (this.isDefault) {
+                window.$dialog.warning({
+                    title: '清空会话',
+                    content: `将清空「${this.title}」的聊天记录（删除后不可恢复），会话保留。`,
+                    positiveText: '清空',
+                    negativeText: '取消',
+                    onPositiveClick: () => this.$emit('clear')
+                })
+                return
+            }
             window.$dialog.warning({
                 title: '删除会话',
                 content: `将删除「${this.title}」会话与窗口显示，消息记录保留在服务器（删除消息记录请前往日志中心），任务再次推送时自动重建。`,

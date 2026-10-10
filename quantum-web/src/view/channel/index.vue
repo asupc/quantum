@@ -45,7 +45,7 @@
       </n-gi>
     </n-grid>
 
-    <n-modal v-model:show="qqModal" preset="card" title="配置 QQ 官方机器人" class="channel-modal"
+    <n-modal v-model:show="qqModal" preset="card" title="配置 QQ 官方机器人" class="channel-modal channel-modal--form"
       @after-leave="qqForm.AppSecret = ''">
       <n-alert type="warning" :bordered="false">更新旧账号会废止绑定与未发送回复。AppSecret 只会发往服务端加密保存，本页不缓存。</n-alert>
       <div class="qr-guide">
@@ -77,7 +77,7 @@
       <template #footer><n-button type="primary" :loading="submitting" @click="saveQq">保存并接入</n-button></template>
     </n-modal>
 
-    <n-modal v-model:show="feishuModal" preset="card" title="手动配置飞书企业自建应用（高级）" class="channel-modal"
+    <n-modal v-model:show="feishuModal" preset="card" title="手动配置飞书企业自建应用（高级）" class="channel-modal channel-modal--form"
       @after-leave="feishuForm.AppSecret = ''">
       <n-alert type="success" :bordered="false" style="margin-bottom: 8px">
         一般<strong>无需手动填写</strong>：使用上面的「扫码接入」，用飞书 App 扫一次码即可自动创建个人应用并保存凭据。
@@ -399,7 +399,7 @@ onUnmounted(() => { stopStatusRefresh(); stopQr(); stopFsQr() })
    故弹窗内部的样式一律放非 scoped 块，并用 channel-modal 前缀避免影响其它页面的弹窗。
    修饰类必须排在 .channel-modal 之后：同为单类选择器，后写的才覆盖得了宽度。 */
 .channel-modal { width: 400px; max-width: calc(100vw - 32px); }
-.channel-modal--form { width: 520px; max-width: calc(100vw - 32px); }
+.channel-modal--form { width: 640px; max-width: calc(100vw - 32px); }
 .channel-modal--wide { width: 850px; max-width: calc(100vw - 32px); }
 .channel-modal .qr-guide { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
 .channel-modal .qr-guide .hint { flex: 1; margin: 0; }

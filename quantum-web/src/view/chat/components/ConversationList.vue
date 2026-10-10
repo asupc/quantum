@@ -26,14 +26,18 @@
                     <span class="conv-time">{{ timeOf(item) }}</span>
                     <span v-if="item.Unread > 0" class="conv-unread">{{ item.Unread > 99 ? '99+' : item.Unread }}</span>
                 </div>
-                <n-popconfirm placement="left-end" positive-text="删除" negative-text="取消"
-                    @positive-click="$emit('delete', item.SessionKey || '')">
+                <!-- 默认会话不可删除（2026-10-10）：动作换「清空」（删聊天记录、会话保留）；其余会话仍是删除 -->
+                <n-popconfirm placement="left-end" :positive-text="isDefault(item) ? '清空' : '删除'" negative-text="取消"
+                    @positive-click="onAction(item)">
                     <template #trigger>
-                        <button class="conv-delete" type="button" title="删除会话" @click.stop>
-                            <i class="fa-solid fa-trash-can"></i>
+                        <button class="conv-delete" type="button"
+                            :title="isDefault(item) ? '清空会话（会话保留）' : '删除会话'" @click.stop>
+                            <i :class="isDefault(item) ? 'fa-solid fa-eraser' : 'fa-solid fa-trash-can'"></i>
                         </button>
                     </template>
-                    删除后该会话从列表移除（消息记录保留），任务再次推送消息时会自动重建
+                    {{ isDefault(item)
+                        ? '默认会话不可删除；清空将删除其聊天记录（不可恢复），会话保留'
+                        : '删除后该会话从列表移除（消息记录保留），任务再次推送消息时会自动重建' }}
                 </n-popconfirm>
             </div>
         </div>
@@ -45,7 +49,8 @@
  * 会话列表（对齐 App ConversationListScreen）：
  * 44px 圆图标（默认会话/任务会话两色）、标题、预览、时间、未读角标（>99 显示 99+）。
  * 标题取任务名映射（会话键 = 任务 Id 或任务配置的会话名），映射不到显示会话键原文；预览规则见 chatFormat.sessionPreview。
- * Web 增强：顶部筛选框（按标题/预览本地过滤）；悬浮显示「删除会话」（时间/未读侧淡出、垃圾桶淡入，确认后 emit delete）。
+ * Web 增强：顶部筛选框（按标题/预览本地过滤）；悬浮显示动作入口（时间/未读侧淡出、图标淡入，确认后 emit）。
+ * 默认会话不可删除（2026-10-10）：动作是「清空」（emit clear，删聊天记录、会话保留），其余会话「删除」（emit delete）。
  */
 import { sessionTitle } from '@/utils/chatFormat'
 
@@ -65,7 +70,7 @@ export default {
             default: ''
         }
     },
-    emits: ['select', 'delete'],
+    emits: ['select', 'delete', 'clear'],
     data() {
         return {
             keyword: ''
@@ -93,6 +98,17 @@ export default {
         },
         timeOf(item) {
             return item.Last?.CreateTime || ''
+        },
+        /** 默认会话（会话键空）：不可删除，只可清空 */
+        isDefault(item) {
+            return !item.SessionKey
+        },
+        onAction(item) {
+            if (this.isDefault(item)) {
+                this.$emit('clear', '')
+                return
+            }
+            this.$emit('delete', item.SessionKey)
         }
     }
 }
