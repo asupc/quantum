@@ -178,6 +178,8 @@ public class Startup
         services.AddScoped(typeof(OpenAuthService));
         services.AddScoped(typeof(LoginService));
         services.AddScoped(typeof(SystemConfigService));
+        // 首次部署初始化向导（/api/Setup/*，匿名仅未初始化期有效）
+        services.AddScoped(typeof(SetupService));
         services.AddScoped(typeof(MenuService));
         services.AddScoped(typeof(LogsService));
         services.AddScoped(typeof(BookmarkService));
@@ -278,10 +280,10 @@ public class Startup
         }
         app.UseForwardedHeaders(forwardedOptions);
 
-        // 单次执行建库/迁移/种子数据
-        DbInitializer.Initialize(app.ApplicationServices, db => ScriptTaskSeeder.Seed(db,
-            Path.Combine(AppContext.BaseDirectory, "scripts"),
-            Path.Combine(Directory.GetCurrentDirectory(), "scripts", "quantum")));
+        // 单次执行建库/迁移/种子数据；任务脚本播种按首次部署初始化向导状态决定范围
+        //（向导未完成不播、向导勾选清单补种、存量新库全量）
+        var dbJustCreated = DbInitializer.Initialize(app.ApplicationServices);
+        ScriptTaskSeeder.RunAfterInit(app.ApplicationServices, dbJustCreated);
         LogServiceHelper.AddLogs();
         CacheManager.InitCacheDatas();
         app.ApplicationServices.InitMessageQueue();

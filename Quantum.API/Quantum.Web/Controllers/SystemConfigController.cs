@@ -73,17 +73,6 @@ public class SystemConfigController : BaseController
     }
 
     /// <summary>
-    /// 初始化系统
-    /// </summary>
-    /// <param name="setting"></param>
-    /// <returns></returns>
-    [HttpPost("install"), AllowAnonymous]
-    public bool Install([FromBody] Setting setting)
-    {
-        return systemConfigService.Install(setting);
-    }
-
-    /// <summary>
     /// 收缩数据库（SQLite VACUUM；MySQL 优化高写入表）
     /// </summary>
     [HttpPost("database-shrink")]

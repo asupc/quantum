@@ -259,9 +259,10 @@
         </member>
         <member name="M:Quantum.Web.Controllers.AppMessageController.ClearSession(System.String)">
             <summary>
-            清空会话（App 端「删除会话」）：**2026-09-21 日志删除逻辑调整起与 session/delete 同语义**——
-            只删除会话行，消息记录（业务真实产生的数据）不再连带删除，删除入口收敛到日志中心。
-            端点仅为已发布 App 的兼容保留，响应形状不变（Cleared 恒为 0，MaxSeq 为当前全局最大 Seq）。
+            清空会话（历史兼容端点，旧 App「删除会话」走这里）：**2026-10-10 起恢复「清空」本义**——
+            删除该会话的消息记录、会话框保留（与 session/clear 同语义）；默认会话（session 空）本就
+            不可删除，清空是它唯一的清理入口，旧客户端的「删除」落到清空语义正好符合该约束。
+            响应形状不变（Cleared = 实际清空条数，MaxSeq 为当前全局最大 Seq 高水位）。
             </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.AppMessageController.UnreadCount">
@@ -299,12 +300,21 @@
         <member name="M:Quantum.Web.Controllers.AppMessageController.DeleteSession(System.String)">
             <summary>
             删除会话（2026-09-18 会话分组归并批次；2026-09-21 日志删除逻辑调整）：只删除会话实体
-            （t_chat_session 行 = 会话数据），**该会话消息行（t_chat_message，业务真实产生的记录）保留**——
-            消息记录删除入口只有日志中心（session 空 = 默认会话，与 messages/clear 同风格 query 参数）。
+            （t_chat_session 行 = 会话数据），**该会话消息行（t_chat_message，业务真实产生的记录）保留**
+            （session 空 = 默认会话，与 messages/clear 同风格 query 参数）。
             响应带当前全局最大 Seq：消息不再删除后 Seq 号段不复用，客户端既有的游标回拨
             min(当前, MaxSeq) 退化为 no-op，兼容保留。会话删除后，归属任务再推送消息时会话自动重建
             （出站落库驱动，重建行预置已读水位，历史消息不计未读）。
+            **默认会话不可删除**（2026-10-10）：session 空时业务异常，清理内容请走 session/clear「清空」。
             </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.AppMessageController.ClearSessionRecords(System.String)">
+            <summary>
+            清空会话（2026-10-10 默认会话改造）：删除该会话的消息记录、**会话框保留**——
+            默认会话不可删除，「清空」是它唯一的清理入口（其余会话同样可用：清记录、留会话框）。
+            Seq 号段不复用（高水位保留在会话行），响应 MaxSeq 为当前全局最大 Seq。
+            </summary>
+            <param name="session">会话键（空 = 默认会话）</param>
         </member>
         <member name="M:Quantum.Web.Controllers.AppMessageController.Command(Quantum.Web.Controllers.AppCommandRequest)">
             <summary>
@@ -1122,6 +1132,28 @@
             </summary>
             <param name="ids">版本 Id 列表（逗号拼接）</param>
         </member>
+        <member name="T:Quantum.Web.Controllers.SetupController">
+            <summary>
+            首次部署初始化向导（匿名）：引导创建登录账号、选择数据库、勾选自带脚本建任务。
+            仅系统未初始化（NeedSetup）期间有效——complete/test-database 在初始化完成后一律拒绝，
+            防止未授权改密/接管账号；已初始化后的账号变更请走登录后的 /api/SystemConfig/password。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SetupController.Status">
+            <summary>
+            初始化向导状态：NeedSetup=true 时附带当前库配置与自带脚本清单（向导三步的数据源）。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SetupController.TestDatabase(Quantum.Entities.DTOs.SetupDatabaseRequest)">
+            <summary>
+            数据库试连（向导第 2 步「测试连接」）：SQLite 校验文件名/目录可写，MySQL 实连握手。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Controllers.SetupController.Complete(Quantum.Entities.DTOs.SetupCompleteRequest)">
+            <summary>
+            完成初始化：创建登录账号 + 保存数据库选择 + 按勾选建任务（一次性，之后本端点即关闭）。
+            </summary>
+        </member>
         <member name="T:Quantum.Web.Controllers.SystemConfigController">
             <summary>
             系统设置（管理员专用；footer/install 匿名端点不受影响）
@@ -1147,13 +1179,6 @@
             <summary>
             获取自定义页脚信息
             </summary>
-            <returns></returns>
-        </member>
-        <member name="M:Quantum.Web.Controllers.SystemConfigController.Install(Quantum.Entities.Config.Setting)">
-            <summary>
-            初始化系统
-            </summary>
-            <param name="setting"></param>
             <returns></returns>
         </member>
         <member name="M:Quantum.Web.Controllers.SystemConfigController.DatabaseShrink">
@@ -1400,7 +1425,18 @@
             </summary>
         </member>
         <member name="T:Quantum.Web.ScriptTaskSeeder">
-            <summary>仅在新库初始化时，将随应用分发的正式脚本登记为待配置任务。</summary>
+            <summary>
+            任务脚本播种（Startup 建库/迁移完成后调用一次）：按首次部署初始化向导的状态决定播种范围——
+            1) 向导未完成（SetupCompleted=false）→ 不播种，勾选结果由向导完成时直接建到当前库；
+            2) 有向导待办（SetupPendingScripts != null）→ 按清单在当前库补种（换库重启后的落点），完成后清待办；
+            3) 无待办且数据库为本次新建 → 全量播种（存量零配置行为不变）；其余不动。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.ScriptTaskSeeder.RunAfterInit(System.IServiceProvider,System.Boolean,System.String,System.String)">
+            <summary>启动播种入口（Startup.Configure 调用）：sourceDirectory/runtimeDirectory 省略时取默认目录。</summary>
+        </member>
+        <member name="M:Quantum.Web.ScriptTaskSeeder.Seed(Quantum.Data.IQuantumDbContext,System.String,System.String)">
+            <summary>全量播种：随应用分发的正式脚本全部登记为待配置任务（停用态）。</summary>
         </member>
     </members>
 </doc>

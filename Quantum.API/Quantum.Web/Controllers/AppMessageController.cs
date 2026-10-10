@@ -60,17 +60,18 @@ public class AppMessageController : BaseController
     }
 
     /// <summary>
-    /// 清空会话（App 端「删除会话」）：**2026-09-21 日志删除逻辑调整起与 session/delete 同语义**——
-    /// 只删除会话行，消息记录（业务真实产生的数据）不再连带删除，删除入口收敛到日志中心。
-    /// 端点仅为已发布 App 的兼容保留，响应形状不变（Cleared 恒为 0，MaxSeq 为当前全局最大 Seq）。
+    /// 清空会话（历史兼容端点，旧 App「删除会话」走这里）：**2026-10-10 起恢复「清空」本义**——
+    /// 删除该会话的消息记录、会话框保留（与 session/clear 同语义）；默认会话（session 空）本就
+    /// 不可删除，清空是它唯一的清理入口，旧客户端的「删除」落到清空语义正好符合该约束。
+    /// 响应形状不变（Cleared = 实际清空条数，MaxSeq 为当前全局最大 Seq 高水位）。
     /// </summary>
     [HttpPost("messages/clear")]
     public async Task<object> ClearSession([FromQuery] string session = null)
     {
-        var (_, maxSeq) = await _messageService.DeleteSessionAsync(session);
+        var (cleared, maxSeq) = await _messageService.ClearSessionAsync(session);
         return new
         {
-            Cleared = 0,
+            Cleared = cleared,
             MaxSeq = maxSeq
         };
     }
@@ -148,11 +149,12 @@ public class AppMessageController : BaseController
 
     /// <summary>
     /// 删除会话（2026-09-18 会话分组归并批次；2026-09-21 日志删除逻辑调整）：只删除会话实体
-    /// （t_chat_session 行 = 会话数据），**该会话消息行（t_chat_message，业务真实产生的记录）保留**——
-    /// 消息记录删除入口只有日志中心（session 空 = 默认会话，与 messages/clear 同风格 query 参数）。
+    /// （t_chat_session 行 = 会话数据），**该会话消息行（t_chat_message，业务真实产生的记录）保留**
+    /// （session 空 = 默认会话，与 messages/clear 同风格 query 参数）。
     /// 响应带当前全局最大 Seq：消息不再删除后 Seq 号段不复用，客户端既有的游标回拨
     /// min(当前, MaxSeq) 退化为 no-op，兼容保留。会话删除后，归属任务再推送消息时会话自动重建
     /// （出站落库驱动，重建行预置已读水位，历史消息不计未读）。
+    /// **默认会话不可删除**（2026-10-10）：session 空时业务异常，清理内容请走 session/clear「清空」。
     /// </summary>
     [HttpPost("session/delete")]
     public async Task<object> DeleteSession([FromQuery] string session = null)
@@ -161,6 +163,23 @@ public class AppMessageController : BaseController
         return new
         {
             Deleted = deleted,
+            MaxSeq = maxSeq
+        };
+    }
+
+    /// <summary>
+    /// 清空会话（2026-10-10 默认会话改造）：删除该会话的消息记录、**会话框保留**——
+    /// 默认会话不可删除，「清空」是它唯一的清理入口（其余会话同样可用：清记录、留会话框）。
+    /// Seq 号段不复用（高水位保留在会话行），响应 MaxSeq 为当前全局最大 Seq。
+    /// </summary>
+    /// <param name="session">会话键（空 = 默认会话）</param>
+    [HttpPost("session/clear")]
+    public async Task<object> ClearSessionRecords([FromQuery] string session = null)
+    {
+        var (cleared, maxSeq) = await _messageService.ClearSessionAsync(session);
+        return new
+        {
+            Cleared = cleared,
             MaxSeq = maxSeq
         };
     }

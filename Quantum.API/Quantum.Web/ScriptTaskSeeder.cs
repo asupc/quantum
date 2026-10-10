@@ -1,57 +1,61 @@
+using Microsoft.Extensions.DependencyInjection;
 using Quantum.Application;
 using Quantum.Data;
-using Quantum.Entities.Model;
+using Quantum.Utils;
 
 namespace Quantum.Web;
 
-/// <summary>仅在新库初始化时，将随应用分发的正式脚本登记为待配置任务。</summary>
+/// <summary>
+/// 任务脚本播种（Startup 建库/迁移完成后调用一次）：按首次部署初始化向导的状态决定播种范围——
+/// 1) 向导未完成（SetupCompleted=false）→ 不播种，勾选结果由向导完成时直接建到当前库；
+/// 2) 有向导待办（SetupPendingScripts != null）→ 按清单在当前库补种（换库重启后的落点），完成后清待办；
+/// 3) 无待办且数据库为本次新建 → 全量播种（存量零配置行为不变）；其余不动。
+/// </summary>
 public static class ScriptTaskSeeder
 {
-    public static void Seed(IQuantumDbContext db, string sourceDirectory, string runtimeDirectory)
+    /// <summary>启动播种入口（Startup.Configure 调用）：sourceDirectory/runtimeDirectory 省略时取默认目录。</summary>
+    public static void RunAfterInit(IServiceProvider services, bool dbJustCreated,
+        string sourceDirectory = null, string runtimeDirectory = null)
     {
-        if (!Directory.Exists(sourceDirectory))
+        var setting = SystemConfigHelper.GetSetting();
+        if (setting.SetupCompleted == false)
         {
-            throw new DirectoryNotFoundException($"任务种子脚本目录不存在：{sourceDirectory}");
+            return;
+        }
+        var pending = setting.SetupPendingScripts;
+        if (pending == null && !dbJustCreated)
+        {
+            return;
         }
 
-        var scripts = Directory.GetFiles(sourceDirectory, "*.cs", SearchOption.TopDirectoryOnly)
-            .OrderBy(Path.GetFileName, StringComparer.Ordinal).ToList();
-        if (scripts.Count == 0)
-        {
-            throw new InvalidOperationException($"任务种子脚本目录没有 .cs 文件：{sourceDirectory}");
-        }
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IQuantumDbContext>();
+        var seeder = new SetupService(db,
+            sourceDirectory ?? SetupService.DefaultScriptSourceDirectory,
+            runtimeDirectory ?? SetupService.DefaultScriptRuntimeDirectory);
 
-        var validated = new List<(string SourcePath, string FileName, string RuntimePath)>();
-        foreach (var sourcePath in scripts)
+        if (pending != null)
         {
-            var fileName = Path.GetFileName(sourcePath);
-            var runtimePath = Path.Combine(runtimeDirectory, fileName);
-            var content = File.ReadAllText(File.Exists(runtimePath) ? runtimePath : sourcePath);
-            var build = ScriptBuildService.Build(content, runtimePath);
-            if (!build.Success)
+            try
             {
-                var issues = build.Blocked.Concat(build.Errors).Select(issue => issue.Message);
-                throw new InvalidOperationException($"任务种子脚本 {fileName} 未通过门禁或编译：{string.Join("；", issues)}");
+                var names = pending.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                seeder.SeedSelectedTasks(names);
+                SystemConfigHelper.UpdateSetting(current => current.SetupPendingScripts = null);
             }
-
-            validated.Add((sourcePath, fileName, runtimePath));
-        }
-
-        Directory.CreateDirectory(runtimeDirectory);
-        foreach (var (sourcePath, fileName, runtimePath) in validated)
-        {
-            if (!File.Exists(runtimePath))
+            catch (Exception e)
             {
-                File.Copy(sourcePath, runtimePath);
+                // 向导勾选已在完成时校验过，此处失败多为运行目录/文件不可写等环境问题：
+                // 保留待办下次启动自动重试，不因任务补种阻塞启动
+                Console.WriteLine($"[ERROR] 初始化向导任务补种失败（配置未清理，下次启动自动重试）：{e.Message}");
             }
-
-            db.Tasks.Add(new TaskModel
-            {
-                Name = Path.GetFileNameWithoutExtension(fileName),
-                FileName = fileName,
-                CreateTime = DateTime.Now,
-                Enable = false,
-            });
+        }
+        else
+        {
+            seeder.SeedSelectedTasks(null);
         }
     }
+
+    /// <summary>全量播种：随应用分发的正式脚本全部登记为待配置任务（停用态）。</summary>
+    public static void Seed(IQuantumDbContext db, string sourceDirectory, string runtimeDirectory)
+        => new SetupService(db, sourceDirectory, runtimeDirectory).SeedSelectedTasks(null);
 }
