@@ -508,15 +508,28 @@ class ChatRepository @Inject constructor(
 
     /**
      * 删除会话（会话列表长按与详情页右上角共用，2026-09-21 日志删除逻辑调整）：服务端只删
-     * 会话实体（t_chat_session 行 = 会话数据），**消息行（业务真实产生的记录）保留**——消息删除
-     * 入口收敛到日志中心；本地删会话行与消息行（窗口/列表显示一并清除）。响应 MaxSeq 恒为当前
+     * 会话实体（t_chat_session 行 = 会话数据），**消息行（业务真实产生的记录）保留**——
+     * 本地删会话行与消息行（窗口/列表显示一并清除）。响应 MaxSeq 恒为当前
      * 全局最大（消息不删 → Seq 号段不复用），既有游标回拨 min(当前, MaxSeq) 退化为 no-op，防御保留
      * （只回拨不下推，避免跳过尚未同步的其他会话行，重拉由 msgId 幂等去重）。该会话来源任务再推送
-     * 消息时会话自动重建（带全部保留历史）。
+     * 消息时会话自动重建（带全部保留历史）。默认会话不可删除（2026-10-10），走 clearSession「清空」。
      */
     suspend fun deleteSession(sessionId: String) {
         val result = appApi.deleteSession(sessionId.ifEmpty { null }).unwrap()
         chatSessionDao.delete(sessionId)
+        chatMessageDao.deleteSession(sessionId)
+        val cursor = syncCursorDao.get()?.maxSeq ?: 0L
+        syncCursorDao.set(SyncCursorEntity(maxSeq = minOf(cursor, result.maxSeq)))
+    }
+
+    /**
+     * 清空会话（2026-10-10 默认会话改造）：服务端删该会话的消息记录、**会话框保留**——
+     * 默认会话不可删除，「清空」是它唯一的清理入口（其余会话同样可用）；本地删消息行、
+     * 保留会话行（空会话显示：无预览/无时间，见 sessionsWithLast）。Seq 号段不复用
+     * （服务端高水位保留在会话行），游标回拨同删除会话（防御性 no-op）。
+     */
+    suspend fun clearSession(sessionId: String) {
+        val result = appApi.clearSession(sessionId.ifEmpty { null }).unwrap()
         chatMessageDao.deleteSession(sessionId)
         val cursor = syncCursorDao.get()?.maxSeq ?: 0L
         syncCursorDao.set(SyncCursorEntity(maxSeq = minOf(cursor, result.maxSeq)))

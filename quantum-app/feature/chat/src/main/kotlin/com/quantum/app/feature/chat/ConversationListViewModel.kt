@@ -23,7 +23,8 @@ import javax.inject.Inject
  *   会话有独立存在性（2026-09-18 会话生命周期）：清空记录后会话保留（无预览/不显示时间）；
  * - 未读 = 会话内机器人下发且超过本地已读水位的条数（进入会话即清零）；
  * - 标题 = 任务名（任务列表接口映射）；未知/已删任务/共享会话名直接显示会话键原文；
- * - 长按会话项可删除会话（服务端+本地一起删，任务再推送时自动重建）。
+ * - 默认会话（空会话键）恒在（2026-10-10）：本地无会话行时合成条目、不可删除，清理内容走「清空」；
+ * - 长按会话项可删除会话（服务端+本地一起删，任务再推送时自动重建）/ 清空默认会话（删记录留会话）。
  */
 @HiltViewModel
 class ConversationListViewModel @Inject constructor(
@@ -58,7 +59,7 @@ class ConversationListViewModel @Inject constructor(
             // 未读走单条聚合查询（2.2）：一条 SQL 得到全部会话未读，替代逐会话 COUNT 的 N+1；
             // 消息落库由 Room 盯表自动重查，水位变化经 flatMapLatest 换新查询。
             chatRepository.unreadCounts(sessions.map { it.sessionKey }, readSeqs).map { unread ->
-                sessions.map { row ->
+                val items = sessions.map { row ->
                     ConversationUi(
                         sessionId = row.sessionKey,
                         title = titleOf(row.sessionKey, names, row.displayTitle),
@@ -66,6 +67,13 @@ class ConversationListViewModel @Inject constructor(
                         time = row.lastCreateTime,
                         unread = unread[row.sessionKey] ?: 0
                     )
+                }
+                // 默认会话恒在（2026-10-10）：本地无会话行（全新安装/清过本地数据）时合成空会话条目，
+                // 与服务端列表快照「默认会话恒在」同语义——首次使用平台就有默认会话
+                if (items.any { it.sessionId.isEmpty() }) {
+                    items
+                } else {
+                    items + ConversationUi(sessionId = "", title = "默认会话", preview = null, time = null, unread = 0)
                 }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -106,8 +114,23 @@ class ConversationListViewModel @Inject constructor(
 
     /** 删除会话（长按列表项确认后调用）：服务端+本地一起删，列表随 Room Flow 自动移除。 */
     fun deleteSession(sessionId: String) {
+        // 默认会话不可删除（2026-10-10）：恒在列表里，清理内容走 clearSession「清空」
+        if (sessionId.isEmpty()) {
+            return
+        }
         viewModelScope.launch {
             runCatching { chatRepository.deleteSession(sessionId) }
+                .onSuccess { prefsStore.removeSessionReadSeq(sessionId) }
+        }
+    }
+
+    /**
+     * 清空会话（2026-10-10）：删聊天记录、会话框保留——默认会话唯一的清理入口
+     * （其余会话同样可用）。本地清消息行后列表呈空会话形态（只显示会话名）。
+     */
+    fun clearSession(sessionId: String) {
+        viewModelScope.launch {
+            runCatching { chatRepository.clearSession(sessionId) }
                 .onSuccess { prefsStore.removeSessionReadSeq(sessionId) }
         }
     }

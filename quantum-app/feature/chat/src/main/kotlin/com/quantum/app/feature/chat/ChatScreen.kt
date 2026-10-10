@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -137,8 +138,10 @@ fun ChatScreen(
     var viewingImage by remember { mutableStateOf<String?>(null) }
     // 全屏端内播放（M1）：点按视频消息/可播文件置入 (地址, 标题, 封面)，非空时浮层播放
     var playingMedia by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
-    // 删除会话确认弹窗（详情页右上角入口，2026-09-21 起与列表长按删除同语义）
+    // 删除/清空会话确认弹窗（详情页右上角入口，2026-09-21 起与列表长按删除同语义；
+    // 默认会话不可删除，2026-10-10 起换「清空」——删聊天记录、会话保留）
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    val isDefaultSession = viewModel.sessionId.isEmpty()
     val listState = rememberLazyListState()
     // 在屏会话上报：通知抑制按「该会话页正被用户看着」判定（而非 App 整体前台），
     // 离开本页/切会话自动清空或改写（AppPushHandler 收帧时读取）
@@ -220,11 +223,12 @@ fun ChatScreen(
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 // 删除会话（2026-09-21 日志删除逻辑调整）：只删会话数据与本地窗口显示，
-                // 服务器消息记录保留（删除入口收敛到日志中心），确认弹窗防误触
+                // 服务器消息记录保留（删除入口收敛到日志中心），确认弹窗防误触；
+                // 默认会话不可删除（2026-10-10）：换「清空」入口（删聊天记录、会话保留）
                 IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(
-                        Icons.Outlined.Delete,
-                        contentDescription = "删除会话",
+                        if (isDefaultSession) Icons.Outlined.DeleteSweep else Icons.Outlined.Delete,
+                        contentDescription = if (isDefaultSession) "清空会话" else "删除会话",
                         tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
@@ -393,19 +397,31 @@ fun ChatScreen(
         }
     }
 
-    // 删除会话确认（2026-09-21 日志删除逻辑调整）：只删会话数据与会话窗口显示，
-    // 服务器消息记录保留（删除消息记录请前往日志中心），删除后返回会话列表
+    // 删除/清空会话确认（2026-09-21 日志删除逻辑调整）：删除只删会话数据与会话窗口显示，
+    // 服务器消息记录保留（删除消息记录请前往日志中心），删除后返回会话列表；
+    // 默认会话不可删除（2026-10-10）：换「清空」——删聊天记录、会话保留，清空后停留本页
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("删除会话") },
-            text = { Text("将删除「$sessionTitle」会话与窗口显示，消息记录保留在服务器，任务再次推送时自动重建。") },
+            title = { Text(if (isDefaultSession) "清空会话" else "删除会话") },
+            text = {
+                Text(
+                    if (isDefaultSession) "默认会话不可删除。将清空「$sessionTitle」的聊天记录（删除后不可恢复），会话保留。"
+                    else "将删除「$sessionTitle」会话与窗口显示，消息记录保留在服务器，任务再次推送时自动重建。"
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
-                    viewModel.deleteSession()
-                    onBack?.invoke()
-                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                    if (isDefaultSession) {
+                        viewModel.clearSession()
+                    } else {
+                        viewModel.deleteSession()
+                        onBack?.invoke()
+                    }
+                }) {
+                    Text(if (isDefaultSession) "清空" else "删除", color = MaterialTheme.colorScheme.error)
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }

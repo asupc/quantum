@@ -2,6 +2,7 @@ package com.quantum.app.core.network.api
 
 import com.quantum.app.core.network.dto.AppDeviceDto
 import com.quantum.app.core.network.dto.ChatMessageDto
+import com.quantum.app.core.network.dto.ClearSessionResult
 import com.quantum.app.core.network.dto.CommandAcceptedResult
 import com.quantum.app.core.network.dto.CommandRequest
 import com.quantum.app.core.network.dto.DeleteSessionResult
@@ -113,9 +114,17 @@ interface AppApi {
      * 删除会话（session 空 = 默认会话；2026-09-21 日志删除逻辑调整）：只删会话实体（会话数据），
      * 消息行（业务真实产生的记录）服务端保留——消息删除入口收敛到日志中心；任务再推送时自动重建。
      * 响应 MaxSeq 恒为当前全局最大（消息不删后号段不复用，回拨 min 为 no-op，兼容保留）。
+     * 默认会话不可删除（2026-10-10）：session 空时服务端业务异常，清理内容走 clearSession「清空」。
      */
     @POST("api/App/session/delete")
     suspend fun deleteSession(@Query("session") session: String?): EnvelopeDto<DeleteSessionResult>
+
+    /**
+     * 清空会话（2026-10-10）：删该会话消息记录、会话框保留——默认会话不可删除，「清空」是它
+     * 唯一的清理入口（其余会话同样可用）。Seq 号段不复用，MaxSeq 为当前全局最大 Seq 高水位。
+     */
+    @POST("api/App/session/clear")
+    suspend fun clearSession(@Query("session") session: String?): EnvelopeDto<ClearSessionResult>
 
     @GET("api/App/messages/unread-count")
     suspend fun unreadCount(): EnvelopeDto<Long>

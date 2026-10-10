@@ -46,11 +46,22 @@ data class SessionPageResult(
 /**
  * 删除会话结果（2026-09-21 日志删除逻辑调整）：只删会话实体、消息记录服务端保留；
  * MaxSeq 恒为当前全局最大（消息不删后号段不复用，回拨 min 为 no-op，兼容保留）。
+ * 默认会话（session 空）不可删除（2026-10-10），清理内容走 clearSession「清空」。
  */
 @Serializable
 data class DeleteSessionResult(
     @SerialName("Deleted") val deleted: Boolean,
     @SerialName("MaxSeq") val maxSeq: Long
+)
+
+/**
+ * 清空会话结果（2026-10-10）：删该会话消息记录、会话框保留（默认会话唯一的清理入口）；
+ * Cleared 为清空条数，MaxSeq 为当前全局最大 Seq（高水位不回拨，号段不复用）。
+ */
+@Serializable
+data class ClearSessionResult(
+    @SerialName("Cleared") val cleared: Long = 0,
+    @SerialName("MaxSeq") val maxSeq: Long = 0
 )
 
 /**

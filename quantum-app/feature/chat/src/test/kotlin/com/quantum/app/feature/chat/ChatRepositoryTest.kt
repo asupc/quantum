@@ -889,4 +889,44 @@ class ChatRepositoryTest {
         // 持平不吸收、只取更新、本地超前不回拨、新会话照收
         assertEquals(listOf("task-a" to 8L, "other" to 9L), absorbed)
     }
+
+    /**
+     * 清空会话（2026-10-10）：走 session/clear 端点，本地只删该会话消息行、**会话行保留**
+     * （会话框恒在——默认会话不可删除，「清空」是它唯一的清理入口），游标只回拨不下推。
+     */
+    @Test
+    fun clearSession_DeletesLocalMessages_KeepsSessionRow() = runBlocking {
+        val paths = mutableListOf<String>()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                paths += request.path!!
+                return MockResponse().setHeader("Content-Type", "application/json")
+                    .setBody("""{"Code":200,"Message":"Success","Data":{"Cleared":2,"MaxSeq":3}}""")
+            }
+        }
+        chatDao.upsertAll(
+            listOf(
+                ChatMessageEntity(seq = 1, msgId = "m1", direction = 1, content = "默认1", createTime = "2026-10-10 10:00:00"),
+                ChatMessageEntity(seq = 2, msgId = "m2", direction = 1, content = "默认2", createTime = "2026-10-10 10:00:01"),
+                ChatMessageEntity(seq = 3, msgId = "m3", direction = 1, content = "任务消息", createTime = "2026-10-10 10:00:02", sessionId = "task-a")
+            )
+        )
+        sessionDao.upsertAll(
+            listOf(
+                ChatSessionEntity(sessionKey = "", createTime = 1L, lastSeq = 2L),
+                ChatSessionEntity(sessionKey = "task-a", createTime = 2L, lastSeq = 3L)
+            )
+        )
+        cursorDao.value = 3L
+
+        repository.clearSession("")
+
+        assertEquals(1, paths.size, "清空只打一次 session/clear")
+        assertTrue(paths.single().startsWith("/api/App/session/clear"), "清空走 session/clear 端点（非 session/delete）")
+        // 本地只清默认会话消息行，任务会话不动；会话行都保留（清空不是删除）
+        assertEquals(listOf("task-a"), chatDao.rows.values.map { it.sessionId }.distinct())
+        assertTrue(sessionDao.rows.containsKey(""))
+        assertTrue(sessionDao.rows.containsKey("task-a"))
+        assertEquals(3L, cursorDao.value, "游标只回拨不下推（高水位不回拨语义）")
+    }
 }

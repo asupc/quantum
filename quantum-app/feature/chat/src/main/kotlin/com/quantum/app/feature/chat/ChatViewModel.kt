@@ -261,8 +261,13 @@ class ChatViewModel @Inject constructor(
      * 删除会话（详情页右上角，2026-09-21 日志删除逻辑调整）：只删会话数据（服务端会话行）与
      * 本地窗口/列表显示——服务器消息记录（业务真实产生的数据）保留，删除入口收敛到日志中心；
      * 任务再次推送时会话自动重建（带全部保留历史）。
+     * 默认会话不可删除（2026-10-10）：清理内容走 clearSession「清空」。
      */
     fun deleteSession() {
+        if (sessionId.isEmpty()) {
+            _toast.value = "默认会话不可删除，可使用「清空」清理聊天记录"
+            return
+        }
         viewModelScope.launch {
             runCatching { chatRepository.deleteSession(sessionId) }
                 .onSuccess {
@@ -272,6 +277,24 @@ class ChatViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     _toast.value = (e as? ApiException)?.message ?: "删除失败，请重试"
+                }
+        }
+    }
+
+    /**
+     * 清空会话（2026-10-10）：删聊天记录、会话框保留——默认会话不可删除，「清空」是它
+     * 唯一的清理入口（其余会话同样可用）。清空后停留本页，窗口呈空视图。
+     */
+    fun clearSession() {
+        viewModelScope.launch {
+            runCatching { chatRepository.clearSession(sessionId) }
+                .onSuccess {
+                    prefsStore.removeSessionReadSeq(sessionId)
+                    _toast.value = "会话已清空（聊天记录已删除，会话保留）"
+                    refreshUnread()
+                }
+                .onFailure { e ->
+                    _toast.value = (e as? ApiException)?.message ?: "清空失败，请重试"
                 }
         }
     }

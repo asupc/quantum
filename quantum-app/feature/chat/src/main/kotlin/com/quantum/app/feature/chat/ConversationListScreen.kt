@@ -44,7 +44,7 @@ import com.quantum.app.feature.chat.ConversationListViewModel.ConversationUi
 /**
  * 会话列表页（默认首页）：按脚本分会话，最后消息时间倒序（空会话垫底）；
  * 行 = 会话图标/标题 + 最后消息预览 + 时间 + 未读角标；点按进入会话详情（底部导航隐藏），
- * 长按弹「删除会话」确认（删除后任务再推送时自动重建）。
+ * 长按弹确认（默认会话「清空」——删聊天记录、会话保留；其余会话「删除」——任务再推送时自动重建）。
  */
 @Composable
 fun ConversationListScreen(
@@ -99,20 +99,31 @@ fun ConversationListScreen(
         }
     }
 
-    // 删除会话确认（2026-09-21 日志删除逻辑调整）：只删会话数据与本窗口显示，
-    // 服务器消息记录保留（删除消息记录请前往日志中心），任务再次推送时自动重建
+    // 长按确认弹窗（2026-09-21 日志删除逻辑调整）：删除会话只删会话数据与本窗口显示，
+    // 服务器消息记录保留（删除消息记录请前往日志中心），任务再次推送时自动重建；
+    // 默认会话不可删除（2026-10-10）：换「清空」确认——删聊天记录、会话保留
     pendingDelete?.let { target ->
+        val isDefault = target.sessionId.isEmpty()
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("删除会话") },
+            title = { Text(if (isDefault) "清空会话" else "删除会话") },
             text = {
-                Text("将删除「${target.title}」会话与窗口显示，消息记录保留在服务器，任务再次推送时自动重建。")
+                Text(
+                    if (isDefault) "默认会话不可删除。将清空「${target.title}」的聊天记录（删除后不可恢复），会话保留。"
+                    else "将删除「${target.title}」会话与窗口显示，消息记录保留在服务器，任务再次推送时自动重建。"
+                )
             },
             confirmButton = {
                 TextButton(onClick = {
                     pendingDelete = null
-                    viewModel.deleteSession(target.sessionId)
-                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                    if (isDefault) {
+                        viewModel.clearSession(target.sessionId)
+                    } else {
+                        viewModel.deleteSession(target.sessionId)
+                    }
+                }) {
+                    Text(if (isDefault) "清空" else "删除", color = MaterialTheme.colorScheme.error)
+                }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) { Text("取消") }
