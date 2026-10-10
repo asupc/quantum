@@ -1041,20 +1041,25 @@
             外触内执
             </summary>
         </member>
-        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.Trigger(System.String)">
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.TriggerByGet(System.String)">
             <summary>
-            触发执行
+            触发执行（GET：查询参数即载荷）
             </summary>
             <param name="secret">配置安全密钥</param>
             <returns></returns>
         </member>
-        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.Trigger(System.String,System.Object)">
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.TriggerByPost(System.String)">
             <summary>
-            触发执行
+            触发执行（POST：请求体自行解析，不走 MVC 绑定）
             </summary>
             <param name="secret">配置安全密钥</param>
-            <param name="data">自定义数据</param>
             <returns></returns>
+        </member>
+        <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.ReadBodyAsync">
+            <summary>
+            读取请求体为 JToken：空体、JSON null 或非法 JSON 一律拒绝，绝不静默降级成 null——
+            静默 null 正是「载荷被丢弃但仍报告成功」的根因，宁可明确报错。
+            </summary>
         </member>
         <member name="M:Quantum.Web.Controllers.OpenTriggerTaskController.AddAsync(Quantum.Entities.Model.OpenTriggerTask)">
             <summary>
@@ -1401,6 +1406,28 @@
         <member name="F:Quantum.Web.Middleware.AppWebSocketMiddleware.MaxFrameBytes">
             <summary>
             单帧最大总字节数（拼帧累计，超限即断连）：正常业务帧远小于此值。
+            </summary>
+        </member>
+        <member name="P:Quantum.Web.Middleware.AppWebSocketMiddleware.PreAuthTimeout">
+            <summary>
+            首帧兜底鉴权的等待上限：留空 token 的连接会被升级并等首帧 auth 完成登录，
+            但「等」必须有界——未认证连接不进注册表（心跳巡检只扫注册表），若不设期限，
+            无凭证升级的连接只能靠 10 分钟 ReceiveTimeout 兜底，且期间完全不参与任何回收
+            （实测 43 条无凭证连接全部常驻）。超过该期限仍未完成鉴权即主动关闭。
+            internal 便于单测缩短。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Middleware.AppWebSocketMiddleware.ReceiveWaitBudget(System.Boolean,System.DateTime,System.DateTime)">
+            <summary>
+            单次等待收帧的预算：已认证连接用常规 ReceiveTimeout；未认证连接收紧到「首帧绝对期限 − 当前时刻」，
+            期限已过返回 0（调用方据此断连）。纯函数便于白盒测试。
+            </summary>
+        </member>
+        <member name="M:Quantum.Web.Middleware.AppWebSocketMiddleware.GetStringOrNull(System.Text.Json.JsonElement)">
+            <summary>
+            安全取字符串字段：仅当元素确为 JSON 字符串时返回值，其余类型（数字/布尔/数组/对象）一律按「字段缺失」
+            返回 null。JsonElement.GetString() 对非 String/Null 会抛 InvalidOperationException，而接收循环只捕获
+            WebSocketException——畸形帧（如 {"type":123}）会让异常逃出已升级的连接（连 500 都产不出来）。
             </summary>
         </member>
         <member name="M:Quantum.Web.Middleware.AppWebSocketMiddleware.IsPingFrame(System.String,System.Text.Json.JsonDocument)">

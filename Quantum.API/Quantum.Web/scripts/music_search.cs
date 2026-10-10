@@ -41,6 +41,7 @@
 //                                绝对路径会被文件门面拒绝——绝对目录请配 appsettings 的 Quantum:FileDownloadRoot）
 //      scripts_music_source      搜索源（默认 wy；lx 模式可选 wy/tx/kw/kg/mg）
 //      scripts_music_lx_url      lxserver 基地址（如 http://192.168.x.x:9527；不配则默认模式）
+//                                 注意：内网地址需先在「系统设置 → 任务外部请求内网白名单」登记
 //      scripts_music_push_audio  保存落盘后回推服务端可播地址音频气泡（默认关——试听后保存已听过，
 //                                不重复推；盲下场景可设 1 开启）
 //

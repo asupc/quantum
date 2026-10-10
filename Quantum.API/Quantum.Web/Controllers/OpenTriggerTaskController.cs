@@ -1,8 +1,12 @@
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Quantum.Application;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
+using Quantum.Utils;
 using Quantum.Web.Filters;
 
 namespace Quantum.Web.Controllers;
@@ -26,12 +30,12 @@ public class OpenTriggerTaskController : BaseController
     }
 
     /// <summary>
-    /// 触发执行
+    /// 触发执行（GET：查询参数即载荷）
     /// </summary>
     /// <param name="secret">配置安全密钥</param>
     /// <returns></returns>
     [HttpGet("{secret}"), AllowAnonymous]
-    public string Trigger([FromRoute] string secret)
+    public string TriggerByGet([FromRoute] string secret)
     {
         var ip = GetUserIp();
         var data = HttpContext.Request.Query.ToList();
@@ -45,15 +49,52 @@ public class OpenTriggerTaskController : BaseController
     }
 
     /// <summary>
-    /// 触发执行
+    /// 触发执行（POST：请求体自行解析，不走 MVC 绑定）
     /// </summary>
     /// <param name="secret">配置安全密钥</param>
-    /// <param name="data">自定义数据</param>
     /// <returns></returns>
+    // 为什么手动读 body 而不是 [FromBody]：MVC 的 Newtonsoft 输入格式器内部固定 JsonTextReader.MaxDepth=32，
+    // 且本项目 SuppressModelStateInvalidFilter=true——深于 32 层的请求体会**静默绑成 null**：
+    // 端点照旧返回「执行成功」、运行记录记成功，而载荷被悄悄丢弃（实测 depth 33/40/64/1000 全部如此）。
+    // 换参数类型（object → JToken）无用：深度上限在格式器里，与目标类型无关。
+    // 因此这里显式读流 + JToken.Parse（迭代式解析、无深度上限），把「该不该拒绝」交给服务侧 ValidatePayload。
     [HttpPost("{secret}"), AllowAnonymous]
-    public string Trigger([FromRoute] string secret, [FromBody] object data)
+    public async Task<string> TriggerByPost([FromRoute] string secret)
     {
+        var data = await ReadBodyAsync();
         return openTriggerTaskService.Trigger(secret, "POST", GetUserIp(), data);
+    }
+
+    /// <summary>
+    /// 读取请求体为 JToken：空体、JSON null 或非法 JSON 一律拒绝，绝不静默降级成 null——
+    /// 静默 null 正是「载荷被丢弃但仍报告成功」的根因，宁可明确报错。
+    /// </summary>
+    private async Task<JToken> ReadBodyAsync()
+    {
+        using var reader = new StreamReader(Request.Body, Encoding.UTF8);
+        var raw = await reader.ReadToEndAsync();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            throw new BusinessException("请求体不能为空！");
+        }
+        JToken token;
+        try
+        {
+            // 必须显式放开读取深度：JToken.Parse / 默认反序列化的读取侧 MaxDepth=64，
+            // 深体在那层就抛 JsonReaderException，会被下面的 catch 误报成「不是合法 JSON」，
+            // 且真正的深度判定永远轮不到 ValidatePayload。放开深度是安全的——JToken 解析是迭代式的
+            // （已实测 10 万层不爆栈），拒绝与否由服务侧的显式上限决定。
+            token = JsonConvert.DeserializeObject<JToken>(raw, new JsonSerializerSettings { MaxDepth = null });
+        }
+        catch (JsonException)
+        {
+            throw new BusinessException("请求体不是合法 JSON！");
+        }
+        if (token == null || token.Type == JTokenType.Null || token.Type == JTokenType.Undefined)
+        {
+            throw new BusinessException("请求体不能为空！");
+        }
+        return token;
     }
 
     /// <summary>

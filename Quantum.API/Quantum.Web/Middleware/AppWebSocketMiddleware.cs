@@ -29,6 +29,15 @@ public class AppWebSocketMiddleware
     /// </summary>
     private const int MaxFrameBytes = 256 * 1024;
 
+    /// <summary>
+    /// 首帧兜底鉴权的等待上限：留空 token 的连接会被升级并等首帧 auth 完成登录，
+    /// 但「等」必须有界——未认证连接不进注册表（心跳巡检只扫注册表），若不设期限，
+    /// 无凭证升级的连接只能靠 10 分钟 ReceiveTimeout 兜底，且期间完全不参与任何回收
+    /// （实测 43 条无凭证连接全部常驻）。超过该期限仍未完成鉴权即主动关闭。
+    /// internal 便于单测缩短。
+    /// </summary>
+    internal static TimeSpan PreAuthTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     public AppWebSocketMiddleware(RequestDelegate next, AppWebSocketManager manager, ILogger<AppWebSocketMiddleware> logger)
     {
         _next = next;
@@ -73,12 +82,22 @@ public class AppWebSocketMiddleware
 
         // §1-12：心跳超时巡检已上收到进程内单例 AppWebSocketHeartbeatService（周期扫全表、踢死连），
         // 此处不再为每条连接各起一个 Task.Delay 循环（N 连接 = N 长驻定时器，且连接销毁前不停）。
+        // 首帧兜底鉴权有界化：未认证连接的存活上限是「升级时刻 + PreAuthTimeout」的**绝对期限**，
+        // 不是滑动窗口——否则一条循环发 ping 的无凭证连接可把等待无限续期（实测单体连接常驻 357s+，
+        // 且未认证连接不进注册表，心跳巡检扫不到它）。
+        var preAuthDeadline = authenticated ? DateTime.MaxValue : DateTime.UtcNow + PreAuthTimeout;
         var buffer = new byte[16 * 1024];
         try
         {
             while (socket.State == WebSocketState.Open)
             {
-                using var receiveCts = new CancellationTokenSource(ReceiveTimeout);
+                var waitBudget = ReceiveWaitBudget(authenticated, preAuthDeadline, DateTime.UtcNow);
+                if (waitBudget <= TimeSpan.Zero)
+                {
+                    _logger.LogWarning("App WS pre-auth timeout, closing: remote={RemoteIp}", context.Connection.RemoteIpAddress);
+                    break;
+                }
+                using var receiveCts = new CancellationTokenSource(waitBudget);
                 WebSocketReceiveResult result = null;
                 // 分片字节先积累、EndOfMessage 后一次性解码：逐分片 GetString 在多字节字符被切断的
                 // 边界会产生 U+FFFD 乱码（正确性缺陷），且单帧多份字符串拷贝
@@ -104,7 +123,13 @@ public class AppWebSocketMiddleware
                 }
                 catch (OperationCanceledException)
                 {
-                    // 客户端长时间沉默由心跳巡检处理，这里继续等待
+                    // 已认证：客户端长时间沉默由心跳巡检处理，这里继续等待。
+                    // 未认证：等待预算耗尽即退出（上方 waitBudget 已按首帧期限收缩），不再续期空转。
+                    if (!authenticated && ReceiveWaitBudget(false, preAuthDeadline, DateTime.UtcNow) <= TimeSpan.Zero)
+                    {
+                        _logger.LogWarning("App WS pre-auth timeout, closing: remote={RemoteIp}", context.Connection.RemoteIpAddress);
+                        break;
+                    }
                     continue;
                 }
                 if (result != null && result.MessageType == WebSocketMessageType.Close)
@@ -171,6 +196,28 @@ public class AppWebSocketMiddleware
     private static TimeSpan ReceiveTimeout => TimeSpan.FromMinutes(10);
 
     /// <summary>
+    /// 单次等待收帧的预算：已认证连接用常规 ReceiveTimeout；未认证连接收紧到「首帧绝对期限 − 当前时刻」，
+    /// 期限已过返回 0（调用方据此断连）。纯函数便于白盒测试。
+    /// </summary>
+    internal static TimeSpan ReceiveWaitBudget(bool authenticated, DateTime preAuthDeadline, DateTime now)
+    {
+        if (authenticated)
+        {
+            return ReceiveTimeout;
+        }
+        var remaining = preAuthDeadline - now;
+        return remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
+    }
+
+    /// <summary>
+    /// 安全取字符串字段：仅当元素确为 JSON 字符串时返回值，其余类型（数字/布尔/数组/对象）一律按「字段缺失」
+    /// 返回 null。JsonElement.GetString() 对非 String/Null 会抛 InvalidOperationException，而接收循环只捕获
+    /// WebSocketException——畸形帧（如 {"type":123}）会让异常逃出已升级的连接（连 500 都产不出来）。
+    /// </summary>
+    private static string GetStringOrNull(JsonElement element)
+        => element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+
+    /// <summary>
     /// 心跳帧按 type 字段精确判断（原实现是子串匹配，会把内容含 "ping" 的 command 帧误当心跳吞掉）。
     /// doc 为调用方一次解析的结果（可空 = 非 JSON 帧）。
     /// </summary>
@@ -183,8 +230,7 @@ public class AppWebSocketMiddleware
         return doc != null
             && doc.RootElement.ValueKind == JsonValueKind.Object
             && doc.RootElement.TryGetProperty("type", out var type)
-            && type.ValueKind == JsonValueKind.String
-            && type.GetString() == "ping";
+            && GetStringOrNull(type) == "ping";
     }
 
     /// <summary>帧文本一次解析（ping 判定/兜底鉴权/帧处理共享）；非 JSON 帧返回 null。</summary>
@@ -209,10 +255,11 @@ public class AppWebSocketMiddleware
         string token = null;
         if (doc?.RootElement.ValueKind == JsonValueKind.Object
             && doc.RootElement.TryGetProperty("type", out var type)
-            && type.GetString() == "auth"
+            && GetStringOrNull(type) == "auth"
             && doc.RootElement.TryGetProperty("token", out var tokenElement))
         {
-            token = tokenElement.GetString();
+            // 非字符串 token（数字/布尔/数组/对象）按缺失处理 → 鉴权失败，绝不把非字符串当凭据
+            token = GetStringOrNull(tokenElement);
         }
         var principal = JwtTokenValidator.ValidateLogin(token);
         if (principal == null)
@@ -237,34 +284,34 @@ public class AppWebSocketMiddleware
             var root = doc.RootElement;
             if (root.TryGetProperty("type", out var typeElement))
             {
-                type = typeElement.GetString();
+                type = GetStringOrNull(typeElement);
             }
             if (root.TryGetProperty("content", out var contentElement))
             {
-                content = contentElement.GetString();
+                content = GetStringOrNull(contentElement);
             }
             if (root.TryGetProperty("contentType", out var contentTypeElement))
             {
-                contentType = contentTypeElement.GetString();
+                contentType = GetStringOrNull(contentTypeElement);
             }
             if (root.TryGetProperty("contentText", out var contentTextElement))
             {
                 // command 帧配文（与 REST api/App/command 的 ContentText 同语义；此前 WS 漏解析）
-                contentText = contentTextElement.GetString();
+                contentText = GetStringOrNull(contentTextElement);
             }
             if (root.TryGetProperty("msgId", out var msgIdElement))
             {
-                msgId = msgIdElement.GetString();
+                msgId = GetStringOrNull(msgIdElement);
             }
             if (root.TryGetProperty("session", out var sessionElement))
             {
-                session = sessionElement.GetString();
+                session = GetStringOrNull(sessionElement);
             }
             if (root.TryGetProperty("targetTask", out var targetTaskElement))
             {
                 // command 帧点选来源任务（可空）：选项消息根部 taskId 由客户端点选代发时透传，
                 // 供入站三级路由①级精确路由使用（手打/重发不带）
-                targetTask = targetTaskElement.GetString();
+                targetTask = GetStringOrNull(targetTaskElement);
             }
             if (root.TryGetProperty("afterSeq", out var afterSeqElement) && afterSeqElement.TryGetInt64(out var seq))
             {
