@@ -41,10 +41,20 @@ public static class FeishuRichText
         while (index < text.Length)
         {
             var open = text.IndexOf("{{", index, StringComparison.Ordinal);
-            if (open < 0) { body.Append(text, index, text.Length - index); break; }
+            if (open < 0)
+            {
+                // 标记之间的普通文本同样必须转义：只转义标记正文时，用户文本可自己拼出
+                // [文字](地址) 链接或 <font>/<at> 构造（实测 {{unknown|…}} 之外的裸文本原样下发）
+                body.Append(EscapeText(text[index..]));
+                break;
+            }
             var close = text.IndexOf("}}", open + 2, StringComparison.Ordinal);
-            if (close < 0) { body.Append(text, index, text.Length - index); break; }
-            body.Append(text, index, open - index);
+            if (close < 0)
+            {
+                body.Append(EscapeText(text[index..]));
+                break;
+            }
+            body.Append(EscapeText(text[index..open]));
             var mark = text[(open + 2)..close];
             if (marks < MaxMarks && TryRender(mark, out var rendered))
             {
@@ -53,7 +63,7 @@ public static class FeishuRichText
             }
             else
             {
-                // 未识别/超限标记按字面输出，但**必须转义尖括号**——否则用户内容里的
+                // 未识别/超限标记按字面输出，但**必须转义**——否则用户内容里的
                 // <script> 之类会原样进入卡片正文被当作 HTML 解析
                 body.Append("{{").Append(EscapeText(mark)).Append("}}");
             }
@@ -95,15 +105,69 @@ public static class FeishuRichText
         return true;
     }
 
+    /// <summary>
+    /// 用户文本 → lark_md 安全文本：HTML 敏感字符实体化（防被当标签解析），markdown 元字符同样实体化——
+    /// 否则用户文本能自己拼出链接/强调语法，例如未识别标记走字面回退时的
+    /// <c>{{unknown|[点我](https://evil)}}</c>（绕过 {{link:…}} 的 https 白名单），
+    /// 或标记文字里夹带 <c>](</c> 提前闭合链接。渲染语法本身（标签尖括号、链接圆括号）由调用处拼接，不经本方法。
+    /// </summary>
     private static string EscapeText(string value)
-        => (value ?? "").Replace("&", "&amp;").Replace("'", "&#39;")
-                        .Replace("<", "&lt;").Replace(">", "&gt;");
+    {
+        var text = value ?? "";
+        var builder = new StringBuilder(text.Length);
+        foreach (var ch in text)
+        {
+            switch (ch)
+            {
+                case '&': builder.Append("&amp;"); break;
+                case '\'': builder.Append("&#39;"); break;
+                case '<': builder.Append("&lt;"); break;
+                case '>': builder.Append("&gt;"); break;
+                // markdown 元字符：实体化后仍渲染为字面字符，但不参与链接/强调语法解析
+                case '[': builder.Append("&#91;"); break;
+                case ']': builder.Append("&#93;"); break;
+                case '(': builder.Append("&#40;"); break;
+                case ')': builder.Append("&#41;"); break;
+                case '*': builder.Append("&#42;"); break;
+                case '_': builder.Append("&#95;"); break;
+                case '~': builder.Append("&#126;"); break;
+                case '`': builder.Append("&#96;"); break;
+                default: builder.Append(ch); break;
+            }
+        }
+        return builder.ToString();
+    }
 
-    /// <summary>飞书链接必须带 scheme 且为 http/https——与仓库既有「非绝对 https 即拒绝」口径一致。</summary>
+    /// <summary>
+    /// 飞书链接必须带 scheme 且为 http/https——与仓库既有「非绝对 https 即拒绝」口径一致。
+    /// 额外拒绝 markdown 敏感字符：链接地址被拼进 <c>[文字](地址)</c>，含 <c>)</c>/空格/尖括号/引号
+    /// 即可提前闭合或改写链接语法（实测 <c>https://a.b/&lt;script&gt;</c> 这类地址会被原样注入目标位置）。
+    /// 合法地址如需这些字符应自行百分号编码。
+    /// </summary>
     public static bool IsSafeHttps(string url)
-        => Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
-           (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp) &&
-           string.IsNullOrEmpty(uri.UserInfo) && uri.Host.Contains('.');
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) ||
+            !string.IsNullOrEmpty(uri.UserInfo) || !uri.Host.Contains('.'))
+        {
+            return false;
+        }
+        foreach (var ch in url)
+        {
+            if (char.IsControl(ch) || char.IsWhiteSpace(ch) || ch is '(' or ')' or '[' or ']' or '<' or '>' or '"' or '\'' or '`' or '\\')
+            {
+                return false;
+            }
+        }
+        // 实体形态的括号同样拒绝：地址是原样拼进 [文字](地址) 的，若飞书渲染前做了 HTML 实体解码，
+        // https://a.b/&#41;&#91;x&#93;&#40;https://evil 就能在目标位置再拼出一个链接。
+        // 合法地址遇这些字符应百分号编码（%29/%5B…），故只拒实体前缀、放行查询串里的裸 &。
+        return url.IndexOf("&#", StringComparison.Ordinal) < 0
+            && !url.Contains("&amp;", StringComparison.OrdinalIgnoreCase)
+            && !url.Contains("&lt;", StringComparison.OrdinalIgnoreCase)
+            && !url.Contains("&gt;", StringComparison.OrdinalIgnoreCase)
+            && !url.Contains("&quot;", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// 构造发送用卡片。<paramref name="body"/> 为已渲染的 lark_md；<paramref name="headerTemplate"/>

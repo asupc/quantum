@@ -130,17 +130,29 @@ public sealed class TaskExecutionResult
         }
     }
 
+    /// <summary>
+    /// 脱敏输入长度上限：脚本异常消息可长达数 MB，而摘要仅保留 MaxSummaryLength 个字符，
+    /// 没有理由把整段过一遍正则与逐值替换（顺带关掉超长输入上的正则放大面）。
+    /// </summary>
+    internal const int MaxSanitizeInputLength = 16 * 1024;
+
+    /// <summary>
+    /// 脱敏正则超时：<c>\w*(?:password|…)\w*</c> 这类「两侧通配夹选择」的形态在无关键字的
+    /// 长词串上是 O(n²)，而输入来自未截断的用户脚本异常消息；超时按「脱敏失败但不阻断链路」处理。
+    /// </summary>
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
     private static readonly Regex CredentialPrefixPattern =
         new(@"\b(Bearer|Basic|Digest|Token)\s+[A-Za-z0-9\-._~+/]{6,}={0,3}",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
 
     /// <summary>裸 JWT（三段式）常出现在被透传的请求头摘要里</summary>
     private static readonly Regex JwtPattern =
-        new(@"\beyJ[A-Za-z0-9\-._~+/]{5,}(?:\.[A-Za-z0-9\-._~+/]{2,})+", RegexOptions.Compiled);
+        new(@"\beyJ[A-Za-z0-9\-._~+/]{5,}(?:\.[A-Za-z0-9\-._~+/]{2,})+", RegexOptions.Compiled, RegexTimeout);
 
     private static readonly Regex SecretAssignPattern =
         new(@"(?<key>\w*(?:password|passwd|secret|token|cookie|apikey|api_key|accesskey|access_key|authorization)\w*)\s*[:=]\s*(?:""[^""\r\n]*""|'[^'\r\n]*'|[^\s,;]{1,512})",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
 
     /// <summary>
     /// 摘要脱敏：控制字符压成空格 → 遮蔽凭据前缀/JWT/密钥型赋值 → 遮蔽当前启用的环境变量明文值 → 截断。
@@ -153,16 +165,26 @@ public sealed class TaskExecutionResult
             return null;
         }
 
-        var builder = new StringBuilder(text.Length);
-        foreach (var ch in text)
+        // 先按上限截断再脱敏：摘要只保留头部，超长尾部对最终结果没有影响
+        var source = text.Length > MaxSanitizeInputLength ? text[..MaxSanitizeInputLength] : text;
+
+        var builder = new StringBuilder(source.Length);
+        foreach (var ch in source)
         {
             builder.Append(char.IsControl(ch) ? ' ' : ch);
         }
 
         var flat = builder.ToString().Trim();
-        flat = CredentialPrefixPattern.Replace(flat, m => $"{m.Groups[1].Value} ***");
-        flat = JwtPattern.Replace(flat, "***");
-        flat = SecretAssignPattern.Replace(flat, m => $"{m.Groups["key"].Value}=***");
+        try
+        {
+            flat = CredentialPrefixPattern.Replace(flat, m => $"{m.Groups[1].Value} ***");
+            flat = JwtPattern.Replace(flat, "***");
+            flat = SecretAssignPattern.Replace(flat, m => $"{m.Groups["key"].Value}=***");
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // 疑似对抗性输入导致正则超时：退化为只做控制字符压制与截断，绝不拖住执行链路
+        }
         flat = RedactEnvValues(flat);
         return flat.Length > MaxSummaryLength ? flat[..MaxSummaryLength] : flat;
     }

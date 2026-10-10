@@ -92,6 +92,8 @@ public class UploadService
         {
             content = await reader.ReadToEndAsync();
         }
+        // 长度硬上限必须在 Build 之前：门禁扫描与 Roslyn 编译都是同步无超时的，超大源码不得进门
+        TaskService.ValidateScriptSourceLength(content);
 
         // 保存流水线（与在线编辑保存同一条链路）：门禁拦截/编译失败即拒绝入库
         var build = ScriptBuildService.Build(content, filePath);

@@ -56,7 +56,8 @@ public class SetupService
         {
             NeedSetup = true,
             DBType = setting.DBType,
-            DBAddress = setting.DBAddress,
+            // 匿名端点：连接串里的密码必须打码后再回（向导只需看清 Server/Database 形状）
+            DBAddress = MaskConnectionString(setting.DBAddress),
             Scripts = ListBundledScripts()
         };
     }
@@ -377,7 +378,7 @@ public class SetupService
     }
 
     /// <summary>
-    /// SQLite 库名校验：只接受 db/ 根内的纯文件名（防目录穿越/子目录拼接）；
+    /// SQLite 库名校验：只接受 db/ 根内的纯文件名（防目录穿越/子目录拼接/连接串键注入）；
     /// createProbe=true 时顺带探针写入验证目录可写（向导「测试连接」用）。
     /// </summary>
     static string ValidateSqliteFileName(string dbAddress, bool createProbe)
@@ -390,6 +391,13 @@ public class SetupService
         if (fileName != Path.GetFileName(fileName) || fileName is "." or "..")
         {
             throw new BusinessException("SQLite 数据库文件名不能包含路径（只允许纯文件名）！");
+        }
+        // 该值最终拼成 "Filename=db/<名字>"（Quantum.Web/Startup.cs）：`;` 可截断并追加第二个连接串键，
+        // `=`/`:` 可改写键值——匿名向导窗口内足以造成 Mode=Memory 丢持久化或绝对 Data Source 越出 db/。
+        // 只允许纯文件名，故这些字符一律拒绝（`:` 同时挡掉 NTFS 数据流写法）。
+        if (fileName.IndexOfAny([';', '=', ':']) >= 0)
+        {
+            throw new BusinessException("SQLite 数据库文件名不能包含 ; = : 字符（只允许纯文件名）！");
         }
         if (SafeFile.Resolve("db", fileName) == null)
         {
@@ -411,6 +419,80 @@ public class SetupService
         }
         return fileName;
     }
+
+    /// <summary>
+    /// 连接串回显打码：逐段（`;` 分隔）把密码类键的值替换为 `***`，其余段原样保留。
+    /// 匿名向导状态接口（/api/Setup/status）只该暴露 Server/Database/Uid 这类形状信息，密码不得明文回包。
+    /// 容忍任意畸形串：SQLite 纯文件名（无 `=`）与非连接串文本按原样返回，解析永不抛异常。
+    /// </summary>
+    internal static string MaskConnectionString(string address)
+    {
+        if (string.IsNullOrEmpty(address))
+        {
+            return address;
+        }
+        var segments = SplitConnectionSegments(address);
+        var masked = false;
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var separator = segments[i].IndexOf('=');
+            if (separator <= 0)
+            {
+                continue; // 无 `=`（纯文件名/畸形段）：原样保留
+            }
+            var key = segments[i][..separator].Trim();
+            if (!IsSecretConnectionKey(key))
+            {
+                continue;
+            }
+            // 整体替换为 ***（不含引号）：即使原值含引号/分号也一并吃掉，杜绝残段泄露
+            segments[i] = segments[i][..(separator + 1)] + "***";
+            masked = true;
+        }
+        return masked ? string.Join(';', segments) : address;
+    }
+
+    /// <summary>
+    /// 按 `;` 切连接串分段：双引号内的 `;` 不作为分隔符（`""` 为引号转义）。
+    /// 前端拼串会把含 `;`/空白的取值用双引号包裹，按裸 `;` 切会把密码值截成多段、尾部残段泄露。
+    /// 引号不闭合等畸形输入尽力切分（不抛异常）。
+    /// </summary>
+    static List<string> SplitConnectionSegments(string address)
+    {
+        var segments = new List<string>();
+        var builder = new StringBuilder();
+        var inQuote = false;
+        for (var i = 0; i < address.Length; i++)
+        {
+            var c = address[i];
+            if (c == '"')
+            {
+                if (inQuote && i + 1 < address.Length && address[i + 1] == '"')
+                {
+                    builder.Append("\"\""); // 引号内的转义引号：原样保留，不改变引号态
+                    i++;
+                    continue;
+                }
+                inQuote = !inQuote;
+            }
+            else if (c == ';' && !inQuote)
+            {
+                segments.Add(builder.ToString());
+                builder.Clear();
+                continue;
+            }
+            builder.Append(c);
+        }
+        segments.Add(builder.ToString());
+        return segments;
+    }
+
+    /// <summary>密码类连接串键（MySqlConnector 的 Pwd/Password；大小写与前缀无关的其它写法一并覆盖）。</summary>
+    static bool IsSecretConnectionKey(string key)
+        => key.Equals("Pwd", StringComparison.OrdinalIgnoreCase)
+           || key.Equals("Password", StringComparison.OrdinalIgnoreCase)
+           || key.Contains("password", StringComparison.OrdinalIgnoreCase)
+           || key.Contains("secret", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>MySQL 连接串校验：非空即可（可达性由「测试连接」实连验证）。</summary>
     static string ValidateMySqlAddress(string dbAddress)

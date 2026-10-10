@@ -155,6 +155,9 @@ public static class FeishuFrameCodec
     // ── 读原语 ────────────────────────────────────────────────
     private static ulong ReadVarint(byte[] data, ref int offset)
     {
+        // 负游标 = 上游某条长度校验被回绕绕过（历史缺陷形态）：必须转成协议异常，
+        // 不能让它以 data[offset] 的形式抛 IndexOutOfRangeException 穿透通道层兜底
+        if (offset < 0 || offset > data.Length) throw new ChannelProtocolException("FEISHU_FRAME_TRUNCATED");
         ulong result = 0;
         var shift = 0;
         while (offset < data.Length)
@@ -180,13 +183,28 @@ public static class FeishuFrameCodec
     private static byte[] ReadBytesField(byte[] data, ref int offset, int wire)
     {
         if (wire != 2) { SkipField(data, ref offset, wire); return []; }
-        var length = (int)ReadVarint(data, ref offset);
-        if (length < 0 || length > MaxFieldBytes || offset + length > data.Length)
+        var length = ReadLength(data, ref offset);
+        if (length > MaxFieldBytes)
             throw new ChannelProtocolException("FEISHU_FRAME_LENGTH_INVALID");
         var slice = new byte[length];
         Array.Copy(data, offset, slice, 0, length);
         offset += length;
         return slice;
+    }
+
+    /// <summary>
+    /// 读 wire type 2 的长度前缀并做**溢出安全**的越界校验。
+    /// 返回的 length 保证 offset + length ≤ data.Length：先验 offset 在范围内，再用 long 比较剩余字节数——
+    /// 若按 int 相加（offset + length），超大长度与 offset 回绕成负数会让检查放行，offset 随即变负，
+    /// 外层 while 下一次 ReadVarint 以负下标取址抛 IndexOutOfRangeException（非协议异常，会穿透通道层的兜底 catch）。
+    /// </summary>
+    private static int ReadLength(byte[] data, ref int offset)
+    {
+        if (offset < 0 || offset > data.Length) throw new ChannelProtocolException("FEISHU_FRAME_TRUNCATED");
+        // varint 转 long：最高位为 1 的畸形值在此落成负数，一并按非法长度拒绝
+        var length = (long)ReadVarint(data, ref offset);
+        if (length < 0 || length > data.Length - offset) throw new ChannelProtocolException("FEISHU_FRAME_LENGTH_INVALID");
+        return (int)length;
     }
 
     private static void SkipField(byte[] data, ref int offset, int wire)
@@ -197,14 +215,16 @@ public static class FeishuFrameCodec
             case 1: offset += 8; break;
             case 2:
             {
-                var length = (int)ReadVarint(data, ref offset);
-                if (length < 0 || offset + length > data.Length) throw new ChannelProtocolException("FEISHU_FRAME_LENGTH_INVALID");
+                // 必须先取值再累加：`offset += ReadLength(data, ref offset)` 的复合赋值会先读 offset（C# 求值序），
+                // 读到的是函数调用**前**的旧值，调用里已推进的游标会被这一步覆盖掉
+                var length = ReadLength(data, ref offset);
                 offset += length;
                 break;
             }
             case 5: offset += 4; break;
             default: throw new ChannelProtocolException("FEISHU_WIRE_TYPE_UNSUPPORTED");
         }
-        if (offset > data.Length) throw new ChannelProtocolException("FEISHU_FRAME_TRUNCATED");
+        // offset < 0 是任何回绕路径的最后一道兜底：负游标绝不允许流到下一次 ReadVarint
+        if (offset < 0 || offset > data.Length) throw new ChannelProtocolException("FEISHU_FRAME_TRUNCATED");
     }
 }

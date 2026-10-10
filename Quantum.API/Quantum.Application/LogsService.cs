@@ -59,12 +59,22 @@ public class LogsService
     {
         var idList = string.IsNullOrEmpty(ids) ? [] : ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         var logs = await _dbContext.Logs.AsNoTracking().Where(n => idList.Contains(n.Id)).ToListAsync();
-        var files = logs.Where(n => !string.IsNullOrEmpty(n.LogPath)).Select(n => n.LogPath);
-        foreach (var item in files)
+        var files = logs.Where(n => !string.IsNullOrEmpty(n.LogPath))
+            .Select(n => (n.DirectoryName, n.LogPath));
+        foreach (var (directoryName, logPath) in files)
         {
-            if (System.IO.File.Exists("./logs/" + item))
+            // 删除侧兜底：DirectoryName/LogPath 均为落库值，存量脏数据可能含路径分隔符/穿越片段，
+            // 经 SafeFile 限定在 ./logs 根内——与读取侧（GetDetailsAsync）同款收口，
+            // 杜绝 `../../` 形态的脏行借删除端点删掉 ./logs 之外的文件。
+            var resolved = SafeFile.Resolve("./logs", $"{directoryName}/{logPath}");
+            if (resolved == null)
             {
-                System.IO.File.Delete("./logs/" + item);
+                // 解析失败按「跳过该行」处理：单条脏行不得阻断整批删除（DB 行仍随本批一起删除）
+                continue;
+            }
+            if (System.IO.File.Exists(resolved))
+            {
+                System.IO.File.Delete(resolved);
             }
         }
         _dbContext.Logs.RemoveRange(logs);

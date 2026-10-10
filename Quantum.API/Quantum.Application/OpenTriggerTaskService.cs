@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Quantum.Data;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
@@ -43,12 +44,85 @@ public class OpenTriggerTaskService
         {
             throw new BusinessException($"当前IP:{ip}，不在白名单内");
         }
-        Task.Run(() =>
+        // 请求体防护必须在派发前做：RunCore 会把请求体 JsonConvert.SerializeObject 后塞进环境变量，
+        // 而 Newtonsoft 写入侧没有深度上限（MaxDepth 只约束读取），深嵌套体会在后台线程递归爆栈——
+        // StackOverflowException 不可捕获，直接打死进程。本端点匿名可达（仅 secret + IP 白名单）。
+        ValidatePayload(data);
+        // 用 async lambda 命中 Task.Run(Func<Task>) 重载：语句体 Action 重载会丢弃 Run 返回的 Task，
+        // 异常既无人观察也静默消失；这里再兜一层日志，绝不让异常落到线程池未处理。
+        _ = Task.Run(async () =>
         {
-            Run(triggerTask, data, ip);
+            try
+            {
+                await Run(triggerTask, data, ip);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"外触内执任务[{triggerTask.Name}]后台执行异常：{e}");
+            }
         });
 
         return "执行成功";
+    }
+
+    /// <summary>
+    /// 外触请求体嵌套深度上限（JSON 层级）：正常 webhook 载荷远低于此值。
+    /// 注意计数口径是 JSON 层级而非 JToken 节点层：JObject 的 Children() 是 JProperty，
+    /// 一个 JSON 层级会跨两个 JToken 节点，故按节点计会让有效上限减半。
+    /// </summary>
+    internal const int MaxPayloadDepth = 64;
+
+    /// <summary>外触请求体节点总数上限：宽结构（上万个兄弟节点）虽不爆栈，但同样放大序列化与内存占用。</summary>
+    internal const int MaxPayloadNodes = 10_000;
+
+    /// <summary>
+    /// 外触请求体序列化长度上限（字符）：节点数拦不住「单个巨型叶子」，实测 20MB 单叶载荷
+    /// （节点数仅 2）能被完整序列化进环境变量，只有 Kestrel 的 30MB 请求体默认值兜底——
+    /// 那是基础设施默认值，不是本端点的防护。这里显式设限，与环境变量/日志的体积预期一致。
+    /// </summary>
+    internal const int MaxPayloadChars = 256 * 1024;
+
+    /// <summary>
+    /// 请求体防护（匿名端点，必须早于序列化）：迭代遍历 JToken 树统计**容器嵌套层数**与节点数，
+    /// 越界即拒绝；并核对序列化长度。用显式栈而非递归——本方法的职责就是防爆栈，自身更不能递归。
+    /// 非 JToken 入参（GET 查询参数字典由控制器自建、深度固定）无需遍历。
+    /// </summary>
+    internal static void ValidatePayload(object data)
+    {
+        if (data is not JToken root)
+        {
+            return;
+        }
+        var nodes = 0;
+        var stack = new Stack<(JToken Token, int Depth)>();
+        stack.Push((root, 1));
+        while (stack.Count > 0)
+        {
+            var (token, depth) = stack.Pop();
+            nodes++;
+            if (depth > MaxPayloadDepth)
+            {
+                throw new BusinessException($"请求体嵌套过深（超过 {MaxPayloadDepth} 层），已拒绝执行！");
+            }
+            if (nodes > MaxPayloadNodes)
+            {
+                throw new BusinessException($"请求体节点数过多（超过 {MaxPayloadNodes} 个），已拒绝执行！");
+            }
+            foreach (var child in token.Children())
+            {
+                // 只按「容器嵌套」计层（与 JSON 层级口径一致）：属性节点（JProperty）与标量叶子
+                // 不单独计一层，否则 {"a":{"a":…}} 这类对象「N 层 JSON」会算成 N+1 层（叶子那层），
+                // 上限被凭空削掉一层；而属性节点不排除则直接翻倍
+                var childDepth = child is JProperty || child is not JContainer ? depth : depth + 1;
+                stack.Push((child, childDepth));
+            }
+        }
+        // 深度与节点数已受限，此处序列化不会爆栈；长度用于拦住巨型叶子的体积放大
+        var serialized = JsonConvert.SerializeObject(data);
+        if (serialized.Length > MaxPayloadChars)
+        {
+            throw new BusinessException($"请求体过大（{serialized.Length} 字符，上限 {MaxPayloadChars} 字符），已拒绝执行！");
+        }
     }
 
     /// <summary>
@@ -83,6 +157,9 @@ public class OpenTriggerTaskService
             openTriggerTask.Id = openTriggerTask.NewId();
             _dbContext.OpenTriggerTasks.Add(openTriggerTask);
             await _dbContext.SaveChangesAsync();
+            // 落库后必须失效缓存：Trigger 只读 CacheManager，不刷新的话新建配置在下一次
+            // 任意刷新（如启停）之前形同不存在——实测「保存成功」后立即触发仍报「未找到相关配置」
+            CacheManager.Refresh<OpenTriggerTask>();
         }
         else
         {
@@ -102,6 +179,8 @@ public class OpenTriggerTaskService
             task.EnablePush = openTriggerTask.EnablePush;
             task.EnableProxy = openTriggerTask.EnableProxy;
             await _dbContext.UpdateAsync(task);
+            // 与新建同源：更新后的 Secret/Enable/Whitelist 也是靠缓存生效的，不刷新则改动要等下次偶然刷新
+            CacheManager.Refresh<OpenTriggerTask>();
         }
         return true;
     }
@@ -113,6 +192,8 @@ public class OpenTriggerTaskService
     {
         var idList = string.IsNullOrEmpty(ids) ? [] : ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         await _dbContext.DeleteByIdsAsync<OpenTriggerTask>(idList);
+        // 删除同样要让 Trigger 立刻看不到：缓存里残留的行会让已删配置继续可触发
+        CacheManager.Refresh<OpenTriggerTask>();
         return true;
     }
 

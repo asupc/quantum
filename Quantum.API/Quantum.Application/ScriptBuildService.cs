@@ -480,15 +480,17 @@ public static class ScriptBuildService
     /// <summary>
     /// 脚本可引用的自有/第三方程序集白名单（只读，供 AI Agent 提示词与「平台能力」面板展示）：
     /// 与编译引用集同源；BCL 由框架目录全量提供（仅受门禁命名空间黑名单约束）。
+    /// 连接串/原始 SQL 类能力受门禁 ④ 实参级限制（SQLite 仅内存库、EF 仅内存库选项、无原始 SQL），
+    /// 此处措辞与之一致，避免「面板说能查库、门禁实际拦」的漂移。
     /// </summary>
     public static IReadOnlyList<string> DescribeReferenceWhitelist()
     {
         return
         [
             "System.*（.NET 框架程序集全量可用，但受门禁黑名单约束，见规则摘要）",
-            "Newtonsoft.Json（JSON 序列化/反序列化：JsonConvert、JObject、JArray、JToken）",
-            "HtmlAgilityPack（HTML 解析：HtmlDocument、HtmlNode）",
-            "Microsoft.EntityFrameworkCore / .Relational / .Sqlite / Microsoft.Data.Sqlite（只读查询已有库时可用）",
+            "Newtonsoft.Json（JSON 序列化/反序列化：JsonConvert、JObject、JArray、JToken；不得反序列化为数据库连接类型）",
+            "HtmlAgilityPack（HTML 解析：HtmlDocument、HtmlNode；LoadHtml/SelectNodes 等内存解析可用，Load/Save/HtmlWeb 的路径与网络面受门禁约束）",
+            "Microsoft.Data.Sqlite / Microsoft.EntityFrameworkCore（仅内存库：SqliteConnection 只接受 \"Data Source=:memory:\"，EF UseSqlite 同样只接受内存串；禁止原始 SQL 与连接句柄，查平台数据走 ctx.Env / ctx.CustomData 门面）",
             "Quantum.Plugins（任务契约本身：IQuantumTask / QuantumTaskContext / 各门面接口）",
             "脚本是单文件编译：不要把辅助类拆到另一个 .cs 文件，也不要用 partial 跨文件"
         ];

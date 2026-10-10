@@ -275,6 +275,9 @@ internal sealed class QuantumFileFacade : IQuantumFile
         {
             throw new BusinessException("文件下载地址必须以 http/https 开头！");
         }
+        // SSRF 边界：下载目标必须是公网（本机/私网/链路本地/云元数据一律拒绝），且在建目录与发请求之前判定——
+        // 校验不通过时不留任何目录/残片，也绝不向对端发出请求。
+        await NetworkGuard.EnsurePublicUrlAsync(url, ct);
 
         var targetDir = SafeMediaPath.ResolveDirectory(_rootFullPath, subDir);
         var finalPath = ResolveAvailablePath(Path.Combine(targetDir, SanitizeFileName(fileName)));

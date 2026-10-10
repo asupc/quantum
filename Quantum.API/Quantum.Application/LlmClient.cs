@@ -869,12 +869,19 @@ public class LlmClient : ILlmClient
 /// </summary>
 internal sealed class SseAccumulator
 {
+    private static readonly ILog Log = LogManager.GetLogger("NETCoreRepository", typeof(SseAccumulator));
+
+    /// <summary>单次响应内工具调用数上限：真实模型远低于此值，仅用于挡住报文里被放大的 index。</summary>
+    internal const int MaxToolCallsPerResponse = 64;
+
     private readonly System.Text.StringBuilder _content = new();
     private readonly List<LlmToolCall> _calls = [];
     private string _finishReason;
     private bool _hasReasoning;
     private int _promptTokens;
     private int _completionTokens;
+    /// <summary>被丢弃的越界 tool_calls 块数（仅用于日志去重，不参与响应语义）。</summary>
+    private int _toolCallIndexRejected;
     /// <summary>全部 data 块原文（含 [DONE] 前）：SaveFullPrompt 落盘的响应侧排查数据——
     /// 正文都在前面的增量块里，只存末块的话（通常只剩 usage 尾块）落盘几乎空白。</summary>
     private readonly System.Text.StringBuilder _rawJson = new();
@@ -915,6 +922,17 @@ internal sealed class SseAccumulator
         foreach (var call in delta["tool_calls"] as JArray ?? [])
         {
             var index = call["index"]?.Value<int?>() ?? _calls.Count;
+            // index 由供应商报文决定：无上限时 {"index":2000000000} 一次撑出 20 亿个对象直接 OOM，
+            // 且流式下每块都能重复触发。越界块丢弃（首见记一条日志），既不放大也不中断整条流。
+            if (index < 0 || index >= MaxToolCallsPerResponse)
+            {
+                if (_toolCallIndexRejected == 0)
+                {
+                    Log.Warn($"SSE tool_calls index 越界（index={index}，上限 {MaxToolCallsPerResponse}），该块已忽略");
+                }
+                _toolCallIndexRejected++;
+                continue;
+            }
             while (_calls.Count <= index)
             {
                 _calls.Add(new LlmToolCall());

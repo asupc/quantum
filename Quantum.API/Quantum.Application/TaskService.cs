@@ -28,6 +28,13 @@ public class TaskService
     /// <summary>会话名长度上限（与迁移列型 varchar(100) 对齐）。</summary>
     internal const int MaxSessionNameLength = 100;
 
+    /// <summary>
+    /// 任务脚本源码长度上限（1 MB）：源码在保存/上传时同步走门禁三级扫描 + Roslyn 编译（无超时），
+    /// 且每个不同哈希的编译产物都进缓存——多 MB 源码反复保存会持续吃内存/CPU。
+    /// 正常脚本在数十 KB 量级，1 MB 留足余量的同时把这条链路钉在有界规模上。
+    /// </summary>
+    public const int MaxScriptSourceLength = 1_048_576;
+
     // 脚本树仅展示可执行/可编辑的 .cs 源码任务（执行白名单=ScriptBuildService.ScriptFileExtension）
     readonly List<string> _allowExtends =
     [
@@ -300,6 +307,8 @@ public class TaskService
         {
             throw new BusinessException("脚本路径非法，请检查！");
         }
+        // 长度硬上限必须在 Build 之前：门禁扫描与 Roslyn 编译都是同步无超时的，超大源码不得进门
+        ValidateScriptSourceLength(file.content);
         var build = ScriptBuildService.Build(file.content, scriptFile);
         if (!build.Success)
         {
@@ -470,6 +479,19 @@ public class TaskService
             {
                 throw new BusinessException("会话名不能与现存任务的 Id 相同（防会话路由串线），请更换会话名！");
             }
+        }
+    }
+
+    /// <summary>
+    /// 脚本源码长度校验：超上限一律拒绝（保存/上传两条入口共用）。
+    /// 走 BusinessException（HTTP 恒 200 信封的 Code=500 业务失败）而非返回诊断三类，
+    /// 因为这是请求规模问题、不是脚本本身的门禁/编译问题。
+    /// </summary>
+    public static void ValidateScriptSourceLength(string content)
+    {
+        if (content != null && content.Length > MaxScriptSourceLength)
+        {
+            throw new BusinessException($"任务脚本源码过长（{content.Length} 字符），上限 {MaxScriptSourceLength} 字符（1 MB）！");
         }
     }
 

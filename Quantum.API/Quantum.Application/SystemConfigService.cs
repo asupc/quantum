@@ -131,6 +131,9 @@ public class SystemConfigService
             currentConfig.KnownProxies = setting.KnownProxies;
             currentConfig.AllowedOrigins = setting.AllowedOrigins;
             currentConfig.EnableSwagger = setting.EnableSwagger;
+            // 任务外部请求的内网白名单：默认空 = 只允许公网（防脚本成为 SSRF 跳板）；
+            // 自建内网服务（qBittorrent/NAS/局域网 API）需在此显式登记才能被 ctx.Http/ctx.File 访问
+            currentConfig.TaskNetworkAllowlist = setting.TaskNetworkAllowlist;
         });
         restartRequired = requiresRestart;
         return true;

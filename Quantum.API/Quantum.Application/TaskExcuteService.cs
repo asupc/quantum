@@ -460,23 +460,37 @@ public static class TaskExcuteService
     /// </summary>
     private static readonly ConcurrentDictionary<bool, HttpClient> _taskHttpClients = new();
 
-    /// <summary>外部请求专用 HttpClient（计划 2.1）：EnableProxy 时走系统代理（容器内 HTTP_PROXY 等），超时 100s。</summary>
+    /// <summary>
+    /// 外部请求专用 HttpClient（计划 2.1）：EnableProxy 时走系统代理（容器内 HTTP_PROXY 等），超时 100s。
+    /// SSRF 边界（2026-10-11）：目标主机必须为公网（本机/私网/链路本地/云元数据一律拒绝），
+    /// 并**关闭自动重定向**——行为变化：公网地址被 302 引向内网不再自动跟随，脚本需自行处理 3xx
+    /// （留手动跟随兜底，见 dygangs_search 的 Location 处理）；自动重定向会让「校验公网、跳到内网」成立。
+    /// 两道校验：请求级 <see cref="TaskUrlGuardHandler"/>（每个请求都查目标，代理复用连接时不漏）
+    /// 与连接级 <see cref="NetworkGuard.ConnectTaskHttpAsync"/>（直连时按解析出的公网地址建连，防解析换址）。
+    /// </summary>
     private static HttpClient CreateTaskHttpClient(bool enableProxy)
     {
-        return _taskHttpClients.GetOrAdd(enableProxy, proxy =>
+        return _taskHttpClients.GetOrAdd(enableProxy, proxy => new HttpClient(CreateTaskHttpHandler(proxy))
         {
-            var handler = new SocketsHttpHandler
-            {
-                AllowAutoRedirect = true,
-                UseProxy = proxy,
-                PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-            };
-            return new HttpClient(handler)
-            {
-                Timeout = TimeSpan.FromSeconds(100)
-            };
+            Timeout = TimeSpan.FromSeconds(100)
         });
     }
+
+    /// <summary>任务外部请求 handler（门禁 + 代理开关 + 连接回调）；抽成方法供单测直接断言配置项。</summary>
+    private static TaskUrlGuardHandler CreateTaskHttpHandler(bool enableProxy)
+    {
+        var handler = new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            UseProxy = enableProxy,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            ConnectCallback = NetworkGuard.ConnectTaskHttpAsync
+        };
+        return new TaskUrlGuardHandler(handler);
+    }
+
+    /// <summary>单测观察点：取任务外部请求 handler（含门禁与连接回调配置），不触发真实请求。</summary>
+    internal static TaskUrlGuardHandler CreateTaskHttpHandlerForTest(bool enableProxy) => CreateTaskHttpHandler(enableProxy);
 
     /// <summary>IServiceScope 非 IAsyncDisposable，包一层配合 await using 统一释放。</summary>
     private sealed class ScopeDisposer : IAsyncDisposable
