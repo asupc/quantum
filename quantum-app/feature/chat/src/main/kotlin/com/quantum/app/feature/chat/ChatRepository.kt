@@ -218,10 +218,22 @@ class ChatRepository @Inject constructor(
             }
             current
         }
+        // 2026-10-12 存量清理（机器人消息不再同步 Web/App）：删除本地残留的 channel:* 会话与消息，
+        // 与服务端启动清理对齐——「飞书机器人」等通道会话从列表消失。条件删除，清完即零成本；
+        // 两端版本不一致窗口内（旧服务端仍推送通道消息）可被下一轮同步再次收敛
+        cleanupChannelSessions()
         // 双端同步（2026-09-21）：补拉完成后与服务器交换已读水位（本地上报 + 权威吸收），
         // 放锁外——水位交换与消息游标互不依赖，且内部 runCatching 静默不污染同步语义
         syncReadWatermarks()
         return cursor
+    }
+
+    /** 见 [syncAll] 内注释：先查会话表（小表）再删两张表，稳态只付一次存在性查询。 */
+    private suspend fun cleanupChannelSessions() {
+        if (chatSessionDao.hasChannelSessions()) {
+            chatSessionDao.deleteChannelSessions()
+            chatMessageDao.deleteChannelMessages()
+        }
     }
 
     /**

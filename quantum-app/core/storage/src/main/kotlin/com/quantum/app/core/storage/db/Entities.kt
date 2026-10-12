@@ -184,6 +184,13 @@ interface ChatMessageDao {
     suspend fun deleteSession(sessionId: String)
 
     /**
+     * 删除 channel: 前缀全部本地消息行（2026-10-12 存量清理：机器人消息不再同步 Web/App，
+     * 「飞书机器人」等通道会话从列表消失）。仅当会话表存在 channel 会话时由仓库调用。
+     */
+    @Query("DELETE FROM chat_message WHERE sessionId LIKE 'channel:%'")
+    suspend fun deleteChannelMessages()
+
+    /**
      * 跨会话触发消息迁移（message_moved 帧，2026-09-18 批次）：按 msgId 把行搬到目标会话，
      * 已在目标会话/行不存在则 0 行（幂等）。返回受影响行数（供调用方决定后续动作）。
      */
@@ -287,6 +294,14 @@ interface ChatSessionDao {
     /** 删除会话行（删除会话时随消息行一起清）。 */
     @Query("DELETE FROM chat_session WHERE sessionKey = :sessionKey")
     suspend fun delete(sessionKey: String)
+
+    /** channel: 前缀会话存在性（2026-10-12 存量清理的条件闸：会话表小，此查询恒快）。 */
+    @Query("SELECT EXISTS(SELECT 1 FROM chat_session WHERE sessionKey LIKE 'channel:%')")
+    suspend fun hasChannelSessions(): Boolean
+
+    /** 删除 channel: 前缀全部会话行（2026-10-12 存量清理；消息行由 ChatMessageDao 对应清理）。 */
+    @Query("DELETE FROM chat_session WHERE sessionKey LIKE 'channel:%'")
+    suspend fun deleteChannelSessions()
 
     @Query("DELETE FROM chat_session")
     suspend fun clear()

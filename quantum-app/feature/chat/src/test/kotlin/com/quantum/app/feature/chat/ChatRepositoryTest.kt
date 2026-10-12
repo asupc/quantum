@@ -91,6 +91,9 @@ class FakeChatDao : ChatMessageDao {
     override suspend fun deleteSession(sessionId: String) {
         rows.values.removeAll { it.sessionId == sessionId }
     }
+    override suspend fun deleteChannelMessages() {
+        rows.values.removeAll { it.sessionId.startsWith("channel:") }
+    }
     override suspend fun moveSession(msgId: String, to: String): Int {
         val row = rows[msgId] ?: return 0
         if (row.sessionId == to) {
@@ -112,6 +115,11 @@ class FakeSessionDao : ChatSessionDao {
     override fun sessionsWithLast(): Flow<List<SessionLastMessageRow>> = flowOf(emptyList())
     override suspend fun delete(sessionKey: String) {
         rows.remove(sessionKey)
+    }
+    override suspend fun hasChannelSessions(): Boolean =
+        rows.keys.any { it.startsWith("channel:") }
+    override suspend fun deleteChannelSessions() {
+        rows.keys.removeAll { it.startsWith("channel:") }
     }
     override suspend fun clear() = rows.clear()
 }
@@ -259,6 +267,35 @@ class ChatRepositoryTest {
         assertEquals(700L, cursor)
         assertEquals(700L, cursorDao.value, "游标必须持久化（sync_cursor）")
         assertEquals(700, chatDao.rows.size, "两条页全部入库")
+    }
+
+    /**
+     * 2026-10-12 存量清理：机器人消息不再同步 Web/App——本地残留的 channel:* 会话与消息
+     * 随 syncAll 删除（「飞书机器人」等通道会话从列表消失），任务会话与默认会话不受影响。
+     */
+    @Test
+    fun syncAll_RemovesLegacyChannelSessionsAndMessages() {
+        runBlocking {
+            sessionDao.upsertAll(
+                listOf(
+                    ChatSessionEntity(sessionKey = "channel:feishubot", createTime = 1L, lastSeq = 5L, displayTitle = "飞书机器人"),
+                    ChatSessionEntity(sessionKey = "task-keep", createTime = 1L, lastSeq = 4L)
+                )
+            )
+            chatDao.upsertAll(
+                listOf(
+                    ChatMessageEntity(seq = 5, msgId = "cm1", direction = 2, content = "旧指令", contentType = "text", status = 3, createTime = "t", sessionId = "channel:feishubot"),
+                    ChatMessageEntity(seq = 4, msgId = "tm1", direction = 1, content = "任务消息", contentType = "text", status = 2, createTime = "t", sessionId = "task-keep")
+                )
+            )
+
+            repository.syncAll()
+
+            assertNull(sessionDao.rows["channel:feishubot"], "通道会话行应删除")
+            assertNotNull(sessionDao.rows["task-keep"], "任务会话行保留")
+            assertNull(chatDao.rows["cm1"], "通道消息行应删除")
+            assertNotNull(chatDao.rows["tm1"], "任务消息行保留")
+        }
     }
 
     /**
