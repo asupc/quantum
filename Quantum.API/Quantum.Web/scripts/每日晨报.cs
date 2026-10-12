@@ -448,3 +448,4 @@ public class MorningReportTask : IQuantumTask
         return end < 0 ? trimmed[start..] : trimmed[start..end];
     }
 }
+

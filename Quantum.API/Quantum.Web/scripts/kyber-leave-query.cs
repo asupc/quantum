@@ -343,3 +343,4 @@ public class KyberLeaveQueryTask : IQuantumTask
         return token.ToString();
     }
 }
+

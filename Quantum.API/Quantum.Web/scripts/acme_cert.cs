@@ -1217,3 +1217,4 @@ public class AcmeCertTask : IQuantumTask
         return text.Length <= max ? text : text[..max] + "…";
     }
 }
+

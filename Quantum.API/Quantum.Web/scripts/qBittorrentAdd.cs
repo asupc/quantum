@@ -5,7 +5,6 @@
 // 单文件编译：原 qBittorrentBase.js 的 qblogin / addTorrents 已内联本文件（qbSearch.cs 另内联一份，
 //   两任务各自独立，不能互相 require）。
 // 环境变量：qBittorrentURL（必填，如 http://192.168.x.x:8080，需带 http:// 或 https:// 前缀）
-// 内网地址需先在「系统设置 → 任务外部请求内网白名单」登记（默认只允许公网，防脚本成为 SSRF 跳板）
 //   command（磁力链接，多个换行分隔）
 //   qbusername / qbpassword（可选；缺失则跳过登录，需在 qB 设置>Web UI 中对量子所在 IP 放行或关闭身份校验）
 //   qbSID（自动维护，勿手改：qB 登录会话缓存——12 小时内免登录复用，超时或校验失效自动重登并回写）
@@ -231,3 +230,4 @@ public class QBittorrentAddTask : IQuantumTask
         return string.Empty;
     }
 }
+

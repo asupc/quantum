@@ -18,15 +18,42 @@
 //   不推榜单列表文字回执与逐首「保存」点选；仅取链/探测/落盘失败时推失败明细文字。
 //   直链→歌名映射（music_url_name，7 天过期）仍逐首照写，点旧直链气泡「保存」可反查直存。
 //
-// 推荐任务配置：定时 Cron 0 0 8 * * ?（每天 08:00，Quartz 六段式，按服务器本地时区，
-//   Docker 部署确认容器时区 Asia/Shanghai），开启推送即可；无需指令触发。
+// 缓存去重（2026-10-05 修订，治热歌重复下载）：热歌榜曲目连日在榜，此前逐日对同一首歌
+//   重复下载，文件门面对同名文件自动加 (N) 后缀各存一份（实测单曲攒到第 9 份副本、日重复率
+//   高达九成）。改为落盘独立目录 musicCache/（与 music_search 手动保存、media_saver 直存的
+//   music/ 分离互不影响），并以 CustomData music_daily_cached（Data1=曲目标识）作存在性索引：
+//   命中即免取链/免探测/免下载，直接复用既有文件推气泡。注意：若手动删除 musicCache/ 下
+//   的文件，需同步清理 music_daily_cached 对应记录，否则气泡会指向已不存在的文件。
+//
+// 轮换选歌（2026-10-06 修订，治每日几乎一样）：热歌榜头部曲目连日在榜，固定推前 N 首导致
+//   每天几乎同一批歌（叠加缓存复用后更是天天推同一组文件）。改为候选池=榜单前「推送条数×
+//   窗口倍数」，从中轮换选歌：从未推过的新歌优先（按榜单名次），已缓存曲按 music_daily_cached
+//   Data5（最近推送日期）最久未推优先；选出后按榜单名次排序推送。Data5 为本次新增列，老数据
+//   空值回退 Data4（首次缓存日期）参与排序；窗口倍数可配 scripts_music_daily_window（=1 退化
+//   为原始「榜单前 N」行为）。
+//
+// 下载交互（2026-10-08 新增，App 端一键下载）：音频气泡推完后追加一张「下载」点选卡片，点按
+//   即回复 热歌下载N（裸「热歌下载」= 全部当日已推）→ DownloadPushedAsync 按已推快照把曲目
+//   从 musicCache/ 经服务端 AppMedia 地址复制下载到 music/ 目录（与 music_search「保存N」、
+//   media_saver 直存同目录同命名）。已推快照 = CustomData music_daily_push_songs（Data1=推送
+//   日期 Data2=榜单ID Data3=推送序号即气泡序号 Data4=musicCache 相对路径 Data5=文件名
+//   Data6=歌手 Data7=歌名 Data8=专辑），今日无快照自动回退昨日；music_daily_saved 台账
+//   （Data1=相对路径）跳过已下载曲目防 (N) 副本；快照与台账 3 天自动清理（music/ 文件不动）。
+//   任务触发指令配 ^热歌下载[\d,，\s]*$（勾选正则）+ 指令环境变量 music_daily_msg。
+//
+// 推荐任务配置：定时 Cron 0 0 7 * * ?（每天 07:00，Quartz 六段式，按服务器本地时区，
+//   Docker 部署确认容器时区 Asia/Shanghai），开启推送即可；另配触发指令 ^热歌下载[\d,，\s]*$
+//   （正则、指令环境变量 music_daily_msg）承接 App「下载」点选，无需其它指令。
 //   可选：配 scripts_music_daily_test=1 跳过「同一天已推过」防重（见下），便于手动调试。
 //
 // 环境变量（全部可选）：
 //   scripts_music_daily_rank    榜单：hot=云音乐热歌榜（默认）/ new=新歌榜 / soar=飙升榜 /
 //                               original=原创榜，亦可直填网易数字歌单 ID（如 60198）
 //   scripts_music_daily_count   推送条数（默认 10，1-20）
+//   scripts_music_daily_window  轮换窗口倍数（默认 3，1-10）：候选池=推送条数×窗口，新歌优先、
+//                               老歌按最久未推轮换，治每天推的几乎一样；=1 退化为榜单前 N 原行为
 //   scripts_music_daily_test    =1 时跳过当日防重检查（手动重推用；防重记录见下）
+//   scripts_music_daily_download  手动触发下载（App 点选无需本变量）：已推序号串（如 2,5）或 all
 //   scripts_music_br            音质 128/192/320/740/999（复用 music_search 同名变量，默认 320）
 //   scripts_music_lx_url        lxserver 基地址（复用同名变量；不配则走 GD 直取，VIP 曲易空链）
 //
@@ -44,15 +71,45 @@ public class MusicDailyTask : IQuantumTask
     private const string PlaylistApi = "https://music.163.com/api/playlist/detail";
     private const string PushLogType = "music_daily_push_log";
     private const string UrlNameType = "music_url_name";
-    private const string SaveDir = "music";
+    private const string CachedType = "music_daily_cached";
+    private const string SnapshotType = "music_daily_push_songs";
+    private const string SavedType = "music_daily_saved";
+    private const string SaveDir = "musicCache";
+    private const string MusicDir = "music";
     private const int DefaultCount = 10;
     private const int DefaultBr = 320;
+    private const int DefaultWindow = 3;
 
     public async Task RunAsync(QuantumTaskContext ctx, CancellationToken ct)
     {
+        // 下载交互（2026-10-08 新增）：App「下载」点选回复 热歌下载N / 裸 热歌下载（全部）/
+        // 手动变量 scripts_music_daily_download → 把当日（无则回退昨日）已推曲目从 musicCache/
+        // 复制下载到 music/。放在防重检查之前——早间推送完成后当天任意时刻点下载都不受
+        // 「今日已推过」拦截
+        var manualDownload = Var(ctx, "scripts_music_daily_download");
+        if (!string.IsNullOrWhiteSpace(manualDownload))
+        {
+            if (TryStripDailyDownload(manualDownload, out var manualTokens))
+            {
+                await DownloadPushedAsync(ctx, manualTokens, ct);
+            }
+            else
+            {
+                ctx.Log($"scripts_music_daily_download[{manualDownload}]格式无效：应为已推序号串（如 2,5）或 all。");
+            }
+            return;
+        }
+        var message = Var(ctx, "music_daily_msg", "command");
+        if (!string.IsNullOrWhiteSpace(message) && TryStripDailyDownload(message, out var msgTokens))
+        {
+            await DownloadPushedAsync(ctx, msgTokens, ct);
+            return;
+        }
+
         var rankRaw = (Var(ctx, "scripts_music_daily_rank") ?? "hot").Trim();
         var rankId = ResolveRankId(rankRaw);
         var count = ReadInt(ctx, "scripts_music_daily_count", DefaultCount, 1, 20);
+        var window = ReadInt(ctx, "scripts_music_daily_window", DefaultWindow, 1, 10);
         var br = ReadInt(ctx, "scripts_music_br", DefaultBr, 128, 999);
         var today = DateTime.Now.ToString("yyyy-MM-dd");
 
@@ -72,7 +129,7 @@ public class MusicDailyTask : IQuantumTask
         string chartName;
         try
         {
-            (songs, chartName) = await LoadChartAsync(ctx, rankId, count, ct);
+            (songs, chartName) = await LoadChartAsync(ctx, rankId, count * window, ct);
         }
         catch (OperationCanceledException)
         {
@@ -91,8 +148,18 @@ public class MusicDailyTask : IQuantumTask
             return;
         }
 
+        // 轮换选歌（2026-10-06，治「每日热歌几乎一样」）：热歌榜头部连日在榜，固定推前 N 首导致
+        // 每天几乎同一批歌。改为从榜单前 count×window 的候选池选：从未推过的新歌优先（按名次），
+        // 已缓存曲按最久未推优先（music_daily_cached Data5=最近推送日期，空回退 Data4 首次缓存
+        // 日期），选满后按榜单名次排序推送；window=1 退化为原始「榜单前 N」行为。
+        var cacheIndex = await LoadCacheIndexAsync(ctx, ct);
+        var candidateCount = songs.Count;
+        songs = SelectRotated(songs, cacheIndex, count);
+        var freshCount = songs.Count(s => !cacheIndex.ContainsKey(BuildFileKey(s)));
+        ctx.Log($"轮换选歌：候选 {candidateCount} 首（推送 {count} × 窗口 {window}），选出 {songs.Count} 首：新歌 {freshCount}、缓存复用 {songs.Count - freshCount}。");
+
         var header = $"🎵 每日热歌 · {DateTime.Now.Month}月{DateTime.Now.Day}日 {chartName}（{songs.Count} 首 / 音质 {BrLabel(br)}）";
-        var listText = string.Join("\r\n", songs.Select((s, i) => $"{i + 1}. {s.Name} - {s.Artist}{(string.IsNullOrWhiteSpace(s.Album) ? "" : $"《{s.Album}》")} {s.Interval}"));
+        var listText = string.Join("\r\n", songs.Select((s, i) => $"{i + 1}. {(s.Rank > 0 ? $"#{s.Rank} " : "")}{s.Name} - {s.Artist}{(string.IsNullOrWhiteSpace(s.Album) ? "" : $"《{s.Album}》")} {s.Interval}"));
         ctx.Log(header + "\r\n" + listText);
 
         // 推送关闭（任务级 EnablePush=false）时只落日志
@@ -113,10 +180,42 @@ public class MusicDailyTask : IQuantumTask
         // CDN 直链是 hash 无歌名，media_saver 靠 music_url_name 反查得「歌手 - 歌名.mp3」；整轮推完
         // 才写映射的话，用户秒点保存早于映射写入，反查落空只得 hash 文件名——逐首先写彻底消除
         await CleanStaleUrlNamesAsync(ctx, ct);
+        await CleanStaleSnapshotsAsync(ctx, ct);
         var pushedCount = 0;
+        var reusedCount = 0;
+        var touchedToday = new HashSet<string>(StringComparer.Ordinal);
+        // 已推快照（2026-10-08 下载交互）：气泡推送成功的曲目逐首登记（序号=气泡序号），
+        // 供「下载」点选按 日期+序号 反查 musicCache 相对路径
+        var pushedSnapshot = new List<(int Order, Song Song, string RelativePath, string FileName)>();
         foreach (var (song, i) in songs.Select((s, idx) => (s, idx)))
         {
             ct.ThrowIfCancellationRequested();
+            // 缓存命中（2026-10-05）：music_daily_cached 已登记该曲（musicCache/ 已有文件）→
+            // 免取链/免探测/免下载，直接复用既有文件推气泡。文件门面没有「存在即跳过」能力，
+            // 故以缓存记录行做存在性索引；命中推送成功后回写 Data5=今日（轮换选歌依据）
+            var fileKey = BuildFileKey(song);
+            cacheIndex.TryGetValue(fileKey, out var cached);
+            if (cached != null && !string.IsNullOrWhiteSpace(cached.Data2))
+            {
+                try
+                {
+                    await NotifyMediaAsync(ctx, cached.Data2, $"{i + 1}. {SongLabel(song)}", ct);
+                    pushedCount++;
+                    reusedCount++;
+                    pushedSnapshot.Add((i + 1, song, cached.Data2, cached.Data3));
+                    await TryTouchCachedAsync(ctx, cached, fileKey, touchedToday, today, ct);
+                    ctx.Log($"命中缓存复用（免下载）：{cached.Data3} → {cached.Data2}。");
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception e)
+                {
+                    results.Add($"{QuantumText.Color("red", "✗")} {i + 1}. {SongLabel(song)}：缓存复用推送失败（{e.Message}）");
+                }
+                continue;
+            }
             var (url, _, error) = await ResolveSongUrlAsync(ctx, song, br, lxUrl, ct);
             if (string.IsNullOrEmpty(url))
             {
@@ -132,7 +231,7 @@ public class MusicDailyTask : IQuantumTask
                 results.Add($"{QuantumText.Color("red", "✗")} {i + 1}. {SongLabel(song)}：直链不可用（{probe.Reason}）");
                 continue;
             }
-            // 落盘再推服务端地址：直链约 1 小时过期，下载到 music/ 后文件无时效，
+            // 落盘再推服务端地址：直链约 1 小时过期，下载到 musicCache/ 后文件无时效，
             // 气泡点开走 App 端内播放（api/AppMedia/file），任何时候点都还能听
             try
             {
@@ -140,8 +239,11 @@ public class MusicDailyTask : IQuantumTask
                 var file = await ctx.File.DownloadAsync(url, fileName, SaveDir, ct);
                 // 先写映射再推气泡：旧直链气泡点「保存」时 media_saver 反查必已能命中
                 await TrySaveUrlNameAsync(ctx, url, song, ct);
+                // 登记缓存：该曲连日在榜很常见，之后再遇免下载直接复用
+                await TrySaveCachedAsync(ctx, fileKey, file.RelativePath, fileName, today, ct);
                 await NotifyMediaAsync(ctx, file.RelativePath, $"{i + 1}. {SongLabel(song)}", ct);
                 pushedCount++;
+                pushedSnapshot.Add((i + 1, song, file.RelativePath, fileName));
                 ctx.Log($"已落盘并推送：{fileName}（{file.Length / 1024.0 / 1024.0:F1}MB）→ {file.RelativePath}。");
             }
             catch (OperationCanceledException)
@@ -166,14 +268,51 @@ public class MusicDailyTask : IQuantumTask
             await ctx.Notify.SendAsync(title, text, ct);
         }
 
-        ctx.Log($"每日热歌推送完成：气泡 {pushedCount}/{songs.Count}，榜单 {chartName}（{rankId}）。");
+        // 「下载」点选卡片（2026-10-08 新增，App 端一键下载）：逐曲「下载」按钮 + 「下载全部」，
+        // 点按回复 热歌下载N 由 DownloadPushedAsync 复制到 music/。卡片与快照失败均只落日志
+        // 不影响推送（代价是当天点选下载不可用，气泡播放不受影响）
+        if (pushedSnapshot.Count > 0)
+        {
+            try
+            {
+                var downloadOptions = new List<QuantumOption>();
+                if (pushedSnapshot.Count > 1)
+                {
+                    downloadOptions.Add(new QuantumOption(
+                        Key: "热歌下载",
+                        Label: $"下载全部（{pushedSnapshot.Count} 首）",
+                        Color: "blue"));
+                }
+                foreach (var p in pushedSnapshot)
+                {
+                    downloadOptions.Add(new QuantumOption(
+                        Key: $"热歌下载{p.Order}",
+                        Label: $"下载 · {SongLabel(p.Song)}",
+                        Color: "green"));
+                }
+                await ctx.Notify.SendOptionsAsync(
+                    header + "\r\n点选「下载」保存到 music/ 目录（重复点选自动跳过已下载）：",
+                    downloadOptions, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                ctx.Log($"下载点选卡片推送失败（不影响音频气泡，但当天点选下载不可用）：{e.Message}");
+            }
+            await SaveSnapshotAsync(ctx, today, rankId, pushedSnapshot, ct);
+        }
+
+        ctx.Log($"每日热歌推送完成：气泡 {pushedCount}/{songs.Count}（新下载 {pushedCount - reusedCount}、复用缓存 {reusedCount}），榜单 {chartName}（{rankId}）。");
         await MarkPushedAsync(ctx, today, rankId, ct);
     }
 
     // ------------------------------------------------------------------ 榜单
-    /// <summary>拉网易歌单榜单并取前 count 首。返回 (曲目列表, 榜单名)。</summary>
+    /// <summary>拉网易歌单榜单并取前 keep 首（含榜单名次 Rank，轮换选歌用）。返回 (曲目列表, 榜单名)。</summary>
     private static async Task<(List<Song> Songs, string ChartName)> LoadChartAsync(
-        QuantumTaskContext ctx, string rankId, int count, CancellationToken ct)
+        QuantumTaskContext ctx, string rankId, int keep, CancellationToken ct)
     {
         // 带 UA/Referer 与实测条件一致（网易部分接口裸 UA 会风控）；接口恒回全量约 620KB
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{PlaylistApi}?id={Uri.EscapeDataString(rankId)}");
@@ -189,8 +328,10 @@ public class MusicDailyTask : IQuantumTask
         var pl = root["result"];
         var tracks = pl?["tracks"] as JArray ?? new JArray();
         var songs = new List<Song>();
+        var rank = 0;
         foreach (var item in tracks)
         {
+            rank++;
             var id = item["id"]?.ToString();
             if (string.IsNullOrEmpty(id))
             {
@@ -202,8 +343,9 @@ public class MusicDailyTask : IQuantumTask
                 JoinArtist(item["artists"]),
                 item["album"]?["name"]?.ToString() ?? "",
                 FormatDuration(item["duration"]?.ToObject<long?>() ?? null),
-                "wy"));
-            if (songs.Count >= count)
+                "wy",
+                rank));
+            if (songs.Count >= keep)
             {
                 break;
             }
@@ -254,6 +396,32 @@ public class MusicDailyTask : IQuantumTask
         }
     }
 
+    /// <summary>清理 3 天前的已推快照与已下载台账（下载交互只对近两天有效；music/ 与 musicCache/
+    /// 文件不受影响）；失败只落日志不影响推送。</summary>
+    private static async Task CleanStaleSnapshotsAsync(QuantumTaskContext ctx, CancellationToken ct)
+    {
+        try
+        {
+            foreach (var type in new[] { SnapshotType, SavedType })
+            {
+                var stale = await ctx.CustomData.QueryAsync(type,
+                    new QuantumCustomDataFilter { CreateTimeEnd = DateTime.Now.AddDays(-3) }, ct);
+                if (stale.Count > 0)
+                {
+                    await ctx.CustomData.DeleteAsync(stale.Select(n => n.Id).ToList(), ct);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"旧快照/台账清理失败（不影响推送）：{e.Message}");
+        }
+    }
+
     /// <summary>单首映射写入（Data1=直链 Data2=歌名 Data3=歌手 Data4=专辑）：逐首在推气泡**前**调用，
     /// 保证气泡可点「保存」的任意时刻 media_saver 反查必中；失败只落日志不影响推送。</summary>
     private static async Task TrySaveUrlNameAsync(QuantumTaskContext ctx, string url, Song song, CancellationToken ct)
@@ -278,6 +446,348 @@ public class MusicDailyTask : IQuantumTask
         }
     }
 
+    /// <summary>缓存索引一次性加载（Data1=曲目标识 → 缓存行）：轮换选歌与推送循环共用，免逐曲查询。
+    /// 查询异常按空索引处理（全部视为未缓存，宁可重下也不漏推）。</summary>
+    private static async Task<Dictionary<string, QuantumCustomDataValue>> LoadCacheIndexAsync(
+        QuantumTaskContext ctx, CancellationToken ct)
+    {
+        try
+        {
+            var rows = await ctx.CustomData.QueryAsync(CachedType, ct: ct);
+            var index = new Dictionary<string, QuantumCustomDataValue>(StringComparer.Ordinal);
+            foreach (var row in rows)
+            {
+                if (!string.IsNullOrWhiteSpace(row.Data1))
+                {
+                    index[row.Data1] = row; // 重复曲目标识以后写入的为准
+                }
+            }
+            return index;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"缓存索引加载失败（按全部未缓存处理，将重新下载）：{e.Message}");
+            return new Dictionary<string, QuantumCustomDataValue>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>轮换选歌：候选池内「从未推过」的新歌优先（按榜单名次），其余按最久未推优先
+    /// （LastPushDate），同优先级按名次；选满 count 后按名次排序返回，气泡顺序与榜单一致。</summary>
+    private static List<Song> SelectRotated(
+        List<Song> candidates, Dictionary<string, QuantumCustomDataValue> cacheIndex, int count)
+    {
+        return candidates
+            .Select(s => (Song: s, Cached: cacheIndex.TryGetValue(BuildFileKey(s), out var row) ? row : null))
+            .OrderBy(t => t.Cached != null)
+            .ThenBy(t => LastPushDate(t.Cached))
+            .ThenBy(t => t.Song.Rank)
+            .Take(count)
+            .OrderBy(t => t.Song.Rank)
+            .Select(t => t.Song)
+            .ToList();
+    }
+
+    /// <summary>缓存行「最近推送日期」：Data5 优先，老数据空回退 Data4（首次缓存日期）；
+    /// 均无效返回 MaxValue（视作最近刚推过，排最后）。</summary>
+    private static DateTime LastPushDate(QuantumCustomDataValue row)
+    {
+        if (row != null)
+        {
+            if (DateTime.TryParse(row.Data5, out var d5))
+            {
+                return d5;
+            }
+            if (DateTime.TryParse(row.Data4, out var d4))
+            {
+                return d4;
+            }
+        }
+        return DateTime.MaxValue;
+    }
+
+    /// <summary>缓存命中推送成功后回写 Data5=今日（轮换选歌的「最近推送日期」依据）；
+    /// 同一轮内同一曲只写一次（touchedToday 去重）；失败只落日志不影响推送
+    /// （代价是该曲明天可能重复推一次，不丢功能）。</summary>
+    private static async Task TryTouchCachedAsync(
+        QuantumTaskContext ctx, QuantumCustomDataValue row, string fileKey,
+        HashSet<string> touchedToday, string today, CancellationToken ct)
+    {
+        if (string.Equals(row.Data5, today, StringComparison.Ordinal) || touchedToday.Contains(fileKey))
+        {
+            return; // 已是今日或本轮已写过，免写
+        }
+        try
+        {
+            await ctx.CustomData.UpdateAsync(new List<QuantumCustomDataValue> { row with { Data5 = today } }, ct);
+            touchedToday.Add(fileKey);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"轮换戳记（最近推送日期）回写失败（不影响推送）：{e.Message}");
+        }
+    }
+
+    /// <summary>缓存登记（Data1=曲目标识 Data2=相对路径 Data3=文件名 Data4=缓存日期 Data5=最近推送日期）：
+    /// 失败只落日志不影响本次推送（代价是该曲下次会再下一份，不丢功能）。</summary>
+    private static async Task TrySaveCachedAsync(
+        QuantumTaskContext ctx, string fileKey, string relativePath, string fileName, string date, CancellationToken ct)
+    {
+        try
+        {
+            await ctx.CustomData.AddAsync(new List<QuantumCustomDataValue>
+            {
+                new()
+                {
+                    Type = CachedType, Data1 = fileKey, Data2 = relativePath, Data3 = fileName,
+                    Data4 = date, Data5 = date
+                }
+            }, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"缓存记录登记失败（不影响本次推送）：{e.Message}");
+        }
+    }
+
+    // ------------------------------------------------------------------ 下载（热歌下载N：musicCache/ → music/）
+    /// <summary>下载已推热歌：按「日期（今日无则回退昨日）+推送序号」取快照，把 musicCache/ 文件
+    /// 经服务端 AppMedia 地址复制下载到 music/（与 music_search「保存N」、media_saver 直存同目录
+    /// 同命名，气泡文件已永存服务端故无直链时效问题）。tokensRaw="all" 或序号串（如 "2,5"）；
+    /// 已下载曲目以 music_daily_saved 台账去重，防 music/ 里攒 (N) 副本。</summary>
+    private static async Task DownloadPushedAsync(QuantumTaskContext ctx, string tokensRaw, CancellationToken ct)
+    {
+        try
+        {
+            await ctx.CustomData.SaveTitleAsync(SavedType, "每日热歌已下载",
+                new[] { "musicCache相对路径", "下载日期", "music文件名" }, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"已下载台账表头登记失败（不影响下载）：{e.Message}");
+        }
+
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        var snapshot = await LoadSnapshotAsync(ctx, today, ct);
+        if (snapshot.Count == 0)
+        {
+            var yesterday = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
+            snapshot = await LoadSnapshotAsync(ctx, yesterday, ct);
+            if (snapshot.Count > 0)
+            {
+                ctx.Log($"今日无已推快照，回退昨日（{yesterday}）{snapshot.Count} 首。");
+            }
+        }
+        if (snapshot.Count == 0)
+        {
+            await NotifyAsync(ctx, "热歌下载", $"今日（{today}）尚无已推送的热歌记录，请等每日推送后再点下载。", ct);
+            return;
+        }
+
+        // 序号 → 快照行（同日多轮推送同序号时，以后落库的为准=与聊天里最新气泡对应）
+        var byOrder = new Dictionary<int, (int Order, string RelativePath, string FileName, string Label)>();
+        foreach (var row in snapshot)
+        {
+            if (int.TryParse(row.Data3, out var order) && order > 0 && !string.IsNullOrWhiteSpace(row.Data4))
+            {
+                var label = string.IsNullOrWhiteSpace(row.Data6)
+                    ? (row.Data7 ?? "")
+                    : $"{row.Data7} - {row.Data6}";
+                byOrder[order] = (order, row.Data4, row.Data5, label);
+            }
+        }
+
+        var picks = new List<(int Order, string RelativePath, string FileName, string Label)>();
+        var missed = new List<string>();
+        if (tokensRaw == "all")
+        {
+            picks.AddRange(byOrder.Values.OrderBy(p => p.Order));
+        }
+        else
+        {
+            foreach (var token in tokensRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (int.TryParse(token, out var order) && byOrder.TryGetValue(order, out var pick))
+                {
+                    picks.Add(pick);
+                }
+                else
+                {
+                    missed.Add(token);
+                }
+            }
+        }
+
+        var results = new List<string>();
+        foreach (var miss in missed)
+        {
+            results.Add($"{QuantumText.Color("red", "✗")} [{miss}] 不在已推热歌序号里（1-{byOrder.Count}），已跳过。");
+        }
+
+        var ok = 0;
+        foreach (var pick in picks)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                // 台账去重：该曲目已复制进 music/ 过则跳过（文件门面同名会加 (N) 后缀存副本）
+                var saved = await ctx.CustomData.QueryAsync(SavedType, pick.RelativePath, ct: ct);
+                if (saved.Count > 0)
+                {
+                    results.Add($"{QuantumText.Color("gray", "⊘")} {pick.Label}：已在 music/（{saved[0].Data3 ?? pick.FileName}），跳过。");
+                    continue;
+                }
+                var fileName = string.IsNullOrWhiteSpace(pick.FileName)
+                    ? pick.RelativePath[(pick.RelativePath.LastIndexOf('/') + 1)..]
+                    : pick.FileName;
+                // musicCache/ 文件已永存服务端，经 AppMedia 服务端地址复制下载到 music/
+                var serverUrl = "api/AppMedia/file?path=" + Uri.EscapeDataString(pick.RelativePath);
+                var file = await ctx.File.DownloadAsync(serverUrl, fileName, MusicDir, ct);
+                ok++;
+                await TrySaveLedgerAsync(ctx, pick.RelativePath, today, file.FileName, ct);
+                results.Add($"{QuantumText.Color("green", "✓")} {pick.Label}（{file.Length / 1024.0 / 1024.0:F1}MB）→ {file.FullPath}");
+                ctx.Log($"热歌下载：{pick.RelativePath} → {file.FullPath}，{file.Length} 字节。");
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                results.Add($"{QuantumText.Color("red", "✗")} {pick.Label}：下载失败（{e.Message}）");
+            }
+        }
+
+        var title = ok == picks.Count && missed.Count == 0 ? "热歌下载完成" : $"热歌下载（{ok}/{picks.Count + missed.Count}）";
+        var text = string.Join("\r\n", results);
+        ctx.Log(text);
+        await NotifyAsync(ctx, title, text, ct);
+    }
+
+    /// <summary>按推送日期取已推快照行（Data3=序号且 Data4=相对路径 的有效行）；查询失败按空处理，
+    /// 由调用方回退昨日或提示未推送。</summary>
+    private static async Task<List<QuantumCustomDataValue>> LoadSnapshotAsync(
+        QuantumTaskContext ctx, string date, CancellationToken ct)
+    {
+        try
+        {
+            var rows = await ctx.CustomData.QueryAsync(SnapshotType, date, ct: ct);
+            return rows
+                .Where(r => int.TryParse(r.Data3, out var order) && order > 0 && !string.IsNullOrWhiteSpace(r.Data4))
+                .ToList();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"已推快照查询失败（{e.Message}）。");
+            return new List<QuantumCustomDataValue>();
+        }
+    }
+
+    /// <summary>已推快照落库（music_daily_push_songs：Data1=推送日期 Data2=榜单ID Data3=推送序号
+    /// Data4=musicCache 相对路径 Data5=文件名 Data6=歌手 Data7=歌名 Data8=专辑）：下载交互按
+    /// 「日期+序号」反查。失败只落日志不影响推送（代价是当天点选下载不可用）。</summary>
+    private static async Task SaveSnapshotAsync(
+        QuantumTaskContext ctx, string today, string rankId,
+        List<(int Order, Song Song, string RelativePath, string FileName)> pushed, CancellationToken ct)
+    {
+        try
+        {
+            await ctx.CustomData.SaveTitleAsync(SnapshotType, "每日热歌已推快照",
+                new[] { "推送日期", "榜单ID", "推送序号", "musicCache相对路径", "文件名", "歌手", "歌名", "专辑" }, ct);
+            await ctx.CustomData.AddAsync(pushed.Select(p => new QuantumCustomDataValue
+            {
+                Type = SnapshotType,
+                Data1 = today,
+                Data2 = rankId,
+                Data3 = p.Order.ToString(),
+                Data4 = p.RelativePath,
+                Data5 = p.FileName,
+                Data6 = p.Song.Artist,
+                Data7 = p.Song.Name,
+                Data8 = p.Song.Album
+            }).ToList(), ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"已推快照落库失败（不影响推送，但当天点选下载不可用）：{e.Message}");
+        }
+    }
+
+    /// <summary>已下载台账登记（music_daily_saved：Data1=musicCache 相对路径 Data2=日期 Data3=music/
+    /// 实际文件名）：失败只落日志（代价是再点一次会重下一份 (N) 副本）。</summary>
+    private static async Task TrySaveLedgerAsync(
+        QuantumTaskContext ctx, string relativePath, string date, string fileName, CancellationToken ct)
+    {
+        try
+        {
+            await ctx.CustomData.AddAsync(new List<QuantumCustomDataValue>
+            {
+                new() { Type = SavedType, Data1 = relativePath, Data2 = date, Data3 = fileName }
+            }, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"已下载台账登记失败（不影响本次下载）：{e.Message}");
+        }
+    }
+
+    /// <summary>「热歌下载N / 热歌下载（=全部）/ all / 纯序号串」判定并规范化：返回序号串（如 "2,5"）
+    /// 或 "all"；非数字垃圾返回 false（交回每日推送主流程，指令任务由正则兜底不会误吞）。
+    /// 注意不用「下载N/保存N」前缀——那是 music_search 的指令，避免点选跨任务误触发。</summary>
+    private static bool TryStripDailyDownload(string text, out string tokensRaw)
+    {
+        tokensRaw = null;
+        var trimmed = text?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return false;
+        }
+        var rest = trimmed;
+        if (rest.StartsWith("热歌下载", StringComparison.Ordinal))
+        {
+            rest = rest["热歌下载".Length..].Trim([' ', ':', '：', ',', '，']);
+        }
+        if (rest.Length == 0 || rest is "all" or "全部")
+        {
+            tokensRaw = "all";
+            return true;
+        }
+        var tokens = rest.Split([',', '，', ' ', '　', '\n', '\r', '\t'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Length > 0 && tokens.All(t => t.Length <= 15 && t.All(char.IsDigit)))
+        {
+            tokensRaw = string.Join(",", tokens);
+        }
+        return tokensRaw != null;
+    }
+
     /// <summary>榜单别名 → 网易歌单 ID；数字直填；其它垃圾值回热歌榜。</summary>
     private static string ResolveRankId(string raw)
     {
@@ -293,7 +803,7 @@ public class MusicDailyTask : IQuantumTask
     }
 
     // ------------------------------------------------------------------ 取链（与 music_search 同逻辑，单文件内联）
-    private sealed record Song(string Id, string Name, string Artist, string Album, string Interval, string Source);
+    private sealed record Song(string Id, string Name, string Artist, string Album, string Interval, string Source, int Rank = 0);
 
     private static string SongLabel(Song song)
     {
@@ -573,12 +1083,15 @@ public class MusicDailyTask : IQuantumTask
         {
             ext = br >= 740 ? "flac" : "mp3";
         }
+        return $"{BuildFileKey(song)}.{ext}";
+    }
+
+    /// <summary>曲目标识（= 文件名去扩展名）：歌手 - 歌名，超 100 字符截断。与直链/扩展名无关，
+    /// 缓存命中判定用它——同一曲目即便换源/换扩展名也视为已缓存，不会再下第二份。</summary>
+    private static string BuildFileKey(Song song)
+    {
         var stem = string.IsNullOrWhiteSpace(song.Artist) ? song.Name : $"{song.Artist} - {song.Name}";
-        if (stem.Length > 100)
-        {
-            stem = stem[..100];
-        }
-        return $"{stem}.{ext}";
+        return stem.Length > 100 ? stem[..100] : stem;
     }
 
     private static string BrLabel(int br) => br >= 740 ? $"无损{br}" : $"{br}k";

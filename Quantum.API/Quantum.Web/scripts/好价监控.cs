@@ -1,6 +1,9 @@
 // ============================================================================
 // 好价监控（2026-09-20 新增）：轮询什么值得买移动站好价榜（m.smzdm.com/top/{分类}/，
 // Nuxt SSR 匿名直连无凭据），按值率/评论数/关键词过滤，把「新出现且达标」的好价推送到 App。
+// 2026-10-06 修复：每榜请求改为 20 秒链接 CTS 硬超时（ctx.Http 的 100 秒全局超时对
+// 被上游/WAF 挂起的连接不生效，会一路挂到整轮以 TaskCanceledException 失败收场）；
+// 连续 3 榜抓取失败即熔断本轮剩余榜单，单榜超时不再拖垮整轮任务。
 // 状态机对齐 yousukenabo/smzdm（基线不推旧货、未达标新品等涨、已推永不再推）。
 // 数据源结论（2026-09-20 调研）：faxian json_more 需浏览器生成 WAF cookie（纯 HTTP 不可行）、
 // search.smzdm.com 关键词搜索被瑞数反爬（上游要隐身 Chromium），均不采用；榜单页偶发瑞数
@@ -25,6 +28,11 @@ public class HaoJiaMonitorTask : IQuantumTask
         "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
     private const string SeenType = "haojia_seen";
     private static readonly TimeSpan Ttl = TimeSpan.FromDays(7);
+
+    // 单榜硬超时：被 WAF/上游挂起的连接不触发 ctx.Http 的 100 秒全局超时，必须链接
+    // 自己的 CTS 才能快速失败；超时按该榜本轮抓取失败处理（计入熔断计数，不中断整轮）。
+    private const int PerRankTimeoutSeconds = 20;
+    private const int MaxConsecutiveFailures = 3; // 连续失败达到该数即熔断本轮剩余榜单
 
     private static readonly (string Slug, string Name)[] AllRanks =
     [
@@ -82,24 +90,34 @@ public class HaoJiaMonitorTask : IQuantumTask
         var adds = new List<QuantumCustomDataValue>();
         var now = NowStamp();
         var baselineAdds = 0;
+        var consecutiveFailures = 0;
 
-        foreach (var (slug, name) in ranks)
+        for (var index = 0; index < ranks.Count; index++)
         {
+            var (slug, name) = ranks[index];
             ct.ThrowIfCancellationRequested();
             string html;
             try
             {
                 html = await FetchAsync(ctx, slug, ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                throw;
+                throw; // 任务真取消：立即中断整轮
             }
             catch (Exception e)
             {
+                // 单榜失败（含 20s 硬超时）：记日志跳过，连续多榜失败则熔断剩余榜单
                 ctx.Log($"[{name}] 抓取失败：{e.Message}");
+                consecutiveFailures++;
+                if (consecutiveFailures >= MaxConsecutiveFailures)
+                {
+                    ctx.Log($"连续 {consecutiveFailures} 榜抓取失败，上游疑似不可达/被 WAF 拦截，本轮熔断剩余 {ranks.Count - index - 1} 个榜单");
+                    break;
+                }
                 continue;
             }
+            consecutiveFailures = 0;
             var items = ParseNuxtItems(html);
             if (items.Count == 0)
             {
@@ -194,8 +212,26 @@ public class HaoJiaMonitorTask : IQuantumTask
         request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         request.Headers.TryAddWithoutValidation("Accept-Language", "zh-CN,zh;q=0.9");
         request.Headers.TryAddWithoutValidation("Referer", "https://m.smzdm.com/");
-        using var response = await ctx.Http.SendAsync(request, ct);
-        return await response.Content.ReadAsStringAsync(ct);
+        return await SendWithTimeoutAsync(ctx, request, ct);
+    }
+
+    /// <summary>
+    /// 链接单榜硬超时：被 WAF/上游挂起的连接不会触发 ctx.Http 的 100 秒全局超时，
+    /// 必须自建 CTS 才能在 20 秒处快速失败。真取消仍穿透（外层 OCE-ct 重新抛出）。
+    /// </summary>
+    private static async Task<string> SendWithTimeoutAsync(QuantumTaskContext ctx, HttpRequestMessage request, CancellationToken ct)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(PerRankTimeoutSeconds));
+        try
+        {
+            using var response = await ctx.Http.SendAsync(request, timeoutCts.Token);
+            return await response.Content.ReadAsStringAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"请求 {PerRankTimeoutSeconds} 秒内无响应（疑似被 WAF 挂起）");
+        }
     }
 
     private static readonly Regex NuxtBlockRegex = new(@"window\.__NUXT__\s*=\s*(.*?)</script>", RegexOptions.Singleline | RegexOptions.Compiled);

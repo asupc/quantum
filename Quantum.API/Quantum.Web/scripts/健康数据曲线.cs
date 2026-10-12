@@ -114,3 +114,4 @@ public class HealthChartTask : IQuantumTask
         return okStart && okEnd ? (endTime - startTime).Days : 0;
     }
 }
+

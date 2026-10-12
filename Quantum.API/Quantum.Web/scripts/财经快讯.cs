@@ -593,3 +593,4 @@ public class FinanceFlashTask : IQuantumTask
         return end < 0 ? trimmed[start..] : trimmed[start..end];
     }
 }
+

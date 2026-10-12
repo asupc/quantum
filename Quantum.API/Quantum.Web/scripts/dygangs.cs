@@ -11,8 +11,6 @@
 //   qBittorrentBase.js 的 qblogin/addTorrents → 本文件内联（脚本单文件编译，不能跨文件引用）。
 // 环境变量：scripts_dygangs_urls（多页用 & 分隔，仅作监听清单为空时的回退）；
 //   qBittorrentURL（必填，带 http:// 或 https:// 前缀，如 http://192.168.x.x:8080）；
-//     注意：内网地址（192.168./10./172.16-31./本机）需先在「系统设置 → 任务外部请求内网白名单」登记，
-//     否则 ctx.Http 会拒绝（默认只允许公网，防脚本成为 SSRF 跳板）。
 //   qbusername / qbpassword（可选；缺失则跳过登录，需在 qB 设置>Web UI 中对量子所在 IP 放行或关闭身份校验）；
 //   qbSID（自动维护，勿手改：qB 登录会话缓存——12 小时内免登录复用，超时或校验失效自动重登并回写）。
 // 与旧脚本的差异（有意为之）：
@@ -36,6 +34,9 @@
 //   7) 2026-09-30 修复：电影港页面把磁力 href 里的 & 转义成 &amp;，HtmlAgilityPack 的 GetAttributeValue
 //      按原始属性值返回、不做解码，&amp; 原样入库/提交 qB —— dn/xl/tr 参数全部失效（只剩 btih、没有 tracker），
 //      种子集体停在「正在下载元数据」。现抓取后先还原 HTML 实体再入库（&amp;→&、&#x26;→& 等）。
+//   8) 2026-10-11 日志瘦身：已采集条目不再逐条落日志（单页 242 条磁力曾刷出上千行），低分辨率跳过同理，
+//      均并入每页一行汇总（本页磁力 N 条，已采集 X，新采集 Y，其中 2160P/4K …）；「新采集」与 qB 提交明细保留
+//      ——磁力串按差异 5 的约定仍以任务日志为留存处。
 // ============================================================================
 using System.Text;
 using HtmlAgilityPack;
@@ -124,6 +125,7 @@ public class DygangsMonitorTask : IQuantumTask
             }
 
             var newData = new List<QuantumCustomDataValue>();
+            var duplicated = 0;
             foreach (var anchor in anchors)
             {
                 ct.ThrowIfCancellationRequested();
@@ -133,10 +135,10 @@ public class DygangsMonitorTask : IQuantumTask
                     continue;
                 }
                 var name = anchor.InnerText?.Trim();
-                // Data3=新行磁力；Data4=旧「影视监听记录」磁力
+                // Data3=新行磁力；Data4=旧「影视监听记录」磁力；已采集不再逐条落日志，计入页汇总（见文件头差异 8）
                 if (datas.Any(n => n.Data3 == link || n.Data4 == link))
                 {
-                    ctx.Log($"[{name}]已采集.");
+                    duplicated++;
                     continue;
                 }
                 ctx.Log($"[{name}]新采集");
@@ -149,13 +151,14 @@ public class DygangsMonitorTask : IQuantumTask
                 });
             }
 
+            // 提交计数提到页作用域，供页汇总行引用（见文件头差异 8）
+            var submitted = 0;
+            var eligible = 0;
             if (newData.Count > 0)
             {
                 await ctx.CustomData.AddAsync(newData, ct);
 
                 // 提交 qBittorrent：按 2160P/4K 筛选逐条提交（保存子目录=片名），成败落日志并计数
-                var submitted = 0;
-                var eligible = 0;
                 if (string.IsNullOrEmpty(qbUrl))
                 {
                     if (!qbUrlMissingLogged)
@@ -173,10 +176,9 @@ public class DygangsMonitorTask : IQuantumTask
                     foreach (var item in newData)
                     {
                         ct.ThrowIfCancellationRequested();
-                        // 与旧脚本一致：仅 2160P/4K 提交下载，其余跳过（标题忽略大小写匹配）
+                        // 与旧脚本一致：仅 2160P/4K 提交下载，其余跳过不逐条落日志（条数见页汇总与推送尾部，差异 8）
                         if (!IsHighRes(item.Data2))
                         {
-                            ctx.Log($"[{page.Name}]跳过下载不包含指定分辨率的项目：{item.Data2}");
                             continue;
                         }
                         eligible++;
@@ -236,7 +238,10 @@ public class DygangsMonitorTask : IQuantumTask
                     await ctx.Notify.SendAsync("电影港更新", content, ct);
                 }
             }
-            ctx.Log($"[{page.Name}]本页磁力 {anchors.Count} 条，新采集 {newData.Count} 条。");
+            var qbPart = newData.Count > 0 && !string.IsNullOrEmpty(qbUrl)
+                ? $"，其中 2160P/4K {eligible} 条已提交 qB（成功 {submitted} 条）"
+                : string.Empty;
+            ctx.Log($"[{page.Name}]本页磁力 {anchors.Count} 条，已采集 {duplicated} 条，新采集 {newData.Count} 条{qbPart}。");
             total += newData.Count;
         }
 

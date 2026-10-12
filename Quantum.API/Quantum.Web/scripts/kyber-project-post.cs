@@ -361,3 +361,4 @@ public class KyberProjectPostTask : IQuantumTask
         return token.ToString();
     }
 }
+

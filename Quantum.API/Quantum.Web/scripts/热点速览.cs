@@ -1,31 +1,37 @@
 // ============================================================================
-// 热点速览（2026-09-17 新写）：定时/指令把热点新闻摘要推送到 App 会话流，重复出现的话题不打扰。
+// 热点速览（2026-09-22 改版为「板块新闻」）：定时/指令把指定板块的新增新闻推送到 App 会话流，
+// 去重窗口期内已推送过的条目不再重复打扰。
 // 后端要求：用到 2026-09-17 的 ctx.CustomData 契约（全列过滤 QueryAsync / AddAsync / DeleteAsync /
 //   SaveTitleAsync）做「已推送」去重，旧构建会拒绝保存，请先部署含该契约的后端。
-// 数据源（2026-09-17 实测选型，全部免 key；微博官方接口要 Cookie、vvhan/tenapi 聚合站均已失效故不用）：
-//   知乎热榜 —— api.zhihu.com/topstory/hot-list（题目自带 excerpt 摘要与热度，即「总结」形态）；
-//   60s API —— github.com/vikiboss/60s「每天60秒读懂世界」（当日要闻清单+封面图），作备选源与兜底。
-// 详情链接（2026-09-19 增；2026-09-20 改命名链接提信息密度）：知乎条目 target.url 形如
-//   api.zhihu.com/questions/{id}，改写为网页版 www.zhihu.com/question/{id}；推送以 {{link:详情|URL}}
-//   命名链接附在标题行尾（App/Web 2026-09-20 起支持：气泡内只显示「详情」、点击跳转，不占链接地址版面；
-//   旧版客户端按字面显示标记）；60s 源接口无逐条链接（news 为纯文本数组），
-//   消息尾部「查看当天全文」同样为命名链接（跳当天微信原文 link）。
+// 数据源（2026-09-22 全部实测可用，免 key 免 Cookie；原 zhihu 热榜按 IP 风控、新浪分类滚动
+//   roll/get 已全量回「列表和页面没有经过注册」故弃用；60s 的 baidu/hotlist、bilibili、finance
+//   端点已 404 勿再试）：
+//   财经 —— 新浪 7×24 zhibo.sina.com.cn（zhibo_id=152），与「财经快讯」任务同源已生产验证，
+//     条目为整句快讯，条目键用源内唯一 id；无独立「全球/科技」频道源，「要闻」（60s 当日国内外
+//     要闻，指令别名 全球/国际/早报/60s）与「知乎热榜」（常含科技/国际话题）作近似覆盖；
+//   要闻 —— 60s API /v2/60s（当日要闻清单，尾部附当天微信原文链接，沿用封面图推送）；
+//   热榜系 —— 60s API /v2/zhihu、/weibo、/toutiao、/baidu/realtime、/douyin（title/link/热度，
+//     百度带 desc 摘要、知乎带 detail 摘要与热度文案，格式统一解析）。
+// 板块表：财经 finance / 要闻 news（别名 全球、国际、早报、60s）/ 知乎 zhihu / 微博 weibo /
+//   头条 toutiao / 百度 baidu / 抖音 douyin；默认推送 财经、要闻、知乎。
 // 触发与配置：
-//   定时 Cron 推荐 0 0 9,21 * * ?（每天 9 点/21 点各推一次）；
-//   指令触发：触发指令填 ^热点.* 勾正则，指令环境变量名填 hotnews_msg——
-//     App 端发「热点」走默认源，发「热点 60s」临时切换 60s 源（也可 Cron+指令配在同一任务上）；
-//   Web 手动调试：配变量 command=热点 或 热点 60s 即可。
+//   定时 Cron 维持每 4 小时一轮；指令触发：发「热点」走配置板块，发「热点 财经 知乎」临时只推
+//   指定板块（中文名/英文键均可）；指令带了文字但没匹配到任何板块时回复可用板块清单；
+//   Web 手动调试：配变量 command=热点 或 热点 财经 即可（兼容 hotnews_msg 变量名）。
 // 环境变量：
-//   scripts_hotnews_source（可选，默认 zhihu，可 60s）；scripts_hotnews_max（可选，默认 10，限 3~20）；
-//   scripts_hotnews_seen_hours（可选，去重窗口小时数，默认 36）；scripts_60s_url（可选，60s 接口地址轮换用）。
-// 去重设计（custom data 类型 hotnews_seen，表头：来源/标题键/推送时间）：
-//   每次推送把本次出现的话题标题键写入；窗口期内再次出现的话题不再带「新」标（照常列出，仅少个标），
-//   窗口外自动清理（>72h 的记录删除）——所以「新」的含义是「窗口期内首次上榜」，不是绝对首见。
+//   scripts_hotnews_boards（可选，逗号分隔板块，默认 财经,要闻,知乎）；
+//   scripts_hotnews_max（可选，每板块条数上限，默认 5，限 3~10）；
+//   scripts_hotnews_seen_hours（可选，去重窗口小时数，默认 36）；
+//   scripts_60s_url（可选，60s 要闻接口地址整体替换用）。
+// 去重设计（custom data 类型 hotnews_seen，表头：板块/标题键/推送时间）：
+//   每板块只推窗口期内未推送过的条目（同轮已推过的标题跨板块也不重复出现）；本次推送的条目键
+//   写入记录（Data1 存板块键；财经用源内 id、其余用去空白标题键），窗口外自动清理（>72h 删除）；
+//   全部板块都无新增时只发一条「无新增」提示，不发正文；个别板块拉取失败在正文尾部标注，
+//   全部失败才报错。注意：SaveTitleAsync 每轮只调一次——同轮重复调会触发后端实体跟踪冲突
+//   （2026-09-22 试运行实测），故表头保存独立于逐板块写入。
 // 注意事项：
-//   1) 知乎接口按出口 IP 风控，若 NAS 出口被拦（HTTP 403），把 scripts_hotnews_source 设为 60s 即可，
-//      zhihu 拉取失败时脚本也会自动落 60s 兜底；
-//   2) 日期/时间取服务器本地时区，Docker 部署请确认容器时区为 Asia/Shanghai；
-//   3) 标题键取「去空白后前 50 字」做匹配，知乎同题改尾缀不算新话题。
+//   1) 新浪 7×24 偶发按出口 IP 风控，被拦的轮次该板块自动标注失败，不影响其他板块；
+//   2) 日期/时间取服务器本地时区，Docker 部署请确认容器时区为 Asia/Shanghai。
 // ============================================================================
 using System.Globalization;
 using System.Text;
@@ -34,92 +40,217 @@ using Quantum.Plugins;
 
 public class HotNewsDigestTask : IQuantumTask
 {
-    private const string ZhihuHotListUrl = "https://api.zhihu.com/topstory/hot-list?limit=20";
-    private const string SixtySecondsUrl = "https://60s.viki.moe/v2/60s";
+    private const string Sina724Url = "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=50&zhibo_id=152&tag_id=0";
+    private const string SixtyBase = "https://60s.viki.moe/v2";
     private const string SeenType = "hotnews_seen";
-    private const int DefaultMaxItems = 10;
+    private const int DefaultMaxItems = 5;
     private const int DefaultSeenHours = 36;
     private const int CleanupHours = 72;
+
+    /// <summary>一个新闻板块：英文键 / 展示名 / 端点（"sina724" 为新浪 7×24，其余为 60s API 路径）/ 触发别名。</summary>
+    private sealed record NewsBoard(string Key, string Name, string Endpoint, string[] Aliases);
+
+    private static readonly NewsBoard[] BoardTable =
+    {
+        new("finance", "财经", "sina724", new[] { "财经", "finance" }),
+        new("news", "要闻", "/60s", new[] { "要闻", "全球", "国际", "早报", "60s", "news" }),
+        new("zhihu", "知乎", "/zhihu", new[] { "知乎", "zhihu" }),
+        new("weibo", "微博", "/weibo", new[] { "微博", "weibo" }),
+        new("toutiao", "头条", "/toutiao", new[] { "头条", "toutiao" }),
+        new("baidu", "百度", "/baidu/realtime", new[] { "百度", "baidu" }),
+        new("douyin", "抖音", "/douyin", new[] { "抖音", "douyin" }),
+    };
+
+    /// <summary>一条新闻：条目键 / 标题（或快讯全文）/ 摘要 / 热度文案 / 发稿时刻 / 原文链接。</summary>
+    private sealed record NewsItem(string Key, string Title, string Summary, string Heat, string Clock, string Link);
 
     public async Task RunAsync(QuantumTaskContext ctx, CancellationToken ct)
     {
         var now = DateTime.Now;
-        string source = ResolveSource(ctx);
-        int max = ResolveMax(ctx);
-        int seenHours = ResolveSeenHours(ctx);
-        ctx.Log($"源：{source}，条数上限：{max}，去重窗口：{seenHours}h");
-
-        // ── 拉取（zhihu 失败自动落 60s 兜底） ──
-        List<(string Title, string Summary, string Heat, string Link)> items;
-        string articleLink = string.Empty;
-        if (source == "zhihu")
+        var boards = ResolveBoards(ctx, out var from, out var commandMiss);
+        if (commandMiss)
         {
-            items = await FetchZhihuAsync(ctx, ct);
-            if (items.Count == 0)
-            {
-                ctx.Log("知乎热榜拉取失败，自动切换 60s 兜底。");
-                source = "60s";
-            }
-        }
-        else
-        {
-            items = null;
-        }
-        if (source == "60s")
-        {
-            (items, articleLink) = await FetchSixtySecondsAsync(ctx, ct);
-        }
-        if (items.Count == 0)
-        {
-            await ctx.Notify.SendAsync("热点速览", $"两个源都没取到数据，请稍后重试或查看任务日志。", ct);
+            await ctx.Notify.SendAsync("热点速览",
+                "未识别到板块。可用板块：财经、要闻（全球/国际/早报/60s）、知乎、微博、头条、百度、抖音。\n例如发送「热点 财经 知乎」；也可配置环境变量 scripts_hotnews_boards 固定板块。", ct);
             return;
         }
-        var picked = items.Take(max).ToList();
+        int max = ResolveMax(ctx);
+        int seenHours = ResolveSeenHours(ctx);
+        ctx.Log($"板块（{from}）：{string.Join("、", boards.Select(b => b.Name))}，每板块上限：{max}，去重窗口：{seenHours}h");
 
-        // ── 去重：窗口期内已推送过的话题不再带 🔥 ──
-        var seenKeys = await LoadSeenKeysAsync(ctx, source, now, seenHours, ct);
-        var fresh = new List<string>();
-        foreach (var item in picked)
+        // ── 逐板块拉取（个别失败记名标注，全部失败才报错） ──
+        var fetched = new List<(NewsBoard Board, List<NewsItem> Items, string ArticleLink)>();
+        var failed = new List<string>();
+        foreach (var board in boards)
         {
             ct.ThrowIfCancellationRequested();
-            var key = NormalizeKey(item.Title);
-            if (!seenKeys.Contains(key))
+            var (items, articleLink) = await FetchBoardAsync(ctx, board, ct);
+            if (items.Count == 0)
             {
-                fresh.Add(key);
+                failed.Add(board.Name);
+                ctx.Log($"板块「{board.Name}」拉取失败。");
+            }
+            else
+            {
+                fetched.Add((board, items, articleLink));
             }
         }
+        if (fetched.Count == 0)
+        {
+            await ctx.Notify.SendAsync("热点速览", "所有板块都没取到数据，请稍后重试或查看任务日志。", ct);
+            return;
+        }
+
+        // ── 去重：窗口期内未推送过的才算新增；同轮跨板块同题只推一次 ──
+        var pushedThisRun = new HashSet<string>();
+        var freshByBoard = new List<(NewsBoard Board, List<NewsItem> Items, string ArticleLink)>();
+        foreach (var (board, items, articleLink) in fetched)
+        {
+            ct.ThrowIfCancellationRequested();
+            var seenKeys = await LoadSeenKeysAsync(ctx, board.Key, now, seenHours, ct);
+            var fresh = new List<NewsItem>();
+            foreach (var item in items)
+            {
+                if (fresh.Count >= max)
+                {
+                    break;
+                }
+                if (!seenKeys.Contains(item.Key) && pushedThisRun.Add(item.Key))
+                {
+                    fresh.Add(item);
+                }
+            }
+            if (fresh.Count == 0)
+            {
+                ctx.Log($"板块「{board.Name}」本轮无新增（上榜 {items.Count} 条均为窗口期内已推送）。");
+                continue;
+            }
+            freshByBoard.Add((board, fresh, articleLink));
+        }
+        if (freshByBoard.Count == 0)
+        {
+            ctx.Log("各板块上榜条目均为窗口期内已推送过的老话题，不重复推送正文。");
+            await ctx.Notify.SendAsync("热点速览 · 板块新闻",
+                "本轮无新增新闻：各板块上榜条目与近期推送重复，暂不重复推送。", ct);
+            return;
+        }
+        ctx.Log($"各板块合计新增 {freshByBoard.Sum(x => x.Items.Count)} 条，开始组装推送。");
 
         // ── 组装并推送 ──
-        var body = BuildMessage(source, picked, fresh, now, articleLink);
+        var body = BuildMessage(freshByBoard, failed, now);
         ctx.Log(body);
-        await ctx.Notify.SendAsync(source == "zhihu" ? "热点速览 · 知乎热榜" : "热点速览 · 每天60秒", body, ct);
+        await ctx.Notify.SendAsync("热点速览 · 板块新闻", body, ct);
 
         // ── 记录与清理（失败只记日志，不影响已完成的推送） ──
-        await RecordSeenAsync(ctx, source, fresh, now, ct);
+        await EnsureSeenTitleAsync(ctx, ct);
+        foreach (var (board, fresh, _) in freshByBoard)
+        {
+            await RecordSeenAsync(ctx, board.Key, fresh.Select(item => item.Key).ToList(), now, ct);
+        }
         await CleanupAsync(ctx, now, ct);
     }
 
-    /// <summary>解析源：指令后缀（「热点 60s」）优先于 scripts_hotnews_source 变量，默认 zhihu。</summary>
-    private static string ResolveSource(QuantumTaskContext ctx)
+    // ────────────────────────── 板块解析 ──────────────────────────
+
+    /// <summary>解析板块清单：指令后缀（「热点 财经 知乎」）优先于 scripts_hotnews_boards 变量，默认 财经,要闻,知乎。</summary>
+    private static List<NewsBoard> ResolveBoards(QuantumTaskContext ctx, out string from, out bool commandMiss)
     {
-        var command = ctx.Variables.TryGetValue("command", out var cmd) ? cmd : null;
+        from = "默认";
+        commandMiss = false;
+        var command = CommandOf(ctx);
         if (!string.IsNullOrEmpty(command))
         {
-            var rest = command.Replace("热点", string.Empty).Trim();
-            if (rest.Length > 0 && (rest.Contains("60") || rest.Contains("早报") || rest.Contains("秒")))
+            var rest = command.Replace("热点", string.Empty);
+            if (HasContent(rest))
             {
-                return "60s";
-            }
-            if (rest.Length > 0 && rest.Contains("知乎", StringComparison.Ordinal))
-            {
-                return "zhihu";
+                var matched = ParseBoards(rest);
+                if (matched.Count > 0)
+                {
+                    from = "指令指定";
+                    return matched;
+                }
+                commandMiss = true;
+                return new List<NewsBoard>();
             }
         }
-        return ctx.Variables.TryGetValue("scripts_hotnews_source", out var configured)
-                && !string.IsNullOrEmpty(configured)
-                && configured.Trim() == "60s"
-            ? "60s"
-            : "zhihu";
+        if (ctx.Variables.TryGetValue("scripts_hotnews_boards", out var configured)
+                && !string.IsNullOrEmpty(configured))
+        {
+            var matched = ParseBoards(configured);
+            if (matched.Count > 0)
+            {
+                from = "变量配置";
+                return matched;
+            }
+        }
+        return ParseBoards("财经,要闻,知乎");
+    }
+
+    /// <summary>指令文本：兼容 command / hotnews_msg 两个变量名。</summary>
+    private static string CommandOf(QuantumTaskContext ctx)
+    {
+        foreach (var name in new[] { "command", "hotnews_msg" })
+        {
+            if (ctx.Variables.TryGetValue(name, out var value) && !string.IsNullOrEmpty(value))
+            {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>按分隔符切词并匹配板块（中文名/英文键，去重保序）。</summary>
+    private static List<NewsBoard> ParseBoards(string text)
+    {
+        var result = new List<NewsBoard>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var token in text.Split(new[] { ',', '，', '、', ' ', '/', '|', ';', '；' },
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            var board = MatchBoard(token);
+            if (board != null && seen.Add(board.Key))
+            {
+                result.Add(board);
+            }
+        }
+        return result;
+    }
+
+    private static NewsBoard MatchBoard(string token)
+    {
+        var t = token?.Trim();
+        if (string.IsNullOrEmpty(t))
+        {
+            return null;
+        }
+        foreach (var board in BoardTable)
+        {
+            if (string.Equals(board.Key, t, StringComparison.OrdinalIgnoreCase))
+            {
+                return board;
+            }
+            foreach (var alias in board.Aliases)
+            {
+                if (t.Contains(alias, StringComparison.Ordinal))
+                {
+                    return board;
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>除分隔符与空白外是否还有内容（判断指令是否带了后缀文字）。</summary>
+    private static bool HasContent(string text)
+    {
+        foreach (var ch in text)
+        {
+            if (!char.IsWhiteSpace(ch) && ",，、/|;；".IndexOf(ch) < 0)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int ResolveMax(QuantumTaskContext ctx)
@@ -127,7 +258,7 @@ public class HotNewsDigestTask : IQuantumTask
         if (ctx.Variables.TryGetValue("scripts_hotnews_max", out var configured)
             && int.TryParse(configured, out var value))
         {
-            return Math.Clamp(value, 3, 20);
+            return Math.Clamp(value, 3, 10);
         }
         return DefaultMaxItems;
     }
@@ -144,113 +275,188 @@ public class HotNewsDigestTask : IQuantumTask
 
     // ────────────────────────── 数据源 ──────────────────────────
 
-    /// <summary>知乎热榜：标题 + excerpt 摘要（截 70 字）+ 热度文案 + 问题页链接。</summary>
-    private static async Task<List<(string Title, string Summary, string Heat, string Link)>> FetchZhihuAsync(
-        QuantumTaskContext ctx, CancellationToken ct)
+    /// <summary>按板块端点拉取：sina724 走新浪 7×24 专析，其余走 60s API（热榜系统一解析）。ArticleLink 仅 60s 要闻有值。</summary>
+    private static async Task<(List<NewsItem> Items, string ArticleLink)> FetchBoardAsync(
+        QuantumTaskContext ctx, NewsBoard board, CancellationToken ct)
     {
-        var root = await GetJsonAsync(ctx, ZhihuHotListUrl, ct);
-        var list = new List<(string, string, string, string)>();
-        if (root?["data"] is not JArray data)
+        if (board.Endpoint == "sina724")
         {
+            return (await FetchSina724Async(ctx, ct), string.Empty);
+        }
+        var url = board.Key == "news"
+                  && ctx.Variables.TryGetValue("scripts_60s_url", out var overrideUrl)
+                  && !string.IsNullOrEmpty(overrideUrl)
+            ? overrideUrl
+            : SixtyBase + board.Endpoint;
+        return await FetchSixtyAsync(ctx, board, url, ct);
+    }
+
+    /// <summary>新浪 7×24：rich_text 快讯全文 + create_time；条目键用源内 id；链接取 docurl（缺失兜底 ext 内桌面版）。</summary>
+    private static async Task<List<NewsItem>> FetchSina724Async(QuantumTaskContext ctx, CancellationToken ct)
+    {
+        var root = await GetJsonAsync(ctx, Sina724Url, ct);
+        var list = new List<NewsItem>();
+        if (root?["result"]?["data"]?["feed"]?["list"] is not JArray feed)
+        {
+            ctx.Log($"板块 finance：响应结构异常 → {Snippet(root?.ToString(Newtonsoft.Json.Formatting.None))}");
             return list;
         }
-        foreach (var item in data)
+        foreach (var item in feed)
         {
             ct.ThrowIfCancellationRequested();
-            var target = item["target"];
-            var title = target?["title"]?.ToString()?.Trim();
-            if (string.IsNullOrEmpty(title))
+            var key = item["id"]?.ToString();
+            var title = OneLine(item["rich_text"]?.ToString());
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(title))
             {
                 continue;
             }
-            var excerpt = OneLine(target?["excerpt"]?.ToString());
-            var summary = string.IsNullOrEmpty(excerpt) ? string.Empty : TrimText(excerpt, 70);
-            var heat = OneLine(item["detail_text"]?.ToString());
-            if (string.IsNullOrEmpty(heat))
+            var link = OneLine(item["docurl"]?.ToString());
+            if (string.IsNullOrEmpty(link))
             {
-                heat = OneLine(target?["detail_text"]?.ToString());
+                link = ExtDocUrl(item["ext"]?.ToString());
             }
-            var link = ZhihuWebUrl(target?["url"]?.ToString(), target?["id"]?.ToString());
-            list.Add((title, summary, heat, link));
+            list.Add(new NewsItem(key, title, string.Empty, string.Empty, ClockOf(item["create_time"]?.ToString()), link));
         }
         return list;
     }
 
-    /// <summary>知乎条目链接：target.url 形如 api.zhihu.com/questions/{id}，改写为网页版
-    /// www.zhihu.com/question/{id}；非 question 形态的 http(s) 链接原样返回；无 url 时按 id 拼。</summary>
-    private static string ZhihuWebUrl(string rawUrl, string id)
+    /// <summary>新浪 ext（JSON 字符串）内桌面版 docurl 提取，解析失败给空串。</summary>
+    private static string ExtDocUrl(string ext)
     {
-        const string apiPrefix = "api.zhihu.com/questions/";
-        if (!string.IsNullOrEmpty(rawUrl))
+        if (string.IsNullOrEmpty(ext))
         {
-            var url = rawUrl.Trim();
-            int pos = url.IndexOf(apiPrefix, StringComparison.Ordinal);
-            if (pos >= 0)
-            {
-                var rest = url[(pos + apiPrefix.Length)..].TrimEnd('/');
-                return string.IsNullOrEmpty(rest) ? string.Empty : $"https://www.zhihu.com/question/{rest}";
-            }
-            if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-            {
-                return url;
-            }
+            return string.Empty;
         }
-        return string.IsNullOrEmpty(id) ? string.Empty : $"https://www.zhihu.com/question/{id}";
+        try
+        {
+            return OneLine(JObject.Parse(ext)["docurl"]?.ToString());
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
-    /// <summary>60s API：当日要闻清单（条目即一句话摘要，无逐条链接）；
-    /// ArticleLink 为当天微信原文（data.link），供消息尾部「查看当天全文」。</summary>
-    private static async Task<(List<(string Title, string Summary, string Heat, string Link)> Items, string ArticleLink)>
-        FetchSixtySecondsAsync(QuantumTaskContext ctx, CancellationToken ct)
+    /// <summary>60s API 要闻：news 为一句话条目数组，无逐条链接；link 为当天微信原文（随板块段尾部附出）。</summary>
+    private static async Task<(List<NewsItem> Items, string ArticleLink)> FetchSixtyAsync(
+        QuantumTaskContext ctx, NewsBoard board, string url, CancellationToken ct)
     {
-        var url = ctx.Variables.TryGetValue("scripts_60s_url", out var configured) && !string.IsNullOrEmpty(configured)
-            ? configured
-            : SixtySecondsUrl;
         var root = await GetJsonAsync(ctx, url, ct);
-        var list = new List<(string, string, string, string)>();
-        if (root?["data"]?["news"] is not JArray news)
+        var list = new List<NewsItem>();
+        if (root is null)
         {
             return (list, string.Empty);
         }
-        var articleLink = OneLine(root["data"]?["link"]?.ToString());
-
-        // 封面气泡（当天报纸头图）先行，失败不阻断正文
-        var cover = root["data"]?["cover"]?.ToString();
-        if (!string.IsNullOrEmpty(cover))
+        if (board.Key == "news")
         {
-            try
+            if (root["data"]?["news"] is not JArray news)
             {
-                await ctx.Notify.SendImageAsync(cover, $"每天60秒读懂世界 · {root["data"]?["date"]}", ct: ct);
+                ctx.Log($"板块 news：响应结构异常 → {Snippet(root.ToString(Newtonsoft.Json.Formatting.None))}");
+                return (list, string.Empty);
             }
-            catch (Exception e)
+            var articleLink = OneLine(root["data"]?["link"]?.ToString());
+            // 封面气泡（当天报纸头图）先行，失败不阻断正文
+            var cover = root["data"]?["cover"]?.ToString();
+            if (!string.IsNullOrEmpty(cover))
             {
-                ctx.Log($"封面图推送失败（忽略）：{e.Message}");
+                try
+                {
+                    await ctx.Notify.SendImageAsync(cover, $"每天60秒读懂世界 · {root["data"]?["date"]}", ct: ct);
+                }
+                catch (Exception e)
+                {
+                    ctx.Log($"封面图推送失败（忽略）：{e.Message}");
+                }
             }
+            foreach (var item in news)
+            {
+                ct.ThrowIfCancellationRequested();
+                var text = OneLine(item?.ToString());
+                if (!string.IsNullOrEmpty(text))
+                {
+                    list.Add(new NewsItem(NormalizeKey(text), text, string.Empty, string.Empty, string.Empty, string.Empty));
+                }
+            }
+            return (list, articleLink);
         }
 
-        foreach (var item in news)
+        // 热榜系：title/link(/url) + 热度（hot_value→万 / hot_value_desc / score_desc）+ 摘要（desc/detail）
+        if (root["data"] is not JArray hot)
+        {
+            ctx.Log($"板块 {board.Key}：响应结构异常 → {Snippet(root.ToString(Newtonsoft.Json.Formatting.None))}");
+            return (list, string.Empty);
+        }
+        foreach (var item in hot)
         {
             ct.ThrowIfCancellationRequested();
-            var text = OneLine(item?.ToString());
-            if (!string.IsNullOrEmpty(text))
+            var title = OneLine(item["title"]?.ToString());
+            if (string.IsNullOrEmpty(title))
             {
-                list.Add((text, string.Empty, string.Empty, string.Empty));
+                continue;
+            }
+            var link = OneLine(item["link"]?.ToString());
+            if (string.IsNullOrEmpty(link))
+            {
+                link = OneLine(item["url"]?.ToString());
+            }
+            var heat = OneLine(item["hot_value_desc"]?.ToString());
+            if (string.IsNullOrEmpty(heat))
+            {
+                heat = OneLine(item["score_desc"]?.ToString());
+            }
+            if (string.IsNullOrEmpty(heat) && long.TryParse(item["hot_value"]?.ToString(), out var hotValue))
+            {
+                heat = hotValue >= 10000 ? $"{hotValue / 10000}万热度" : $"{hotValue}热度";
+            }
+            var summarySrc = OneLine(item["desc"]?.ToString());
+            if (string.IsNullOrEmpty(summarySrc))
+            {
+                summarySrc = OneLine(item["detail"]?.ToString());
+            }
+            var summary = string.IsNullOrEmpty(summarySrc) || summarySrc == title ? string.Empty : TrimText(summarySrc, 60);
+            list.Add(new NewsItem(NormalizeKey(title), title, summary, heat, string.Empty, link));
+        }
+        return (list, string.Empty);
+    }
+
+    /// <summary>新浪 create_time（yyyy-MM-dd HH:mm:ss）取 HH:mm，格式不符给空串。</summary>
+    private static string ClockOf(string rawTime)
+    {
+        if (!string.IsNullOrEmpty(rawTime))
+        {
+            int space = rawTime.IndexOf(' ');
+            if (space >= 0 && rawTime.Length >= space + 6)
+            {
+                return rawTime.Substring(space + 1, 5);
             }
         }
-        return (list, articleLink);
+        return string.Empty;
     }
 
     // ────────────────────────── 去重记录 ──────────────────────────
 
+    /// <summary>表头保存：每轮只调一次（同轮重复调 SaveTitleAsync 会触发后端实体跟踪冲突，见头注释）。</summary>
+    private static async Task EnsureSeenTitleAsync(QuantumTaskContext ctx, CancellationToken ct)
+    {
+        try
+        {
+            await ctx.CustomData.SaveTitleAsync(SeenType, "热点去重记录", ["板块", "标题键", "推送时间"], ct);
+        }
+        catch (Exception e)
+        {
+            ctx.Log($"去重表头保存失败（忽略）：{e.Message}");
+        }
+    }
+
     private static async Task<HashSet<string>> LoadSeenKeysAsync(
-        QuantumTaskContext ctx, string source, DateTime now, int seenHours, CancellationToken ct)
+        QuantumTaskContext ctx, string boardKey, DateTime now, int seenHours, CancellationToken ct)
     {
         var keys = new HashSet<string>();
         try
         {
             var rows = await ctx.CustomData.QueryAsync(SeenType, new QuantumCustomDataFilter
             {
-                Data1 = source,
+                Data1 = boardKey,
                 CreateTimeStart = now.AddHours(-seenHours),
             }, ct);
             foreach (var row in rows)
@@ -269,7 +475,7 @@ public class HotNewsDigestTask : IQuantumTask
     }
 
     private static async Task RecordSeenAsync(
-        QuantumTaskContext ctx, string source, List<string> freshKeys, DateTime now, CancellationToken ct)
+        QuantumTaskContext ctx, string boardKey, List<string> freshKeys, DateTime now, CancellationToken ct)
     {
         if (freshKeys.Count == 0)
         {
@@ -277,16 +483,15 @@ public class HotNewsDigestTask : IQuantumTask
         }
         try
         {
-            await ctx.CustomData.SaveTitleAsync(SeenType, "热点去重记录", ["来源", "标题键", "推送时间"], ct);
             var rows = freshKeys.Select(key => new QuantumCustomDataValue
             {
                 Type = SeenType,
-                Data1 = source,
+                Data1 = boardKey,
                 Data2 = key,
                 Data3 = now.ToString("MM-dd HH:mm", CultureInfo.InvariantCulture),
             }).ToList();
             await ctx.CustomData.AddAsync(rows, ct);
-            ctx.Log($"写入去重记录 {rows.Count} 条。");
+            ctx.Log($"板块 {boardKey} 写入去重记录 {rows.Count} 条。");
         }
         catch (Exception e)
         {
@@ -318,37 +523,45 @@ public class HotNewsDigestTask : IQuantumTask
     // ────────────────────────── 组装 ──────────────────────────
 
     private static string BuildMessage(
-        string source,
-        List<(string Title, string Summary, string Heat, string Link)> items,
-        List<string> freshKeys,
-        DateTime now,
-        string articleLink)
+        List<(NewsBoard Board, List<NewsItem> Items, string ArticleLink)> freshByBoard,
+        List<string> failedBoards,
+        DateTime now)
     {
-        var fresh = new HashSet<string>(freshKeys);
         var body = new StringBuilder();
-        body.Append($"{now.Month}月{now.Day}日 {now:HH:mm} 更新\n");
-        for (int i = 0; i < items.Count; i++)
+        body.Append($"{now.Month}月{now.Day}日 {now:HH:mm} 板块新闻新增 {freshByBoard.Sum(x => x.Items.Count)} 条\n");
+        foreach (var (board, items, articleLink) in freshByBoard)
         {
-            var marker = fresh.Contains(NormalizeKey(items[i].Title)) ? QuantumText.Tag("orange", "新") : string.Empty;
-            // 详情为命名链接：只显示「详情」二字，点击直达（不占链接地址版面）
-            var detail = string.IsNullOrEmpty(items[i].Link) ? string.Empty : $" 🔗{Link("详情", items[i].Link)}";
-            body.Append($"\n{i + 1}. {marker}{items[i].Title}{detail}\n");
-            if (!string.IsNullOrEmpty(items[i].Summary))
+            body.Append($"\n【{board.Name}】\n");
+            for (int i = 0; i < items.Count; i++)
             {
-                var heat = string.IsNullOrEmpty(items[i].Heat) ? string.Empty : $"（{items[i].Heat}）";
-                body.Append($"　　{items[i].Summary}{heat}\n");
+                // 详情为命名链接：只显示「详情」二字，点击直达（不占链接地址版面）
+                var detail = string.IsNullOrEmpty(items[i].Link) ? string.Empty : $" 🔗{Link("详情", items[i].Link)}";
+                // 摘要行为空时把发稿时刻前缀到标题行（财经快讯场景）
+                var lead = !string.IsNullOrEmpty(items[i].Clock) && string.IsNullOrEmpty(items[i].Summary)
+                    ? $"{items[i].Clock} "
+                    : string.Empty;
+                body.Append($"{i + 1}. {lead}{items[i].Title}{detail}\n");
+                if (!string.IsNullOrEmpty(items[i].Summary))
+                {
+                    var heat = string.IsNullOrEmpty(items[i].Heat) ? string.Empty : $"（{items[i].Heat}）";
+                    body.Append($"　　{items[i].Summary}{heat}\n");
+                }
+                else if (!string.IsNullOrEmpty(items[i].Heat))
+                {
+                    body.Append($"　　{items[i].Heat}\n");
+                }
+            }
+            if (board.Key == "news" && !string.IsNullOrEmpty(articleLink))
+            {
+                body.Append($"　　📄 {Link("查看当天全文", articleLink)}\n");
             }
         }
-        if (source == "60s")
+        if (failedBoards.Count > 0)
         {
-            if (!string.IsNullOrEmpty(articleLink))
-            {
-                body.Append($"\n📄 {Link("查看当天全文", articleLink)}");
-            }
-            return body.ToString().TrimEnd();
+            body.Append($"\n⚠️ 以下板块本轮拉取失败：{string.Join("、", failedBoards)}\n");
         }
-        body.Append("\n以上点「详情」直达知乎问题页；橙色「新」标为本次窗口期新上榜话题。");
-        return body.ToString();
+        body.Append("\n以上点「详情」直达原文；仅推送近期未推过的新增条目。");
+        return body.ToString().TrimEnd();
     }
 
     /// <summary>命名链接标记 {{link:文字|URL}}：App/Web 气泡内只显示文字、点击跳 URL。
@@ -373,7 +586,7 @@ public class HotNewsDigestTask : IQuantumTask
         return sb.Length <= 50 ? sb.ToString() : sb.ToString(0, 50);
     }
 
-    /// <summary>压掉换行/连续空白为单空格（excerpt 里常带换行，气泡里会破版式）。</summary>
+    /// <summary>压掉换行/连续空白为单空格（接口字段常带换行，气泡里会破版式）。</summary>
     private static string OneLine(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -385,6 +598,10 @@ public class HotNewsDigestTask : IQuantumTask
 
     private static string TrimText(string text, int maxLength)
         => text.Length <= maxLength ? text : text[..maxLength] + "…";
+
+    /// <summary>响应片段：压成单行取前 300 字，供结构异常时排障。</summary>
+    private static string Snippet(string text)
+        => string.IsNullOrEmpty(text) ? "(空)" : TrimText(OneLine(text), 300);
 
     // ────────────────────────── HTTP 公共 ──────────────────────────
 
