@@ -1,5 +1,33 @@
 # QQ／微信／飞书内置通道代码实施与联调状态
 
+## 2026-10-12：机器人消息不再同步 Web/App（本地完成，未发布／未做真机验收）
+
+### 背景与决策
+
+- **表象**：随机密码任务（飞书触发）的结果消息在 Web 端归「随机密码」任务会话，App 端却滞留「飞书机器人」会话。
+- **机制**：每条平台入站都会落一条回显到 `channel:<platform>` 会话（显示名「QQ/微信/飞书机器人」）并广播 WS message 帧；指令命中任务后服务端把回显行迁移到任务会话并广播 `message_moved` 帧。Web 端列表/消息恒以服务端库内 `SessionKey` 为准所以正确；App 端靠 WS 帧写本地 Room，`message_moved` 帧一旦丢失/未及处理（进程被杀、断线瞬间），消息就滞留在通道会话。
+- **所有者决策（本次调整）**：机器人链路消息**不再同步 Web/App**——通道私聊交互（指令回显、快捷回复、系统命令回复）与**经通道触发的任务结果**（Start/EndNotify、ctx.Notify）只回平台原路，不落 `t_chat_message`、不推 WS；定时/手动触发的任务通知不受影响，仍照常落任务会话。
+
+### 实现要点
+
+- 入站：`ChannelInboxService.AcceptBatchAsync` 移除会话回显落库与 WS 帧广播（`t_channel_inbox`／回复路由／游标逻辑不变）；构造瘦身为 `(db, secret)`。
+- 出站：`SendMessageHelper.Send` 按 `ChannelReplyRouteId` 非空分流——机器人链路只走 `ChannelReplySink`（原路 Outbox，非文本降级文本替身不变），其余照常走 `AppChatSink`（落库 + WS）；两接缝测试可替换。
+- 跨会话迁移（`MessageProcess`/`message_moved`）保留：对通道消息已无行可迁（幂等 no-op），App/Web 端内触发的迁移照旧。
+- 存量清理：`ChannelCommandWorker.CleanupLegacyAsync`（启动时）删除 `channel:*` 会话行与消息行，幂等一次性迁移；App 端 `ChatRepository.syncAll` 尾部条件删除本地 `channel:%` 会话与消息（先查会话表小表，稳态零成本）——两端版本不一致窗口内可被下一轮同步再次收敛。
+- 未改数据库模型/迁移、通道凭据、平台协议与安全基线。
+
+### 本地验证
+
+- 后端全量：`dotnet test` 1202/1202 通过（ChannelInboxTests 断言改为「入站不落 ChatMessages」并补存量清理断言；MessageSourceRoutingTests 的 NotifyFacade 用例改为「bot 只进 Outbox、app 落任务会话」，新增 SendMessageHelper 分支接缝用例）。
+- App：`:feature:chat:testDebugUnitTest`、`:core:storage:testDebugUnitTest` 通过（新增 `syncAll_RemovesLegacyChannelSessionsAndMessages`）。
+- Web 无改动（通道管理页平台显示名与聊天会话无关）。
+
+### 待真机验收
+
+1. 飞书发指令触发任务：平台收到结果；Web/App 的通道会话不再出现新消息，任务会话不记录该次结果；App 列表中「飞书机器人」会话在下次 syncAll 后消失。
+2. App/Web 发指令触发同一任务：任务会话照常出现结果，平台无消息。
+3. 定时/手动触发的任务通知照常落任务会话。
+
 ## 2026-10-09：App 与机器人任务消息来源隔离（本地完成，未发布／未做真实账号验收）
 
 ### 根因与修复范围
