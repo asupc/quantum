@@ -757,6 +757,18 @@ public class ScriptEngineTests : IDisposable
     }
 
     [Fact]
+    public void Build_XunleiTransferScript_PassesPipeline()
+    {
+        // qBittorrentXunleiTransfer.cs：qb 慢速/死种磁力自动转飞牛迅雷（2026-10-12）——
+        // 门禁+编译必须全过（依赖真实 qB/迅雷服务，不做端到端执行）
+        var path = Path.Combine(FindRepoRoot(), "Quantum.API", "Quantum.Web", "scripts", "qBittorrentXunleiTransfer.cs");
+        var build = ScriptBuildService.Build(File.ReadAllText(path), path);
+        Assert.True(build.Success, $"qBittorrentXunleiTransfer.cs 未通过流水线："
+            + string.Join(";", build.Blocked.Select(b => b.Message))
+            + string.Join(";", build.Errors.Select(e => e.Message)));
+    }
+
+    [Fact]
     public async Task Converted_PasswordScripts_PassPipelineAndExecuteEndToEnd()
     {
         // 由 quantum_password.cs / quantum_password_query.cs 转换的两个任务：门禁+编译全过，端到端可执行
