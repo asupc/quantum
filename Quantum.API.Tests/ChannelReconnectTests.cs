@@ -382,8 +382,7 @@ public sealed class ChannelReconnectTests
 
     private static ServiceProvider Services(IQuantumDbContext db, ChannelSecretProtector protector)
     {
-        var inbox = new ChannelInboxService(db, new AppMessageService(db, NullLogger<AppMessageService>.Instance),
-            new AppWebSocketManager(NullLogger<AppWebSocketManager>.Instance), protector);
+        var inbox = new ChannelInboxService(db, protector);
         return new ServiceCollection().AddSingleton(db).AddSingleton(protector).AddSingleton(inbox).BuildServiceProvider();
     }
 

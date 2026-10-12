@@ -324,7 +324,7 @@ public class MessageSourceRoutingTests : IDisposable
     }
 
     [Fact]
-    public async Task NotifyFacade_AppAndBotMessages_KeepTaskSessions_AndOnlyBotGetsOutbox()
+    public async Task NotifyFacade_BotMessages_OnlyReplyChannel_AppMessages_KeepTaskSession()
     {
         var appTask = TaskModel("app-task", "source-routing-app");
         var botTask = TaskModel("bot-task", "source-routing-bot");
@@ -365,19 +365,63 @@ public class MessageSourceRoutingTests : IDisposable
             var push = new AppPushService(db, new AppMessageService(db, NullLogger<AppMessageService>.Instance),
                 new AppWebSocketManager(NullLogger<AppWebSocketManager>.Instance), NullLogger<AppPushService>.Instance);
             var replies = new ChannelReplyService(db, new ChannelAccountGate());
+            // 与 SendMessageHelper.Send 的现行分支同构（2026-10-12）：机器人链路（RouteId 非空）只原路回平台，
+            // 不落 t_chat_message；App/Web 链路照常落库
             foreach (var message in captured)
             {
-                await push.SendChatMessageAsync(message.message, sessionKey: message.SessionKey);
                 if (message.ChannelReplyRouteId != null)
                     await replies.QueueAsync(message.ChannelReplyRouteId, message.message);
+                else
+                    await push.SendChatMessageAsync(message.message, sessionKey: message.SessionKey);
             }
 
             var rows = await db.ChatMessages.AsNoTracking().ToListAsync();
-            Assert.Equal(appTask.Id, Assert.Single(rows, x => x.Content == sentinel + appTask.Id).SessionKey);
-            Assert.Equal(botTask.Id, Assert.Single(rows, x => x.Content == sentinel + botTask.Id).SessionKey);
+            Assert.Equal(appTask.Id, Assert.Single(rows).SessionKey);
+            Assert.Equal(sentinel + appTask.Id, Assert.Single(rows).Content);
             var outbox = Assert.Single(await db.ChannelOutboxes.AsNoTracking().ToListAsync());
             Assert.Equal("bot-route", outbox.ReplyRouteId);
             Assert.Equal(sentinel + botTask.Id, outbox.Content);
+        }
+    }
+
+    [Fact]
+    public async Task SendMessageHelper_BotRoute_SkipsAppSync_AppRoute_SyncsWithoutChannelReply()
+    {
+        // 直接钉 SendMessageHelper.Send 的出站分支（2026-10-12 机器人消息不同步 Web/App）：
+        // 机器人链路（RouteId 非空）只走通道回复接缝；App/Web 链路只走 App 落库接缝
+        var appSink = new ConcurrentQueue<(string Content, string SessionKey)>();
+        var replySink = new ConcurrentQueue<(string RouteId, string Text)>();
+        var originalApp = SendMessageHelper.AppChatSink;
+        var originalReply = SendMessageHelper.ChannelReplySink;
+        SendMessageHelper.AppChatSink = (content, _, _, sessionKey, _) =>
+        {
+            appSink.Enqueue((content, sessionKey));
+            return Task.CompletedTask;
+        };
+        SendMessageHelper.ChannelReplySink = (routeId, text) =>
+        {
+            replySink.Enqueue((routeId, text));
+            return Task.CompletedTask;
+        };
+        try
+        {
+            await SendMessageHelper.SendSafeAsync(Message("机器人回复", ChannelManagementService.Feishu, "route-1"));
+
+            var reply = Assert.Single(replySink);
+            Assert.Equal("route-1", reply.RouteId);
+            Assert.Equal("机器人回复", reply.Text);
+            Assert.Empty(appSink);
+
+            await SendMessageHelper.SendSafeAsync(Message("App 回复"));
+
+            var app = Assert.Single(appSink);
+            Assert.Equal("App 回复", app.Content);
+            Assert.Single(replySink);
+        }
+        finally
+        {
+            SendMessageHelper.AppChatSink = originalApp;
+            SendMessageHelper.ChannelReplySink = originalReply;
         }
     }
 

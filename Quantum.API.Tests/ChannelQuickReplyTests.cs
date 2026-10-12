@@ -23,8 +23,7 @@ public sealed class ChannelQuickReplyTests
             var admin = new ChannelManagementService(db, secret, gate);
             await admin.ConfigureQqAsync(new QqChannelSaveDto { AppId = "bot", AppSecret = "secret" });
             var account = await db.ChannelAccounts.SingleAsync();
-            var inbox = new ChannelInboxService(db, new AppMessageService(db, NullLogger<AppMessageService>.Instance),
-                new AppWebSocketManager(NullLogger<AppWebSocketManager>.Instance), secret);
+            var inbox = new ChannelInboxService(db, secret);
             await inbox.AcceptBatchAsync(account.Id, ChannelManagementService.Qq,
             [
                 new ChannelIncoming("C2C_MESSAGE_CREATE", "m1", "i1", "peer-a", "帮助"),
