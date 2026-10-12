@@ -101,6 +101,12 @@ public sealed class ChannelCommandWorker(IServiceScopeFactory scopes, ILogger<Ch
             .ExecuteUpdateAsync(u => u.SetProperty(x => x.Status, "Cancelled"), ct);
         await db.ChannelInboxes.Where(x => x.Status == "Processing")
             .ExecuteUpdateAsync(u => u.SetProperty(x => x.Status, "Unknown"), ct);
+        // 2026-10-12 机器人消息不同步 Web/App：清理历史通道会话（channel:* 会话行与消息行）。
+        // 一次性数据迁移，幂等——入站/出站链路已不再产生 channel:* 行，清理后不再增长。
+        await db.ChatSessions.Where(x => x.SessionKey.StartsWith("channel:"))
+            .ExecuteDeleteAsync(ct);
+        await db.ChatMessages.Where(x => x.SessionKey.StartsWith("channel:"))
+            .ExecuteDeleteAsync(ct);
     }
 
     private static Task<int> FinishAsync(IQuantumDbContext db, string id, string status, CancellationToken ct)

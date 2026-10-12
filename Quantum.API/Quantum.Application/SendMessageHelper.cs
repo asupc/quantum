@@ -31,6 +31,15 @@ public static class SendMessageHelper
     /// </summary>
     internal static Func<MessageProccessDTO, Task> Sender = Send;
 
+    /// <summary>App 会话落库接缝（测试可替换）：非机器人链路出站经此进 App 管道（落库 + WS 广播）。</summary>
+    internal static Func<string, string, string, string, string, Task> AppChatSink =
+        (content, contentType, contentText, sessionKey, payload) =>
+            AppPushDispatcher.SendChatMessageAsync(content, contentType, contentText, sessionKey, payload);
+
+    /// <summary>通道原路回复接缝（测试可替换）：机器人链路出站经此回平台。</summary>
+    internal static Func<string, string, Task> ChannelReplySink =
+        (routeId, text) => AppPushDispatcher.QueueChannelReplyAsync(routeId, text);
+
     private static void Start()
     {
         // 消息泵全程异步等待：不再占用线程池线程空转
@@ -117,19 +126,25 @@ public static class SendMessageHelper
             MessageType.音频 => "audio",
             _ => "text"
         };
-        await AppPushDispatcher.SendChatMessageAsync(messageProccess.message, appContentType,
-            messageProccess.message_text, messageProccess.SessionKey, messageProccess.Payload);
-        // 「从哪儿触发就回哪儿」：原路投递不再只放行纯文本——音频/图片/视频输出（如音乐搜索的 8 条链接）
-        // 此前被整批跳过，表现为任务在 App 里跑完、平台侧却毫无回音。非文本降级为文本替身，逐条发送。
+        // 「从哪儿触发就回哪儿」+ 2026-10-12 机器人消息不同步 Web/App：经通道触发的出站
+        // （快捷回复/系统命令/任务通知/ctx.Notify，ChannelReplyRouteId 非空）只原路回平台，
+        // 不落 t_chat_message、不推 WS——Web/App 会话不再出现机器人链路的消息。
+        // 原路投递不限于纯文本：音频/图片/视频输出（如音乐搜索的 8 条链接）降级为文本替身，逐条发送。
         if (messageProccess.ChannelReplyRouteId is { Length: > 0 })
         {
             var channelText = appContentType == "text"
                 ? messageProccess.message
                 : BuildChannelFallback(messageProccess, appContentType);
             if (!string.IsNullOrWhiteSpace(channelText))
-                await AppPushDispatcher.QueueChannelReplyAsync(messageProccess.ChannelReplyRouteId, channelText);
+                await ChannelReplySink(messageProccess.ChannelReplyRouteId, channelText);
+            log.Remark += "\r\n通知结果：仅机器人原路回复（不同步 App/Web）。";
         }
-        log.Remark += "\r\n通知结果：App推送。";
+        else
+        {
+            await AppChatSink(messageProccess.message, appContentType,
+                messageProccess.message_text, messageProccess.SessionKey, messageProccess.Payload);
+            log.Remark += "\r\n通知结果：App推送。";
+        }
         LogServiceHelper.Logs.Enqueue(log);
     }
 

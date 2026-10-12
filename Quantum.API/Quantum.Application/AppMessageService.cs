@@ -121,7 +121,8 @@ public class AppMessageService
         _dbContext.ChatMessages.Add(message);
         // 会话行 upsert（§2.7，与消息同一 SaveChanges/事务提交，保证「消息在则会话在」）：
         // 建行（SessionKey 归一空串 = 默认会话；消息表默认会话存 null，两侧表示不同）或推进 LastSeq = 本条 Seq。
-        // 外发（AppPushService）、通知镜像、入站回显三条落库路径共用本函数，一处挂点全覆盖。
+        // 外发（AppPushService）与通知镜像两条落库路径共用本函数，一处挂点全覆盖
+        // （通道入站回显路径 2026-10-12 随「机器人消息不同步 Web/App」一并移除）。
         var normalizedKey = message.SessionKey ?? "";
         var session = await _dbContext.ChatSessions.FindAsync(normalizedKey);
         if (session == null)

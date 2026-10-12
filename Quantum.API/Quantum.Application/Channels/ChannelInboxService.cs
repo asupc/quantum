@@ -15,35 +15,32 @@ public sealed record ChannelIncoming(string EventType, string MessageId, string 
     string PeerId, string Text, string ContextToken = null, bool IsText = true, string Fingerprint = null,
     string RejectHint = null);
 
-/// <summary>入站、游标、原路回复及 App 气泡的单库原子提交；失败绝不推进游标。</summary>
+/// <summary>
+/// 入站、游标与原路回复的单库原子提交；失败绝不推进游标。
+/// 2026-10-12 机器人消息不同步 Web/App：入站不再落会话回显、不广播 WS 帧——指令交互只存在于
+/// 平台私聊与 t_channel_inbox，Web/App 会话不再出现 channel:* 会话（历史行由启动清理删除）。
+/// </summary>
 public sealed class ChannelInboxService
 {
     private readonly IQuantumDbContext _db;
-    private readonly AppMessageService _messages;
-    private readonly AppWebSocketManager _websocket;
     private readonly ChannelSecretProtector _secret;
 
-    public ChannelInboxService(IQuantumDbContext db, AppMessageService messages, AppWebSocketManager websocket,
-        ChannelSecretProtector secret, ChannelQuickReplyService quickReplies = null)
+    public ChannelInboxService(IQuantumDbContext db, ChannelSecretProtector secret)
     {
         _db = db;
-        _messages = messages;
-        _websocket = websocket;
         _secret = secret;
     }
 
-    /// <summary>批次只有整笔持久化成功才保存 QQ s/微信游标，返回本次产生的会话消息数。</summary>
-    public async Task<int> AcceptBatchAsync(string accountId, string platform, IReadOnlyList<ChannelIncoming> batch,
+    /// <summary>批次只有整笔持久化成功才保存 QQ s/微信游标。</summary>
+    public async Task AcceptBatchAsync(string accountId, string platform, IReadOnlyList<ChannelIncoming> batch,
         string cursor = null, long? qqSequence = null, string qqSessionId = null, CancellationToken ct = default)
     {
         if (batch is null || batch.Count > 100) throw new InvalidOperationException("平台入站批次过大");
         if (cursor is { Length: > 8192 }) throw new InvalidOperationException("平台游标过长，拒绝推进");
         if (cursor is { Length: 0 }) cursor = null;
         var account = await _db.ChannelAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == accountId && x.Platform == platform, ct);
-        if (account is null) return 0;
+        if (account is null) return;
         var now = DateTime.UtcNow;
-        var accepted = 0;
-        var frames = new List<string>();
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
         foreach (var incoming in batch)
         {
@@ -82,15 +79,9 @@ public sealed class ChannelInboxService
                 route.ContextTokenCiphertext = _secret.Protect(incoming.ContextToken, accountId, "context-token:" + route.Id);
             _db.ChannelReplyRoutes.Add(route);
             inbox.ReplyRouteId = route.Id;
-            // 第一条落库后再为第二条分配 Seq，两个消息及 Outbox 与 Inbox/游标仍在同一事务内。
-            var sessionKey = "channel:" + platform.ToLowerInvariant();
-            var title = ChannelManagementService.DisplayName(platform);
-            var inbound = await _messages.AppendNoSaveAsync(ChatMessageDirection.接收, inbox.Content,
-                status: ChatMessageStatus.已读, msgId: inbox.Id, sessionKey: sessionKey, sessionTitle: title);
+            // 2026-10-12 起入站不再落会话回显：指令由 ChannelCommandWorker 消费 Received 行
+            // 并按原路路由回复平台，Web/App 会话不产生任何行。
             await _db.SaveChangesAsync(ct);
-            // 指令由 ChannelCommandWorker 消费 Received 行，不在网络批次中执行脚本。
-            frames.Add(Frame(inbound));
-            accepted++;
         }
         if (cursor is not null || qqSequence.HasValue)
         {
@@ -111,12 +102,6 @@ public sealed class ChannelInboxService
         }
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        foreach (var frame in frames)
-        {
-            try { await _websocket.SendToAllAsync(frame, ct); }
-            catch { /* 落库已完成，App/Web 重连走消息增量补拉。 */ }
-        }
-        return accepted;
     }
 
     private static string Validate(ChannelIncoming msg, ChannelAccountModel account)
@@ -135,12 +120,4 @@ public sealed class ChannelInboxService
             return "MissingContextToken";
         return null;
     }
-
-    private static string Frame(ChatMessageModel message) => JsonSerializer.Serialize(new
-    {
-        type = "message", msgId = message.MsgId, seq = message.Seq,
-        content = message.Content, contentType = message.ContentType,
-        direction = (int)message.Direction, session = message.SessionKey, sessionTitle = message.SessionTitle,
-        createTime = message.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
-    }, AppPushService.FrameJsonOptions);
 }
