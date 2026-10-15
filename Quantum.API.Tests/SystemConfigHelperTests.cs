@@ -343,6 +343,55 @@ public class SystemConfigHelperTests : IDisposable
     }
 
     [Fact]
+    public void SetSetting_RenameUnavailable_FallsBackToInPlaceWrite()
+    {
+        // Docker 单文件 bind-mount 部署形态（compose 挂载 ./app/appsettings.json:/app/appsettings.json）：
+        // 目标路径是挂载点，Linux rename 固定 EBUSY（非瞬时占用，重试无解）——
+        // 原子替换穷尽重试后必须降级为原地直写（挂载文件可直写且写穿宿主），否则 Web 端保存设置永远失败。
+        SystemConfigHelper.SetSetting(new Setting { UserName = "u0", PassWord = "p", Port = 5088 });
+        SystemConfigHelper.TestHookMoveFile = (_, _) => throw new IOException("Device or resource busy");
+        try
+        {
+            SystemConfigHelper.UpdateSetting(current => current.TaskNetworkAllowlist = "192.168.1.50,qb.lan");
+
+            // 读回（缓存 + 解析）与磁盘都应看到新值：降级路径同样同步文本缓存，不得停在上轮快照
+            Assert.Equal("192.168.1.50,qb.lan", SystemConfigHelper.GetSetting().TaskNetworkAllowlist);
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(SystemConfigHelper.configPath));
+            Assert.Equal("192.168.1.50,qb.lan",
+                doc.RootElement.GetProperty("Quantum").GetProperty("TaskNetworkAllowlist").GetString());
+            // 降级路径不得残留 *.tmp
+            Assert.All(Directory.GetFiles(Path.GetDirectoryName(SystemConfigHelper.configPath)!),
+                f => Assert.Equal("appsettings.json", Path.GetFileName(f)));
+        }
+        finally
+        {
+            SystemConfigHelper.TestHookMoveFile = null;
+        }
+    }
+
+    [Fact]
+    public void SetSetting_RenameUnavailable_InPlaceWriteAlsoLocked_Throws()
+    {
+        // rename 不可行 + 原地直写也被独占锁挡住 = 写真的失败：必须抛错冒泡，不得静默吞成「保存成功」
+        SystemConfigHelper.SetSetting(new Setting { UserName = "u0", PassWord = "p", Port = 5088 });
+        SystemConfigHelper.TestHookMoveFile = (_, _) => throw new IOException("Device or resource busy");
+        try
+        {
+            using (new FileStream(SystemConfigHelper.configPath, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                Assert.ThrowsAny<IOException>(() =>
+                    SystemConfigHelper.SetSetting(new Setting { UserName = "u1", PassWord = "p", Port = 5088 }));
+            }
+            // 失败后磁盘与读取保持旧值
+            Assert.Equal("u0", SystemConfigHelper.GetSetting().UserName);
+        }
+        finally
+        {
+            SystemConfigHelper.TestHookMoveFile = null;
+        }
+    }
+
+    [Fact]
     public void SetSetting_ConcurrentWriters_FileRemainsConsistent()
     {
         // 写侧互斥下的不变量：全程没有写坏文件；最终盘上内容可解析，

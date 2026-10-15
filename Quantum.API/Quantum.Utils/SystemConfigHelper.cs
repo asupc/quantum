@@ -34,6 +34,10 @@ public static class SystemConfigHelper
     /// 磁盘的 appsettings.json 都是完整可解析的旧版或新版——杜绝「写一半 → 配置损坏且
     /// JWT 密钥/通道主密钥等不可再生密钥丢失」。写侧全程持 ConfigWriteLock：串行化多个写者，
     /// 消除整文件读改写的丢更新与「A 文本 @ B mtime」缓存错配。
+    /// rename 替换不可行时（典型：Docker 单文件 bind-mount 挂载点，Linux rename 固定返回 EBUSY，
+    /// 非瞬时占用、重试无解）降级为原地 WriteThrough 直写——挂载文件可直写且写穿宿主，
+    /// 否则 Web 端保存设置/改密/向导完成在该部署形态下永远失败。降级路径失去「任意崩溃时点
+    /// 文件完整」的原子保证（极端崩溃可能半写），原地写失败照常抛错，绝不静默丢更新。
     /// </summary>
     public static void SetSetting(Setting config)
         => SetSetting(config, configPath);
@@ -55,7 +59,8 @@ public static class SystemConfigHelper
             config.ManagerTokenNotBefore = notBefore;
             root[SectionName] = JsonSerializer.SerializeToNode(config);
             var text = root.ToJsonString(WriteOptions);
-            for (var attempt = 0; ; attempt++)
+            var replaced = false;
+            for (var attempt = 0; attempt < 3 && !replaced; attempt++)
             {
                 var tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
                 try
@@ -65,25 +70,56 @@ public static class SystemConfigHelper
                     {
                         writer.Write(text);
                     }
-                    File.Move(tempPath, path, true);
-                    // 写后同步文本缓存：消除「缓存仍持旧文本，而磁盘 mtime 恰与写前相同（同 tick 写入）」的读旧窗口
-                    lock (ConfigTextLock)
-                    {
-                        _cachedText = text;
-                        _cachedPath = path;
-                        _cachedWriteUtc = File.GetLastWriteTimeUtc(path);
-                    }
-                    break;
+                    MoveFile(tempPath, path);
+                    replaced = true;
                 }
                 // Windows 下替换撞上共享占用按错误码可能落到 UnauthorizedAccessException 而非 IOException，
                 // 两者都按瞬时占用重试，不让文件锁竞态冒泡成配置保存失败
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < 2)
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {
-                    // 并发读/杀软扫描的瞬时占用：短暂重试（消息泵每百毫秒读一次配置，写侧偶发撞车）
-                    try { File.Delete(tempPath); } catch { /* 清理失败不影响重试 */ }
-                    Thread.Sleep(50);
+                    // 瞬时占用（并发读/杀软扫描）短暂重试；挂载点 EBUSY 等永久性失败重试穷尽后走降级直写
+                    try { File.Delete(tempPath); } catch { /* 清理失败不影响后续处理 */ }
+                    if (attempt < 2)
+                    {
+                        Thread.Sleep(50);
+                    }
                 }
             }
+            if (!replaced)
+            {
+                // 持 ConfigTextLock 与读者互斥：读者 ReadAllText 持 FileShare.Read（不放写共享），
+                // 锁外直写会与并发读撞车；锁序恒为 ConfigWriteLock → ConfigTextLock，无死锁环
+                lock (ConfigTextLock)
+                {
+                    using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read, 4096, FileOptions.WriteThrough))
+                    using (var writer = new StreamWriter(stream))
+                    {
+                        writer.Write(text);
+                    }
+                }
+            }
+            // 写后同步文本缓存：消除「缓存仍持旧文本，而磁盘 mtime 恰与写前相同（同 tick 写入）」的读旧窗口
+            lock (ConfigTextLock)
+            {
+                _cachedText = text;
+                _cachedPath = path;
+                _cachedWriteUtc = File.GetLastWriteTimeUtc(path);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 临时文件 rename 覆盖目标；测试可注入「rename 永久不可行」（模拟挂载点 EBUSY）走降级路径。
+    /// </summary>
+    private static void MoveFile(string tempPath, string path)
+    {
+        if (TestHookMoveFile != null)
+        {
+            TestHookMoveFile(tempPath, path);
+        }
+        else
+        {
+            File.Move(tempPath, path, true);
         }
     }
 
@@ -292,6 +328,12 @@ public static class SystemConfigHelper
     /// 默认 null，生产路径零开销、行为不变。
     /// </summary>
     internal static Action TestHookBeforeMemoPublish;
+
+    /// <summary>
+    /// 观察点（单测专用）：替换 SetSetting 内 rename 覆盖的执行体，注入抛 IOException 即可确定性模拟
+    /// 「目标不可 rename」（Docker 单文件 bind-mount 挂载点的 EBUSY）；默认 null 走真实 File.Move。
+    /// </summary>
+    internal static Action<string, string> TestHookMoveFile;
 
     /// <summary>观察点（单测专用）：当前 memo 的文本引用与设置快照（断言 Text 与 Setting 同源）。默认 null 时不变。</summary>
     internal static (string Text, Setting Setting)? InspectMemoForTest()
