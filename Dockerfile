@@ -7,11 +7,11 @@ ENV TZ=Asia/Shanghai \
 # 安装运行时基础依赖
 # 2026-09-16 脚本执行引擎改造：任务改为 C# 源码进程内执行（Roslyn 编译），
 # node/python3/build-essential 安装段与对应运行时清理段整体移除
+# 2026-10-15 内存优化 P1-4：wget/git/fontconfig 在仓库内零调用方——
+# C# 侧唯一 Process.Start 是 Windows 重启脚本（容器内不跑），任务脚本被门禁禁止
+# Process 与 System.Drawing；仅保留 curl（健康检查与运维排查）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        wget \
         curl \
-        git \
-        fontconfig \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

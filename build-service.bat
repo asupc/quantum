@@ -36,7 +36,9 @@ if exist "%OUT%" (
 )
 
 echo ===== [2/6] 发布后端服务 dotnet publish =====
-dotnet publish ./Quantum.API/Quantum.Web/Quantum.Web.csproj -c release -o "%OUT%"
+rem 2026-10-15 内存优化 P1-6：ReadyToRun 预编译（-r 必备，否则 R2R 被 SDK 静默跳过；
+rem --self-contained false 保持框架依赖、复用镜像内运行时，避免自包含把运行时再打一份进镜像）
+dotnet publish ./Quantum.API/Quantum.Web/Quantum.Web.csproj -c release -o "%OUT%" -r linux-x64 --self-contained false -p:PublishReadyToRun=true
 if errorlevel 1 goto :fail
 
 echo ===== [3/6] 构建前端，产物写入 %OUT%\wwwroot =====

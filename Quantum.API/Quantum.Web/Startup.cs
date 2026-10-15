@@ -43,7 +43,6 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddDistributedMemoryCache();
         Setting setting = SystemConfigHelper.GetSetting();
 
         services.AddControllers().AddControllersAsServices();
@@ -204,17 +203,23 @@ public class Startup
         services.AddScoped(typeof(QrLoginService));
 
 
-        services.AddSwaggerGen(c =>
+        // Swagger 生成器按需注册（2026-10-15 内存优化 P1-8）：与 Configure 侧
+        // UseSwagger/UseSwaggerUI 的门控条件一致（开发环境或显式 EnableSwagger），
+        // 生产关闭时不注册、不做 XML 注释扫描，省启动开销与常驻内存
+        if (Environment.IsDevelopment() || setting.EnableSwagger)
         {
-            c.SwaggerDoc("v1", new OpenApiInfo
+            services.AddSwaggerGen(c =>
             {
-                Title = "量子助手API",
-                Version = "v1"
+                c.SwaggerDoc("v1", new OpenApiInfo
+                {
+                    Title = "量子助手API",
+                    Version = "v1"
+                });
+                var basePath = AppContext.BaseDirectory;
+                var xmlPath = Path.Combine(basePath, "Quantum.xml");
+                c.IncludeXmlComments(xmlPath);
             });
-            var basePath = AppContext.BaseDirectory;
-            var xmlPath = Path.Combine(basePath, "Quantum.xml");
-            c.IncludeXmlComments(xmlPath);
-        });
+        }
 
         services.AddMvc(options =>
         {
