@@ -1,0 +1,14 @@
+{
+  "target": {
+    "name": "正式环境",
+    "baseUrl": "https://your-quantum-host:8888",
+    "userName": "账号",
+    "passWord": "密码"
+  },
+  "source": {
+    "name": "本地开发实例（缺变量时的取值来源，可不可用）",
+    "baseUrl": "http://localhost:5088",
+    "userName": "admin",
+    "passWord": "123456"
+  }
+}

@@ -20,6 +20,8 @@ log
 /logs/
 build-*.version
 .agents/skills/*/config.json
+.claude/skills/*/config.local.json
+.claude/skills/*-workspace/
 Quantum.API/Quantum.Web/scripts/quantum/
 
 Quantum.API/Quantum.Web/downloads/
