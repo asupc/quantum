@@ -2,7 +2,6 @@ using System.Diagnostics;
 using Quantum.Application;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
-using Quantum.Utils;
 
 namespace Quantum.API.Tests;
 

@@ -3,7 +3,6 @@ using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 using Quantum.Utils;
 using Quartz;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

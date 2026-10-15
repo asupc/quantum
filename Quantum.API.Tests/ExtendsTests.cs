@@ -1,8 +1,6 @@
-using Quantum.Entities.Config;
 using Quantum.Entities.Model;
 using Quantum.Utils;
 using System.Text;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

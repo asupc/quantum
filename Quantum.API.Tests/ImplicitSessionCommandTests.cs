@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 using Quantum.Application;
 using Quantum.Data;
 using Quantum.Entities.Config;

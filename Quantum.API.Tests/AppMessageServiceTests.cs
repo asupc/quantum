@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quantum.Application;
-using Xunit;
 using Quantum.Entities.Model;
 using Quantum.Data;
 using Quantum.Utils;

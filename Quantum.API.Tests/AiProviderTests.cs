@@ -7,7 +7,6 @@ using Quantum.Entities.Model;
 using Quantum.Utils;
 using Quantum.Web.Controllers;
 using Quantum.Web.Filters;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

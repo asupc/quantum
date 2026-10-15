@@ -1,9 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Quantum.Data;
-using Quantum.Entities.Model;
 
 namespace Quantum.Application.Channels;
 

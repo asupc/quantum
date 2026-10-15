@@ -1,7 +1,6 @@
 ﻿using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 using Quantum.Utils;
-using System.Collections.Concurrent;
 
 namespace Quantum.Application;
 

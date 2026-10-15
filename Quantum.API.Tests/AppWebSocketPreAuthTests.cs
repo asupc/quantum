@@ -1,8 +1,5 @@
 using System.Reflection;
-using Microsoft.Extensions.Logging.Abstractions;
-using Quantum.Application;
 using Quantum.Web.Middleware;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

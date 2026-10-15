@@ -1,7 +1,6 @@
 using Newtonsoft.Json.Linq;
 using Quantum.Application;
 using Quantum.Entities.Model;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

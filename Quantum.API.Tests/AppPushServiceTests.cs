@@ -1,11 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using Quantum.Application;
 using Quantum.Utils;
-using Xunit;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 using Quantum.Data;

@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Quantum.Application;
-using Quantum.Entities.Model;
 using Quantum.Utils;
 using Quantum.Entities.Result;
 using Quantum.Web.Filters;

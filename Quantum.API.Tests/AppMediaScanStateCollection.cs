@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace Quantum.API.Tests;
 
 /// <summary>

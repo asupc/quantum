@@ -7,8 +7,6 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging.Abstractions;
-using Quantum.Application;
 using Quantum.Data;
 using Quantum.Application.Channels;
 using Quantum.Entities.Model;

@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Quantum.Application;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;

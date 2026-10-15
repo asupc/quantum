@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.StaticFiles;
 using Quantum.Application;
-using Quantum.Entities.Model;
 using Quantum.Web.Filters;
-using Quantum.Utils;
 
 namespace Quantum.Web.Controllers;
 

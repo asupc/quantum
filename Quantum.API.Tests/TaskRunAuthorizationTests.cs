@@ -1,11 +1,8 @@
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Quantum.Application;
 using Quantum.Data;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
-using Quantum.Utils;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

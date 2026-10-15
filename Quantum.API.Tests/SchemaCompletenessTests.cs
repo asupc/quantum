@@ -2,7 +2,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Quantum.Data;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

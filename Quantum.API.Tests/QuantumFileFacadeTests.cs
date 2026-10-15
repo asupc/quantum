@@ -1,7 +1,6 @@
 using System.Net;
 using Quantum.Application;
 using Quantum.Utils;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

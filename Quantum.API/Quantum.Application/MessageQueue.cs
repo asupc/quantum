@@ -1,9 +1,7 @@
 ﻿using log4net;
-using Microsoft.Extensions.DependencyInjection;
 using Quantum.Entities.Config;
 using Quantum.Entities.DTOs;
 using Quantum.Utils;
-using System.Collections.Concurrent;
 
 namespace Quantum.Application;
 

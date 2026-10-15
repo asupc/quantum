@@ -1,6 +1,5 @@
 using Microsoft.IdentityModel.Tokens;
 using Quantum.Entities.Config;
-using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 using Quantum.Utils;
 using System.IdentityModel.Tokens.Jwt;

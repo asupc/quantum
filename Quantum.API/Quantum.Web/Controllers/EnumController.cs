@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Quantum.Application;
-using Quantum.Entities.Result;
 using Quantum.Web.Filters;
 
 namespace Quantum.Web.Controllers;

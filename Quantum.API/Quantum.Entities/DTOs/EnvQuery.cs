@@ -1,6 +1,4 @@
-﻿using Quantum.Entities.Model;
-
-namespace Quantum.Entities.DTOs;
+﻿namespace Quantum.Entities.DTOs;
 
 public class EnvQuery : BaseQuery
 {

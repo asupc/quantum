@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using Quantum.API.Tests.Contract;
-using Quantum.Entities;
 using Quantum.Utils;
 
 namespace Quantum.API.Tests;

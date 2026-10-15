@@ -1,5 +1,4 @@
 using Quantum.Entities.Model;
-using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace Quantum.Entities.DTOs;

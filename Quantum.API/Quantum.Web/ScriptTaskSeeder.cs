@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using Quantum.Application;
 using Quantum.Data;
 using Quantum.Utils;

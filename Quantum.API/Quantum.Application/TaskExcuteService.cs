@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using Quantum.Plugins;
 using Quantum.Utils;
-using System.Text;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 

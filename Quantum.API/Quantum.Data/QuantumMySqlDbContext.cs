@@ -1,6 +1,5 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
-using MySql.EntityFrameworkCore.Extensions;
 using Quantum.Entities.Model;
 using Quantum.Utils;
 

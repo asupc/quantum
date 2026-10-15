@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Http;
 using Quantum.Utils;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

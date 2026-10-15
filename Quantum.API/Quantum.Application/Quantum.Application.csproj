@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <!-- 项目名与命名空间解耦：源码 namespace Quantum.Application 原样保留 -->
-    <RootNamespace>Quantum</RootNamespace>
+    <RootNamespace>Quantum.Application</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 using Quantum.Entities.DTOs;
 using Quantum.Utils;
 

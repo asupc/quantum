@@ -1,6 +1,4 @@
-﻿using Quantum.Entities.Model;
-
-namespace Quantum.Entities.DTOs;
+﻿namespace Quantum.Entities.DTOs;
 
 /// <summary>
 /// 任务新增/更新的入参模型：只暴露允许客户端写入的字段，

@@ -6,7 +6,7 @@ namespace Quantum.Utils;
 
 public static class Extends
 {
-    public static DateTime VersionTime = new(2026, 9, 17, 0, 0, 1);
+    public static DateTime VersionTime = new(2026, 10, 15, 0, 0, 1);
 
     // TemporaryToken（任务临时令牌签发）已随 2026-09-16 脚本执行引擎改造删除：
     // C# 任务门面直调应用服务（决议 6），任务执行链路不再签发/注入任何令牌

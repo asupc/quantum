@@ -3,16 +3,12 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Quantum.Application;
 using Quantum.Data;
-using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 using Quantum.Utils;
 using Quantum.Web.Controllers;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

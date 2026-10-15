@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Quantum.Application;
-using Quantum.Entities.Model;
 using Quantum.Entities.Result;
 using Quantum.Utils;
 

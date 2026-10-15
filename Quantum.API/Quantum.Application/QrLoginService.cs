@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Quantum.Utils;
 
 namespace Quantum.Application;
 

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection;
 using log4net;
 using Quantum.Application;
 using Quantum.Entities.DTOs;

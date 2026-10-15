@@ -1,5 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using Quantum.Entities.Model;
 using Quartz;
 
 namespace Quantum.Application;

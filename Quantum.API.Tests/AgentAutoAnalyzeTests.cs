@@ -1,9 +1,7 @@
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Quantum.Application;
 using Quantum.Data;
 using Quantum.Entities.Model;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

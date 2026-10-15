@@ -1,5 +1,4 @@
 ﻿using Autofac.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Quantum.Utils;
 
 namespace Quantum.Web;

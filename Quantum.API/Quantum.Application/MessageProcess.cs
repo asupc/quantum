@@ -1,8 +1,5 @@
 ﻿using log4net;
-using Microsoft.EntityFrameworkCore;
-using Newtonsoft.Json;
 using Quantum.Data;
-using Quantum.Entities;
 using Quantum.Entities.Config;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;

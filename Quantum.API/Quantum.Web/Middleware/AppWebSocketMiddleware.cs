@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Quantum.Application;
-using Quantum.Entities.Model;
 using Quantum.Utils;
 
 namespace Quantum.Web.Middleware;

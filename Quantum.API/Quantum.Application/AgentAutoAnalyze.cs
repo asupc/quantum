@@ -1,6 +1,5 @@
 ﻿using log4net;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Quantum.Data;
 using Quantum.Entities.Model;
 

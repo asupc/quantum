@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using log4net;
 using Quantum.Entities.Model;
 using Quantum.Utils;

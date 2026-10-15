@@ -5,16 +5,12 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
-using Quantum.Application;
 using Quantum.Data;
 using System.Security.Claims;
-using System.Security.Principal;
 using Quantum.Entities.Model;
 using Quantum.Entities.Result;
 using Quantum.Utils;
 using Quantum.Web.Filters;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

@@ -4,7 +4,6 @@ using System.Net.WebSockets;
 using System.Text;
 using Quantum.Application;
 using Quantum.Utils;
-using Xunit;
 using Quantum.Entities.Model;
 using Quantum.Data;
 

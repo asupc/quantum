@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Quantum.Application;
-using Quantum.Web.Filters;
 
 namespace Quantum.Web.Controllers;
 

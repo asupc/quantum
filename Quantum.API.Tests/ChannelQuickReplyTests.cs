@@ -1,10 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
-using Quantum.Application;
 using Quantum.Application.Channels;
 using Quantum.Entities.DTOs;
-using Quantum.Entities.Model;
 
 namespace Quantum.API.Tests;
 

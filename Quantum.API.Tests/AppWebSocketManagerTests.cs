@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quantum.Application;
 using System.Net.WebSockets;
 using System.Text;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Quantum.Data;
 
 namespace Quantum.Data.DesignTime;
 

@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Quantum.Data;
 using Quantum.Entities.Model;
 using Quantum.Utils;

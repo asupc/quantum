@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Quantum.Data;
 using Quantum.Entities.Model;
 

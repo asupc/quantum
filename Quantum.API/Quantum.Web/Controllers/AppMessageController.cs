@@ -3,7 +3,6 @@ using Quantum.Application;
 using Quantum.Entities.Model;
 using Quantum.Utils;
 using Quantum.Web.Filters;
-using Quantum.Utils;
 
 namespace Quantum.Web.Controllers;
 

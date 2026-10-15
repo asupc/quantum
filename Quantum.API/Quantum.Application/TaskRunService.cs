@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query;
-using Microsoft.Extensions.Logging;
 using Quantum.Data;
 using Quantum.Entities.Model;
 using Quantum.Utils;

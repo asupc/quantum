@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
-using Quantum.Entities.Result;
 using Quantum.Web.Filters;
 using Quantum.Utils;
 

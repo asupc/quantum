@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Quantum.Entities.Model;
+﻿using Quantum.Entities.Model;
 using Quartz;
 using System.Diagnostics;
 using System.Runtime.InteropServices;

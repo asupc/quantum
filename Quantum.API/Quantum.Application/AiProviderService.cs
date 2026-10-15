@@ -1,10 +1,10 @@
-﻿using System.Diagnostics;
-using log4net;
+﻿using log4net;
 using Microsoft.EntityFrameworkCore;
 using Quantum.Data;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 using Quantum.Utils;
+using System.Diagnostics;
 
 namespace Quantum.Application;
 

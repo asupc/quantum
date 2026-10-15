@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quantum.API.Tests.Contract;

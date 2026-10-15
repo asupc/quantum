@@ -9,7 +9,6 @@ using Quantum.Entities.Model;
 using Quantum.Plugins;
 using Quartz;
 using Quantum.Utils;
-using Xunit;
 
 namespace Quantum.API.Tests;
 

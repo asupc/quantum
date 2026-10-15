@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Quantum.Application;
 using Quantum.Data;
 using Quantum.Entities.Model;
-using Quantum.Utils;
 
 namespace Quantum.API.Tests;
 

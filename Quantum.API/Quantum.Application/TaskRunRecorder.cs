@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using Quantum.Entities.DTOs;
 using Quantum.Entities.Model;
 
